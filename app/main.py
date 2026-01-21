@@ -30,6 +30,25 @@ load_dotenv()
 
 app = FastAPI(title="Employee ID Registration System")
 
+# Get the directory where main.py is located
+BASE_DIR = Path(__file__).resolve().parent
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+# Check if running on Vercel (serverless) or locally
+IS_VERCEL = os.environ.get("VERCEL", "0") == "1"
+
+# Static files directory (exists in both environments)
+static_dir = BASE_DIR / "static"
+
+# Log paths for debugging
+logging.info(f"BASE_DIR: {BASE_DIR}")
+logging.info(f"Static dir: {static_dir}, exists: {static_dir.exists()}")
+logging.info(f"Templates dir: {BASE_DIR / 'templates'}, exists: {(BASE_DIR / 'templates').exists()}")
+logging.info(f"IS_VERCEL: {IS_VERCEL}")
+
+# Always initialize DB (uses /tmp on Vercel which is writable)
+init_db()
+
 # Global exception handler - ALWAYS return JSON, never HTML
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -39,32 +58,10 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"success": False, "error": str(exc), "detail": "Internal server error"}
     )
 
-# Get the directory where main.py is located
-BASE_DIR = Path(__file__).resolve().parent
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-# Check if running on Vercel (serverless) or locally
-IS_VERCEL = os.environ.get("VERCEL", False)
-
-# Static files directory (exists in both environments)
-static_dir = BASE_DIR / "static"
-
-# Always initialize DB (uses /tmp on Vercel which is writable)
-init_db()
-
-if not IS_VERCEL:
-    # Create local uploads directory (only works locally)
-    # Vercel's serverless functions have a read-only filesystem except /tmp
-    uploads_dir = static_dir / "uploads"
-    static_dir.mkdir(parents=True, exist_ok=True)
-    uploads_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Mount uploads separately for local development
-    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
-
-# Always mount static files - CSS/JS are read-only and can be served in both environments
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
+# ============================================
+# HTML Page Routes (define BEFORE static mount)
+# ============================================
 
 # Landing page route
 @app.get("/", response_class=HTMLResponse)
@@ -80,6 +77,29 @@ async def apply_page(request: Request):
     return templates.TemplateResponse("form.html", {"request": request})
 
 
-# Routes
+# ============================================
+# API Routes (include routers BEFORE static mount)
+# ============================================
 app.include_router(employee.router)
 app.include_router(hr.router)
+
+
+# ============================================
+# Static Files (mount LAST to avoid catching API routes)
+# ============================================
+if not IS_VERCEL:
+    # Create local uploads directory (only works locally)
+    # Vercel's serverless functions have a read-only filesystem except /tmp
+    uploads_dir = static_dir / "uploads"
+    static_dir.mkdir(parents=True, exist_ok=True)
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Mount uploads separately for local development
+    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+
+# Mount static files for CSS/JS - these are bundled with the deployment
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    logging.info("Static files mounted successfully")
+else:
+    logging.error(f"Static directory does not exist: {static_dir}")
