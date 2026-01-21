@@ -34,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     aiPreviewImg: document.getElementById('aiPreviewImg'),
     aiLoading: document.getElementById('aiLoading'),
     aiError: document.getElementById('aiError'),
+    aiActions: document.getElementById('aiActions'),
+    removeBgBtn: document.getElementById('removeBgBtn'),
     signatureCanvas: document.getElementById('signaturePad'),
     signatureData: document.getElementById('signature_data'),
     clearSignature: document.getElementById('clearSignature')
@@ -154,6 +156,11 @@ async function generateAIHeadshot(imageBase64) {
       elements.aiLoading.style.display = 'none';
       elements.aiError.style.display = 'none';
       
+      // Show Remove Background button (only if not already transparent)
+      if (elements.aiActions) {
+        elements.aiActions.style.display = isTransparent ? 'none' : 'flex';
+      }
+      
       // Store transparency state for ID card preview
       elements.aiPreviewImg.dataset.transparent = isTransparent ? 'true' : 'false';
       
@@ -180,6 +187,11 @@ async function generateAIHeadshot(imageBase64) {
     elements.aiPreviewImg.style.display = 'none';
     elements.aiError.style.display = 'block';
     elements.aiError.textContent = 'AI preview unavailable';
+    
+    // Hide Remove Background button on error
+    if (elements.aiActions) {
+      elements.aiActions.style.display = 'none';
+    }
   }
 }
 
@@ -216,6 +228,69 @@ async function removeBackground(imageData, isUrl = true) {
     return null;
   }
 }
+
+// Remove background from AI-generated image (called from Remove Background button)
+async function removeBackgroundFromAI() {
+  const aiPreviewImg = elements.aiPreviewImg;
+  const removeBgBtn = elements.removeBgBtn;
+  
+  if (!aiPreviewImg || !aiPreviewImg.src) {
+    showMessage('No AI image available', 'error');
+    return;
+  }
+  
+  // Get the current AI image URL
+  const imageUrl = aiPreviewImg.src;
+  
+  // Update button state
+  const originalText = removeBgBtn ? removeBgBtn.innerHTML : '';
+  if (removeBgBtn) {
+    removeBgBtn.innerHTML = '<span class="spinner-small"></span> Processing...';
+    removeBgBtn.disabled = true;
+  }
+  
+  try {
+    console.log('Removing background from AI image:', imageUrl);
+    
+    const processedUrl = await removeBackground(imageUrl, true);
+    
+    if (processedUrl) {
+      // Update the AI preview image
+      aiPreviewImg.src = processedUrl;
+      aiPreviewImg.classList.add('transparent-bg');
+      aiPreviewImg.dataset.transparent = 'true';
+      
+      // Update ID card preview with the new transparent image
+      updateIdCardPreview();
+      
+      // Hide the Remove Background button since it's now transparent
+      if (elements.aiActions) {
+        elements.aiActions.style.display = 'none';
+      }
+      
+      showMessage('Background removed successfully!', 'success');
+    } else {
+      showMessage('Failed to remove background', 'error');
+      // Restore button
+      if (removeBgBtn) {
+        removeBgBtn.innerHTML = originalText;
+        removeBgBtn.disabled = false;
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error removing background:', error);
+    showMessage('Error removing background', 'error');
+    // Restore button
+    if (removeBgBtn) {
+      removeBgBtn.innerHTML = originalText;
+      removeBgBtn.disabled = false;
+    }
+  }
+}
+
+// Make function globally available for onclick handler
+window.removeBackgroundFromAI = removeBackgroundFromAI;
 
 // ============================================
 // Signature Pad with Transparent Background

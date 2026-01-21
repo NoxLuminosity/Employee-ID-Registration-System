@@ -73,6 +73,17 @@
                     <img id="aiPreviewImg" class="ai-clickable" src="" alt="AI generated headshot" style="display: none;" onclick="openLightbox(this.src)">
                     <p class="ai-error" id="aiError" style="display: none;">AI generation unavailable</p>
                   </div>
+                  <!-- Remove Background Button -->
+                  <div class="ai-actions" id="aiActions" style="display: none;">
+                    <button type="button" class="btn-remove-bg" id="removeBgBtn" onclick="removeBackgroundFromAI()">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M3 16l3-3 4 4 6-6 5 5"/>
+                      </svg>
+                      Remove Background
+                    </button>
+                  </div>
                 </div>
               </div>
               <!-- Hidden legacy preview for compatibility -->

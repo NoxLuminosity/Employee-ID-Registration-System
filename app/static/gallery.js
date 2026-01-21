@@ -15,50 +15,65 @@ const galleryState = {
 };
 
 // ============================================
-// DOM Elements
+// DOM Elements (initialized after DOM loads)
 // ============================================
-const elements = {
-  loadingState: document.getElementById('loadingState'),
-  gallerySection: document.getElementById('gallerySection'),
-  galleryGrid: document.getElementById('galleryGrid'),
-  emptyState: document.getElementById('emptyState'),
-  searchInput: document.getElementById('searchInput'),
-  departmentFilter: document.getElementById('departmentFilter'),
-  totalApproved: document.getElementById('totalApproved'),
-  totalCompleted: document.getElementById('totalCompleted'),
-  previewModal: document.getElementById('previewModal'),
-  modalBody: document.getElementById('modalBody'),
-  closeModal: document.getElementById('closeModal'),
-  downloadBtn: document.getElementById('downloadBtn'),
-  downloadAllBtn: document.getElementById('downloadAllBtn'),
-  toast: document.getElementById('toast'),
-  toastMessage: document.getElementById('toastMessage')
-};
+let elements = {};
 
 // ============================================
 // Initialization
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize elements after DOM is fully loaded
+  elements = {
+    loadingState: document.getElementById('loadingState'),
+    gallerySection: document.getElementById('gallerySection'),
+    galleryGrid: document.getElementById('galleryGrid'),
+    emptyState: document.getElementById('emptyState'),
+    searchInput: document.getElementById('searchInput'),
+    departmentFilter: document.getElementById('departmentFilter'),
+    totalApproved: document.getElementById('totalApproved'),
+    totalCompleted: document.getElementById('totalCompleted'),
+    previewModal: document.getElementById('previewModal'),
+    modalBody: document.getElementById('modalBody'),
+    closeModal: document.getElementById('closeModal'),
+    downloadBtn: document.getElementById('downloadBtn'),
+    downloadAllBtn: document.getElementById('downloadAllBtn'),
+    toast: document.getElementById('toast'),
+    toastMessage: document.getElementById('toastMessage')
+  };
+  
+  console.log('Gallery DOM elements initialized:', Object.keys(elements).filter(k => elements[k] !== null));
+  
   initEventListeners();
   fetchGalleryData();
 });
 
 function initEventListeners() {
-  // Search and filter
-  elements.searchInput.addEventListener('input', debounce(filterGallery, 300));
-  elements.departmentFilter.addEventListener('change', filterGallery);
+  // Search and filter - add null checks
+  if (elements.searchInput) {
+    elements.searchInput.addEventListener('input', debounce(filterGallery, 300));
+  }
+  if (elements.departmentFilter) {
+    elements.departmentFilter.addEventListener('change', filterGallery);
+  }
 
-  // Modal
-  elements.closeModal.addEventListener('click', closePreviewModal);
-  elements.previewModal.addEventListener('click', (e) => {
-    if (e.target === elements.previewModal) closePreviewModal();
-  });
+  // Modal - add null checks
+  if (elements.closeModal) {
+    elements.closeModal.addEventListener('click', closePreviewModal);
+  }
+  if (elements.previewModal) {
+    elements.previewModal.addEventListener('click', (e) => {
+      if (e.target === elements.previewModal) closePreviewModal();
+    });
+  }
 
-  elements.downloadBtn.addEventListener('click', () => {
-    if (galleryState.currentEmployee) {
-      downloadIDPdf(galleryState.currentEmployee);
-    }
-  });
+  if (elements.downloadBtn) {
+    elements.downloadBtn.addEventListener('click', () => {
+      if (galleryState.currentEmployee) {
+        downloadIDPdf(galleryState.currentEmployee);
+      }
+    });
+  }
 
   // Download All button
   if (elements.downloadAllBtn) {
@@ -119,28 +134,36 @@ async function fetchGalleryData() {
 // ============================================
 function showLoading(show) {
   galleryState.isLoading = show;
-  elements.loadingState.style.display = show ? 'flex' : 'none';
-  elements.gallerySection.style.display = show ? 'none' : 'block';
+  if (elements.loadingState) {
+    elements.loadingState.style.display = show ? 'flex' : 'none';
+  }
+  if (elements.gallerySection) {
+    elements.gallerySection.style.display = show ? 'none' : 'block';
+  }
 }
 
 function updateStats() {
   const approved = galleryState.employees.filter(e => e.status === 'Approved').length;
   const completed = galleryState.employees.filter(e => e.status === 'Completed').length;
   
-  elements.totalApproved.textContent = approved;
-  elements.totalCompleted.textContent = completed;
+  if (elements.totalApproved) {
+    elements.totalApproved.textContent = approved;
+  }
+  if (elements.totalCompleted) {
+    elements.totalCompleted.textContent = completed;
+  }
 }
 
 function renderGallery() {
   const employees = galleryState.filteredEmployees;
 
   if (employees.length === 0) {
-    elements.galleryGrid.innerHTML = '';
-    elements.emptyState.style.display = 'flex';
+    if (elements.galleryGrid) elements.galleryGrid.innerHTML = '';
+    if (elements.emptyState) elements.emptyState.style.display = 'flex';
     return;
   }
 
-  elements.emptyState.style.display = 'none';
+  if (elements.emptyState) elements.emptyState.style.display = 'none';
 
   const cards = employees.map(emp => {
     const statusClass = emp.status.toLowerCase();
@@ -181,7 +204,9 @@ function renderGallery() {
     `;
   }).join('');
 
-  elements.galleryGrid.innerHTML = cards;
+  if (elements.galleryGrid) {
+    elements.galleryGrid.innerHTML = cards;
+  }
 }
 
 // Generate the ID card HTML for display - matches the exact design from form.html id-preview-section
@@ -436,8 +461,8 @@ function generateIDCardBackHtml(emp) {
 // Filtering
 // ============================================
 function filterGallery() {
-  const searchTerm = elements.searchInput.value.toLowerCase().trim();
-  const deptFilter = elements.departmentFilter.value;
+  const searchTerm = elements.searchInput ? elements.searchInput.value.toLowerCase().trim() : '';
+  const deptFilter = elements.departmentFilter ? elements.departmentFilter.value : '';
 
   galleryState.filteredEmployees = galleryState.employees.filter(emp => {
     const matchesSearch = !searchTerm || 
@@ -460,6 +485,11 @@ function previewID(id) {
   if (!emp) return;
 
   galleryState.currentEmployee = emp;
+
+  if (!elements.modalBody) {
+    console.error('Modal body element not found');
+    return;
+  }
 
   elements.modalBody.innerHTML = `
     <!-- Flip Toggle Buttons -->
@@ -529,7 +559,9 @@ function previewID(id) {
     </div>
   `;
 
-  elements.previewModal.classList.add('active');
+  if (elements.previewModal) {
+    elements.previewModal.classList.add('active');
+  }
 }
 
 // Toggle between front and back preview in modal
@@ -561,7 +593,9 @@ function showPreviewSide(side) {
 window.showPreviewSide = showPreviewSide;
 
 function closePreviewModal() {
-  elements.previewModal.classList.remove('active');
+  if (elements.previewModal) {
+    elements.previewModal.classList.remove('active');
+  }
   galleryState.currentEmployee = null;
 }
 
@@ -798,6 +832,10 @@ async function markAsCompleted(id) {
 // Utilities
 // ============================================
 function showToast(message, type = 'success') {
+  if (!elements.toastMessage || !elements.toast) {
+    console.log('Toast:', type, message);
+    return;
+  }
   elements.toastMessage.textContent = message;
   elements.toast.className = `toast show ${type}`;
 
