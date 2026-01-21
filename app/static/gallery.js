@@ -78,7 +78,11 @@ async function fetchGalleryData() {
   showLoading(true);
 
   try {
-    const response = await fetch('/hr/api/employees');
+    // VERCEL FIX: Include credentials to ensure JWT cookie is sent with request
+    // Without this, serverless functions may not receive the authentication cookie
+    const response = await fetch('/hr/api/employees', {
+      credentials: 'include'
+    });
     const data = await response.json();
 
     if (data.success) {

@@ -77,7 +77,7 @@ async def hr_login(request: Request, response: Response):
             "error": "Invalid username or password"
         })
     
-    # Create session
+    # Create session (JWT token)
     session_id = create_session(username)
     
     # Create response with cookie
@@ -86,16 +86,23 @@ async def hr_login(request: Request, response: Response):
         "redirect": "/hr/dashboard"
     })
     
+    # VERCEL FIX: Set secure=True for production (HTTPS) environments
+    # This ensures the cookie is only sent over secure connections in production
+    # but still works for local development over HTTP
+    is_production = IS_VERCEL or os.environ.get('VERCEL_ENV') == 'production'
+    
     # Set session cookie (8 hours expiry)
     json_response.set_cookie(
         key="hr_session",
         value=session_id,
         httponly=True,
         max_age=28800,  # 8 hours
-        samesite="lax"
+        samesite="lax",
+        secure=is_production,  # Only require HTTPS in production
+        path="/"  # Ensure cookie is sent for all paths
     )
     
-    logger.info(f"HR user logged in: {username}")
+    logger.info(f"HR user logged in: {username} (secure={is_production})")
     return json_response
 
 

@@ -115,7 +115,11 @@ async function fetchEmployeeData() {
   showLoading(true);
 
   try {
-    const response = await fetch('/hr/api/employees');
+    // VERCEL FIX: Include credentials to ensure JWT cookie is sent with request
+    // Without this, serverless functions may not receive the authentication cookie
+    const response = await fetch('/hr/api/employees', {
+      credentials: 'include'
+    });
     const data = await response.json();
 
     if (data.success) {
@@ -275,7 +279,8 @@ async function approveEmployee(id) {
   try {
     const response = await fetch(`/hr/api/employees/${id}/approve`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
 
     const data = await response.json();
@@ -306,7 +311,8 @@ async function removeEmployee(id) {
   try {
     const response = await fetch(`/hr/api/employees/${id}`, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
 
     const data = await response.json();
@@ -351,9 +357,11 @@ async function removeBackground(id) {
   try {
     console.log('Sending request to /hr/api/employees/' + id + '/remove-background');
     
+    // VERCEL FIX: Include credentials to ensure JWT cookie is sent
     const response = await fetch(`/hr/api/employees/${id}/remove-background`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
 
     console.log('Response status:', response.status);
@@ -510,7 +518,9 @@ async function downloadID(id) {
 
   try {
     // Call the download endpoint
-    const response = await fetch(`/hr/api/employees/${id}/download-id`);
+    const response = await fetch(`/hr/api/employees/${id}/download-id`, {
+      credentials: 'include'
+    });
     
     if (response.ok) {
       // If we get a blob, download it
@@ -544,7 +554,8 @@ async function markAsCompleted(id) {
   try {
     const response = await fetch(`/hr/api/employees/${id}/complete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
 
     if (response.ok) {
@@ -565,7 +576,10 @@ async function syncToGoogleSheets() {
   showToast('Syncing to Google Sheets...', 'success');
 
   try {
-    const response = await fetch('/hr/api/sync-sheets', { method: 'POST' });
+    const response = await fetch('/hr/api/sync-sheets', { 
+      method: 'POST',
+      credentials: 'include'
+    });
     const data = await response.json();
 
     if (data.success) {

@@ -313,7 +313,8 @@
 
                 const response = await fetch('/hr/login', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    credentials: 'include'  // VERCEL FIX: Ensure cookie is properly set
                 });
 
                 const data = await response.json();
