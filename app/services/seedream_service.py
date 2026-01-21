@@ -24,8 +24,9 @@ SEEDREAM_API_URL = os.environ.get(
 )
 SEEDREAM_MODEL = os.environ.get('BYTEPLUS_MODEL', "seedream-4-5-251128")
 
-# Professional headshot prompt - editorial passport-style photo
-HEADSHOT_PROMPT = """Editorial colour portrait of my reference photo, with a white shirt with black tie and black blazer. As it is hair, natural lip colour. High contrast lighting with a bright, minimalist white or light-gray background. Sharp focus on the eyes and face. Hyper-realistic, photorealistic, shot with a Leica Summicron-M 50mm. Straight body pose. For Passport official photo"""
+# Professional headshot prompt - Updated for brown suit with dark navy shirt
+# This prompt generates consistent, professional ID card photos
+HEADSHOT_PROMPT = """Use the uploaded image as the reference subject. Generate a centered, waist-up portrait of the person. The person is wearing a brown suit with a dark navy shirt, neatly styled, professional appearance. Studio portrait style with soft, even lighting and a neutral light grey background. Fully framed, 1:1 aspect ratio, no cropping, photorealistic, consistent composition and style across all images. Keep facial features and hairstyle similar to the reference image. No extra objects, no accessories other than the outfit specified."""
 
 
 def generate_headshot_from_url(image_url: str) -> Tuple[Optional[str], Optional[str]]:
