@@ -1045,16 +1045,16 @@ input::placeholder {
   margin-top: 4px;
 }
 
-/* Signature Area - Larger size */
+/* Signature Area - Enlarged to fully capture wide signatures */
 .id-signature-area {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-top: 50px;
-  margin-right: 20px;
-  width: 180px;
-  height: 100px;
+  margin-top: 30px;
+  margin-right: 15px;
+  width: 220px;   /* Increased from 180px to capture wider signatures */
+  height: 120px;  /* Increased from 100px to maintain aspect ratio */
   position: relative;
   overflow: hidden;
   /* Geometric squares background pattern */
@@ -1078,15 +1078,16 @@ input::placeholder {
 .id-signature-area img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;  /* Changed from cover to contain - ensures full signature is visible */
   object-position: center center;
   /* Fill the entire container */
   position: absolute;
   top: 0;
   left: 0;
   z-index: 1;
-  padding: 0;
+  padding: 8px;  /* Add padding so signature doesn't touch edges */
   margin: 0;
+  box-sizing: border-box;
 }
 
 .id-signature-placeholder {
