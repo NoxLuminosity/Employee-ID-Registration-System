@@ -45,12 +45,13 @@ document.addEventListener('DOMContentLoaded', () => {
   initCancelButton();
   updateReviewSection(); // Update on load
   updateIdCardPreview(); // Update ID card preview on load
+  updateIdCardBackside(); // Update ID card backside on load
   
   // Auto-update review and ID card preview when form changes
   document.querySelectorAll('input, select, textarea').forEach(el => {
-    el.addEventListener('change', () => { updateReviewSection(); updateIdCardPreview(); });
-    el.addEventListener('input', () => { updateReviewSection(); updateIdCardPreview(); });
-    el.addEventListener('blur', () => { updateReviewSection(); updateIdCardPreview(); });
+    el.addEventListener('change', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); });
+    el.addEventListener('input', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); });
+    el.addEventListener('blur', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); });
   });
 });
 
@@ -508,6 +509,11 @@ function updateReviewSection() {
   setText('review_email', getValue('email'));
   setText('review_personal_number', getValue('personal_number'));
 
+  // Update text fields - Emergency Contact
+  setText('review_emergency_name', getValue('emergency_name'));
+  setText('review_emergency_contact', getValue('emergency_contact'));
+  setText('review_emergency_address', getValue('emergency_address'));
+
   // Photo preview
   const photoPreviewImg = document.getElementById('photoPreviewImg');
   const reviewPhoto = document.getElementById('review_photo');
@@ -717,6 +723,84 @@ function initCancelButton() {
       location.reload();
     }
   });
+}
+
+// ============================================
+// ID Card Flip Toggle
+// ============================================
+function showCardSide(side) {
+  const frontCard = document.getElementById('idCardFront');
+  const backCard = document.getElementById('idCardBack');
+  const flipBtns = document.querySelectorAll('.flip-btn');
+  
+  // Update button states
+  flipBtns.forEach(btn => {
+    if (btn.dataset.side === side) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  
+  // Show/hide cards
+  if (side === 'front') {
+    if (frontCard) frontCard.style.display = 'block';
+    if (backCard) backCard.style.display = 'none';
+  } else {
+    if (frontCard) frontCard.style.display = 'none';
+    if (backCard) backCard.style.display = 'block';
+  }
+}
+
+// Make showCardSide available globally for onclick
+window.showCardSide = showCardSide;
+
+// ============================================
+// ID Card Backside Preview Update
+// ============================================
+function updateIdCardBackside() {
+  // Helper function to safely get element value
+  const getValue = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    return el.value || '';
+  };
+  
+  // Update username (derived from employee name or id_nickname)
+  const idBackUsername = document.getElementById('id_back_username');
+  if (idBackUsername) {
+    const nickname = getValue('id_nickname');
+    const fullName = getValue('employee_name');
+    // Use nickname if available, otherwise use first name from full name
+    if (nickname) {
+      idBackUsername.textContent = nickname.toLowerCase().replace(/\s+/g, '');
+    } else if (fullName) {
+      idBackUsername.textContent = fullName.split(' ')[0].toLowerCase();
+    } else {
+      idBackUsername.textContent = 'username';
+    }
+  }
+  
+  // Update Emergency Contact Name
+  const emergencyNameEl = document.getElementById('id_back_emergency_name');
+  if (emergencyNameEl) {
+    const name = getValue('emergency_name');
+    emergencyNameEl.textContent = name || 'Emergency Contact Name';
+  }
+  
+  // Update Emergency Contact Number
+  const emergencyContactEl = document.getElementById('id_back_emergency_contact');
+  if (emergencyContactEl) {
+    const contact = getValue('emergency_contact');
+    emergencyContactEl.textContent = contact || '+63 XXX XXX XXXX';
+  }
+  
+  // Update Emergency Address
+  const emergencyAddressEl = document.getElementById('id_back_emergency_address');
+  if (emergencyAddressEl) {
+    const address = getValue('emergency_address');
+    emergencyAddressEl.textContent = address || 'Contact Address';
+  }
 }
 
 // ============================================

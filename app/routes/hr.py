@@ -178,7 +178,7 @@ def api_get_employees(hr_session: str = Cookie(None)):
             SELECT id, employee_name, id_nickname, id_number, position, department,
                    email, personal_number, photo_path, photo_url, new_photo, new_photo_url,
                    nobg_photo_url, signature_path, signature_url, status, date_last_modified,
-                   id_generated, render_url
+                   id_generated, render_url, emergency_name, emergency_contact, emergency_address
             FROM employees
             ORDER BY date_last_modified DESC
         """)
@@ -207,7 +207,10 @@ def api_get_employees(hr_session: str = Cookie(None)):
                 "status": row["status"] or "Reviewing",
                 "date_last_modified": row["date_last_modified"],
                 "id_generated": bool(row["id_generated"]),
-                "render_url": row["render_url"]
+                "render_url": row["render_url"],
+                "emergency_name": row["emergency_name"] if "emergency_name" in row.keys() else None,
+                "emergency_contact": row["emergency_contact"] if "emergency_contact" in row.keys() else None,
+                "emergency_address": row["emergency_address"] if "emergency_address" in row.keys() else None
             })
 
         return JSONResponse(content={"success": True, "employees": employees})
@@ -233,7 +236,7 @@ def api_get_employee(employee_id: int, hr_session: str = Cookie(None)):
             SELECT id, employee_name, id_nickname, id_number, position, department,
                    email, personal_number, photo_path, photo_url, new_photo, new_photo_url,
                    nobg_photo_url, signature_path, signature_url, status, date_last_modified,
-                   id_generated, render_url
+                   id_generated, render_url, emergency_name, emergency_contact, emergency_address
             FROM employees
             WHERE id = ?
         """, (employee_id,))
@@ -266,7 +269,10 @@ def api_get_employee(employee_id: int, hr_session: str = Cookie(None)):
             "status": row["status"] or "Reviewing",
             "date_last_modified": row["date_last_modified"],
             "id_generated": bool(row["id_generated"]),
-            "render_url": row["render_url"]
+            "render_url": row["render_url"],
+            "emergency_name": row["emergency_name"] if "emergency_name" in row.keys() else None,
+            "emergency_contact": row["emergency_contact"] if "emergency_contact" in row.keys() else None,
+            "emergency_address": row["emergency_address"] if "emergency_address" in row.keys() else None
         }
 
         return JSONResponse(content={"success": True, "employee": employee})

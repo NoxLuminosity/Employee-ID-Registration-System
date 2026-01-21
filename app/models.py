@@ -25,6 +25,9 @@ class EmployeeBase(BaseModel):
     department: str
     email: Optional[str] = None
     personal_number: Optional[str] = None
+    emergency_name: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    emergency_address: Optional[str] = None
 
 
 class EmployeeResponse(EmployeeBase):

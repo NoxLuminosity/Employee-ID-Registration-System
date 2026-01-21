@@ -280,6 +280,158 @@ function generateIDCardHtml(emp) {
   `;
 }
 
+// Generate ID Card Backside HTML
+function generateIDCardBackHtml(emp) {
+  // Get username from nickname or first name
+  const nickname = emp.id_nickname || emp.employee_name.split(' ')[0];
+  const username = nickname.toLowerCase().replace(/\s+/g, '');
+  
+  // Emergency contact details
+  const emergencyName = emp.emergency_name || 'Not provided';
+  const emergencyContact = emp.emergency_contact || 'Not provided';
+  const emergencyAddress = emp.emergency_address || 'Not provided';
+
+  return `
+    <div class="id-card id-card-back gallery-id-card-back">
+      <!-- Top Section - QR Code Area with Geometric Background -->
+      <div class="id-back-top">
+        <!-- Geometric Background Pattern -->
+        <div class="id-back-pattern"></div>
+        
+        <!-- QR Code Content -->
+        <div class="id-back-qr-content">
+          <!-- QR Code Placeholder -->
+          <div class="id-qr-code">
+            <svg viewBox="0 0 100 100" width="180" height="180">
+              <rect fill="#ffffff" width="100" height="100" rx="8"/>
+              <text x="50" y="50" text-anchor="middle" fill="#9ca3af" font-size="10" dy=".3em">QR Code</text>
+            </svg>
+          </div>
+          
+          <!-- VCARD Label -->
+          <h1 class="id-vcard-label">VCARD</h1>
+          
+          <!-- Website URL -->
+          <p class="id-vcard-url">www.spmadrid.com/${escapeHtml(username)}</p>
+        </div>
+      </div>
+
+      <!-- Bottom Section - Logo and Emergency Contact -->
+      <div class="id-back-bottom">
+        <!-- SPM Logo -->
+        <div class="id-back-logo">
+          <span class="id-back-logo-spm">SPM</span>
+          <span class="id-back-logo-divider">|</span>
+          <span class="id-back-logo-text">S.P. MADRID</span>
+        </div>
+
+        <!-- Emergency Contact Info -->
+        <div class="id-emergency-section">
+          <h2 class="id-emergency-title">In case of emergency, please notify:</h2>
+          
+          <div class="id-emergency-info">
+            <div class="id-emergency-row">
+              <span class="id-emergency-label">Name:</span>
+              <span class="id-emergency-value">${escapeHtml(emergencyName)}</span>
+            </div>
+            
+            <div class="id-emergency-row">
+              <span class="id-emergency-label">Contact #:</span>
+              <span class="id-emergency-value">${escapeHtml(emergencyContact)}</span>
+            </div>
+            
+            <div class="id-emergency-row">
+              <span class="id-emergency-label">Address:</span>
+              <span class="id-emergency-value">${escapeHtml(emergencyAddress)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+  const expDate = new Date();
+  expDate.setFullYear(expDate.getFullYear() + 2);
+  const expDateStr = expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // Get nickname or use first name
+  const nickname = emp.id_nickname || emp.employee_name.split(' ')[0];
+
+  return `
+    <div class="id-card gallery-id-card">
+      <!-- Photo Section with Blue Sidebar -->
+      <div class="id-card-top">
+        <!-- Blue vertical sidebar -->
+        <div class="id-sidebar">
+          <span class="id-nickname-vertical">${escapeHtml(nickname)}</span>
+        </div>
+
+        <!-- Photo area -->
+        <div class="id-photo-section">
+          <!-- Header with Logo -->
+          <div class="id-header">
+            <div class="id-logo-group">
+              <span class="id-logo-spm">SPM</span>
+              <span class="id-logo-divider">|</span>
+            </div>
+            <span class="id-logo-text">S.P. MADRID</span>
+          </div>
+          
+          <!-- Photo placeholder with geometric background -->
+          <div class="id-photo-container ${photoHasImage}">
+            ${photoHtml}
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Info Section -->
+      <div class="id-card-bottom">
+        <div class="id-info-container">
+          <!-- Left side - Name, Title, Barcode -->
+          <div class="id-info-left">
+            <h1 class="id-fullname">${escapeHtml(emp.employee_name)}</h1>
+            
+            <div class="id-position-dept">
+              <span>${escapeHtml(emp.department)}</span>
+              <span class="id-dash">-</span>
+              <span>${escapeHtml(emp.position)}</span>
+            </div>
+
+            <!-- Barcode area -->
+            <div class="id-barcode-area">
+              <div class="id-barcode-placeholder">
+                <span>Barcode</span>
+              </div>
+              <p class="id-number-text">${escapeHtml(emp.id_number)}</p>
+            </div>
+          </div>
+
+          <!-- Right side - Signature -->
+          <div class="id-signature-area ${signatureHasImage}">
+            ${signatureHtml}
+          </div>
+        </div>
+
+        <!-- Website icon and URL -->
+        <div class="id-website-strip">
+          <p class="id-website-url">www.spmadrid.com</p>
+          <svg class="id-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+        </div>
+
+        <!-- Expiration Date -->
+        <div class="id-expiration">
+          <span class="id-exp-label">Expiration Date:</span>
+          <span class="id-exp-date">${expDateStr}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // ============================================
 // Filtering
 // ============================================
@@ -310,8 +462,33 @@ function previewID(id) {
   galleryState.currentEmployee = emp;
 
   elements.modalBody.innerHTML = `
+    <!-- Flip Toggle Buttons -->
+    <div class="id-flip-toggle">
+      <button type="button" class="flip-btn active" data-side="front" onclick="showPreviewSide('front')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="9" cy="10" r="2"/>
+          <path d="M15 8h2M15 12h2M7 16h10"/>
+        </svg>
+        Front
+      </button>
+      <button type="button" class="flip-btn" data-side="back" onclick="showPreviewSide('back')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M7 7h10v10H7z"/>
+          <path d="M12 11v4M12 7v1"/>
+        </svg>
+        Back
+      </button>
+    </div>
+    
     <div class="id-preview-wrapper">
-      ${generateIDCardHtml(emp)}
+      <div id="previewFront">
+        ${generateIDCardHtml(emp)}
+      </div>
+      <div id="previewBack" style="display: none;">
+        ${generateIDCardBackHtml(emp)}
+      </div>
     </div>
     <div class="id-preview-details">
       <h3>Employee Information</h3>
@@ -341,6 +518,10 @@ function previewID(id) {
           <span class="value">${escapeHtml(emp.personal_number)}</span>
         </div>
         <div class="preview-info-item">
+          <span class="label">Emergency Contact</span>
+          <span class="value">${escapeHtml(emp.emergency_name || 'Not provided')}</span>
+        </div>
+        <div class="preview-info-item">
           <span class="label">Status</span>
           <span class="value"><span class="status-badge ${emp.status.toLowerCase()}">${emp.status}</span></span>
         </div>
@@ -350,6 +531,34 @@ function previewID(id) {
 
   elements.previewModal.classList.add('active');
 }
+
+// Toggle between front and back preview in modal
+function showPreviewSide(side) {
+  const frontPreview = document.getElementById('previewFront');
+  const backPreview = document.getElementById('previewBack');
+  const flipBtns = document.querySelectorAll('.id-flip-toggle .flip-btn');
+  
+  // Update button states
+  flipBtns.forEach(btn => {
+    if (btn.dataset.side === side) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  
+  // Show/hide cards
+  if (side === 'front') {
+    if (frontPreview) frontPreview.style.display = 'block';
+    if (backPreview) backPreview.style.display = 'none';
+  } else {
+    if (frontPreview) frontPreview.style.display = 'none';
+    if (backPreview) backPreview.style.display = 'block';
+  }
+}
+
+// Make showPreviewSide available globally
+window.showPreviewSide = showPreviewSide;
 
 function closePreviewModal() {
   elements.previewModal.classList.remove('active');
@@ -363,7 +572,7 @@ function downloadSinglePdf(id) {
   downloadIDPdf(emp);
 }
 
-// Download ID card as PDF using jsPDF and html2canvas
+// Download ID card as PDF using jsPDF and html2canvas - includes both front and back
 async function downloadIDPdf(emp) {
   showToast('Generating PDF...', 'success');
 
@@ -373,30 +582,74 @@ async function downloadIDPdf(emp) {
     tempContainer.style.position = 'absolute';
     tempContainer.style.left = '-9999px';
     tempContainer.style.top = '0';
+    
+    // Render front side
     tempContainer.innerHTML = `<div class="pdf-id-card-wrapper">${generateIDCardHtml(emp)}</div>`;
     document.body.appendChild(tempContainer);
 
     // Wait a bit for images to load
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    const idCardEl = tempContainer.querySelector('.id-card');
+    const frontCardEl = tempContainer.querySelector('.id-card');
     
-    // Use html2canvas to capture the ID card
-    const canvas = await html2canvas(idCardEl, {
+    // Capture front side with html2canvas
+    const frontCanvas = await html2canvas(frontCardEl, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff'
     });
 
-    // Create PDF with jsPDF - using the actual ID card dimensions ratio
+    // Render back side
+    tempContainer.innerHTML = `<div class="pdf-id-card-wrapper">${generateIDCardBackHtml(emp)}</div>`;
+    
+    // Wait for rendering
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    const backCardEl = tempContainer.querySelector('.id-card');
+    
+    // Capture back side with html2canvas
+    const backCanvas = await html2canvas(backCardEl, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff'
+    });
+
+    // Create PDF with jsPDF - 2 pages (front and back)
     const { jsPDF } = window.jspdf;
-    // ID card is 420px wide x ~620px tall (including both sections)
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: [85.6, 125] // Proportional to ID card design
     });
+
+    // Add front side
+    const frontImgData = frontCanvas.toDataURL('image/png');
+    pdf.addImage(frontImgData, 'PNG', 0, 0, 85.6, 125);
+    
+    // Add back side on new page
+    pdf.addPage([85.6, 125], 'portrait');
+    const backImgData = backCanvas.toDataURL('image/png');
+    pdf.addImage(backImgData, 'PNG', 0, 0, 85.6, 125);
+    
+    // Download the PDF
+    pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}.pdf`);
+
+    // Cleanup
+    document.body.removeChild(tempContainer);
+    
+    // Mark as completed if approved
+    if (emp.status === 'Approved') {
+      await markAsCompleted(emp.id);
+    }
+
+    showToast('PDF downloaded successfully (Front + Back)', 'success');
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    showToast('Failed to generate PDF. Please try again.', 'error');
+  }
+}
 
     const imgData = canvas.toDataURL('image/png');
     pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 125);
@@ -419,7 +672,7 @@ async function downloadIDPdf(emp) {
   }
 }
 
-// Download all IDs as PDFs
+// Download all IDs as PDFs (front and back)
 async function downloadAllPdfs() {
   const employees = galleryState.filteredEmployees;
   
@@ -450,31 +703,52 @@ async function downloadAllPdfs() {
     for (let i = 0; i < employees.length; i++) {
       const emp = employees[i];
       
-      // Render the ID card
+      // Render front side
       tempContainer.innerHTML = `<div class="pdf-id-card-wrapper">${generateIDCardHtml(emp)}</div>`;
       
       // Wait for images to load
       await new Promise(resolve => setTimeout(resolve, 600));
 
-      const idCardEl = tempContainer.querySelector('.id-card');
+      const frontCardEl = tempContainer.querySelector('.id-card');
       
-      // Capture with html2canvas
-      const canvas = await html2canvas(idCardEl, {
+      // Capture front with html2canvas
+      const frontCanvas = await html2canvas(frontCardEl, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      });
+      
+      // Render back side
+      tempContainer.innerHTML = `<div class="pdf-id-card-wrapper">${generateIDCardBackHtml(emp)}</div>`;
+      
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const backCardEl = tempContainer.querySelector('.id-card');
+      
+      // Capture back with html2canvas
+      const backCanvas = await html2canvas(backCardEl, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff'
       });
 
-      // Create PDF (portrait format to match full ID card design)
+      // Create PDF (portrait format with 2 pages)
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: [85.6, 125]
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 125);
+      // Add front side
+      const frontImgData = frontCanvas.toDataURL('image/png');
+      pdf.addImage(frontImgData, 'PNG', 0, 0, 85.6, 125);
+      
+      // Add back side on new page
+      pdf.addPage([85.6, 125], 'portrait');
+      const backImgData = backCanvas.toDataURL('image/png');
+      pdf.addImage(backImgData, 'PNG', 0, 0, 85.6, 125);
       
       // Download
       pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}.pdf`);
@@ -486,7 +760,7 @@ async function downloadAllPdfs() {
     // Cleanup
     document.body.removeChild(tempContainer);
 
-    showToast(`Successfully downloaded ${employees.length} PDFs`, 'success');
+    showToast(`Successfully downloaded ${employees.length} PDFs (Front + Back)`, 'success');
   } catch (error) {
     console.error('Error downloading PDFs:', error);
     showToast('Failed to download some PDFs. Please try again.', 'error');

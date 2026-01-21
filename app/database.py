@@ -40,7 +40,10 @@ def init_db():
       status TEXT DEFAULT 'Reviewing',
       date_last_modified TEXT,
       id_generated INTEGER DEFAULT 0,
-      render_url TEXT
+      render_url TEXT,
+      emergency_name TEXT,
+      emergency_contact TEXT,
+      emergency_address TEXT
     )
     """)
     
@@ -54,6 +57,25 @@ def init_db():
     # Add nobg_photo_url column if it doesn't exist (for background-removed photos)
     try:
         cursor.execute("ALTER TABLE employees ADD COLUMN nobg_photo_url TEXT")
+        conn.commit()
+    except:
+        pass  # Column already exists
+    
+    # Add emergency contact fields (for ID card backside)
+    try:
+        cursor.execute("ALTER TABLE employees ADD COLUMN emergency_name TEXT")
+        conn.commit()
+    except:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute("ALTER TABLE employees ADD COLUMN emergency_contact TEXT")
+        conn.commit()
+    except:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute("ALTER TABLE employees ADD COLUMN emergency_address TEXT")
         conn.commit()
     except:
         pass  # Column already exists

@@ -270,7 +270,10 @@ async def submit_employee(
     personal_number: str = Form(...),
     photo: UploadFile = File(...),
     signature_data: str = Form(...),
-    ai_headshot_data: Optional[str] = Form(None)  # AI-generated headshot URL from frontend
+    ai_headshot_data: Optional[str] = Form(None),  # AI-generated headshot URL from frontend
+    emergency_name: Optional[str] = Form(''),  # Emergency contact name
+    emergency_contact: Optional[str] = Form(''),  # Emergency contact number
+    emergency_address: Optional[str] = Form('')  # Emergency contact address
 ):
     """Submit employee registration - returns JSON response always."""
     import base64
@@ -393,8 +396,8 @@ async def submit_employee(
             INSERT INTO employees
             (employee_name, id_nickname, id_number, position, department, email, personal_number,
              photo_path, photo_url, new_photo, new_photo_url, signature_path, signature_url, status,
-             date_last_modified, id_generated, render_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             date_last_modified, id_generated, render_url, emergency_name, emergency_contact, emergency_address)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             employee_name,
             id_nickname,
@@ -412,7 +415,10 @@ async def submit_employee(
             'Reviewing',
             date_last_modified,
             0,  # id_generated = False
-            ''  # render_url (empty for now)
+            '',  # render_url (empty for now)
+            emergency_name or '',
+            emergency_contact or '',
+            emergency_address or ''
         ))
 
         conn.commit()
