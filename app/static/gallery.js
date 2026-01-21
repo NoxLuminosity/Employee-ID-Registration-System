@@ -90,22 +90,39 @@ function initEventListeners() {
 // Data Fetching
 // ============================================
 async function fetchGalleryData() {
+  console.log('fetchGalleryData: Starting data fetch...');
   showLoading(true);
 
   try {
     // VERCEL FIX: Include credentials to ensure JWT cookie is sent with request
     // Without this, serverless functions may not receive the authentication cookie
+    console.log('fetchGalleryData: Fetching from /hr/api/employees...');
     const response = await fetch('/hr/api/employees', {
       credentials: 'include'
     });
+    
+    console.log('fetchGalleryData: Response status:', response.status);
+    
+    // Handle unauthorized - redirect to login
+    if (response.status === 401) {
+      console.log('fetchGalleryData: Unauthorized, redirecting to login');
+      window.location.href = '/hr/login';
+      return;
+    }
+    
     const data = await response.json();
+    console.log('fetchGalleryData: Response data:', data);
 
     if (data.success) {
       // Filter only approved and completed IDs
       const allEmployees = data.employees || [];
+      console.log('fetchGalleryData: Total employees:', allEmployees.length);
+      
       galleryState.employees = allEmployees.filter(
         emp => emp.status === 'Approved' || emp.status === 'Completed'
       );
+      console.log('fetchGalleryData: Filtered employees (Approved/Completed):', galleryState.employees.length);
+      
       galleryState.filteredEmployees = [...galleryState.employees];
       updateStats();
       renderGallery();
@@ -115,16 +132,18 @@ async function fetchGalleryData() {
         elements.downloadAllBtn.style.display = galleryState.employees.length > 0 ? 'flex' : 'none';
       }
     } else {
+      console.error('fetchGalleryData: API returned error:', data.error);
       throw new Error(data.error || 'Failed to fetch data');
     }
   } catch (error) {
-    console.error('Error fetching gallery data:', error);
-    showToast('Failed to load gallery data', 'error');
+    console.error('fetchGalleryData: Error occurred:', error);
+    showToast('Failed to load gallery data: ' + error.message, 'error');
     galleryState.employees = [];
     galleryState.filteredEmployees = [];
     updateStats();
     renderGallery();
   } finally {
+    console.log('fetchGalleryData: Hiding loading state');
     showLoading(false);
   }
 }
@@ -133,12 +152,19 @@ async function fetchGalleryData() {
 // UI Updates
 // ============================================
 function showLoading(show) {
+  console.log('showLoading:', show);
   galleryState.isLoading = show;
   if (elements.loadingState) {
     elements.loadingState.style.display = show ? 'flex' : 'none';
+    console.log('showLoading: loadingState display =', elements.loadingState.style.display);
+  } else {
+    console.warn('showLoading: loadingState element not found');
   }
   if (elements.gallerySection) {
     elements.gallerySection.style.display = show ? 'none' : 'block';
+    console.log('showLoading: gallerySection display =', elements.gallerySection.style.display);
+  } else {
+    console.warn('showLoading: gallerySection element not found');
   }
 }
 
@@ -155,15 +181,24 @@ function updateStats() {
 }
 
 function renderGallery() {
+  console.log('renderGallery: Starting render...');
   const employees = galleryState.filteredEmployees;
+  console.log('renderGallery: Employee count:', employees.length);
 
   if (employees.length === 0) {
+    console.log('renderGallery: No employees, showing empty state');
     if (elements.galleryGrid) elements.galleryGrid.innerHTML = '';
-    if (elements.emptyState) elements.emptyState.style.display = 'flex';
+    if (elements.emptyState) {
+      elements.emptyState.style.display = 'flex';
+      console.log('renderGallery: emptyState display = flex');
+    }
     return;
   }
 
-  if (elements.emptyState) elements.emptyState.style.display = 'none';
+  if (elements.emptyState) {
+    elements.emptyState.style.display = 'none';
+    console.log('renderGallery: emptyState display = none');
+  }
 
   const cards = employees.map(emp => {
     const statusClass = emp.status.toLowerCase();

@@ -156,10 +156,15 @@ async function generateAIHeadshot(imageBase64) {
       elements.aiLoading.style.display = 'none';
       elements.aiError.style.display = 'none';
       
-      // Show Remove Background button (only if not already transparent)
+      // Always show Remove Background button when AI image is ready
+      // Users can use it to remove/re-process background at any time
       if (elements.aiActions) {
-        elements.aiActions.style.display = isTransparent ? 'none' : 'flex';
+        elements.aiActions.style.display = 'flex';
+        console.log('AI Actions button shown - Remove Background available');
       }
+      
+      // Update button text based on transparency state
+      updateRemoveBgButtonState(isTransparent);
       
       // Store transparency state for ID card preview
       elements.aiPreviewImg.dataset.transparent = isTransparent ? 'true' : 'false';
@@ -188,9 +193,9 @@ async function generateAIHeadshot(imageBase64) {
     elements.aiError.style.display = 'block';
     elements.aiError.textContent = 'AI preview unavailable';
     
-    // Hide Remove Background button on error
+    // Still show Remove Background button - user can try after uploading new photo
     if (elements.aiActions) {
-      elements.aiActions.style.display = 'none';
+      elements.aiActions.style.display = 'none';  // Hide when no image
     }
   }
 }
@@ -198,6 +203,25 @@ async function generateAIHeadshot(imageBase64) {
 // ============================================
 // Background Removal
 // ============================================
+
+// Update the Remove Background button state based on image transparency
+function updateRemoveBgButtonState(isTransparent) {
+  const btnText = document.getElementById('removeBgBtnText');
+  const btn = elements.removeBgBtn;
+  
+  if (btnText) {
+    if (isTransparent) {
+      btnText.textContent = 'Re-process Background';
+    } else {
+      btnText.textContent = 'Remove Background';
+    }
+  }
+  
+  if (btn) {
+    btn.disabled = false;
+  }
+}
+
 async function removeBackground(imageData, isUrl = true) {
   try {
     console.log(`Removing background from ${isUrl ? 'URL' : 'base64'}...`);
@@ -231,30 +255,46 @@ async function removeBackground(imageData, isUrl = true) {
 
 // Remove background from AI-generated image (called from Remove Background button)
 async function removeBackgroundFromAI() {
+  console.log('removeBackgroundFromAI: Starting background removal...');
+  
   const aiPreviewImg = elements.aiPreviewImg;
   const removeBgBtn = elements.removeBgBtn;
+  const btnText = document.getElementById('removeBgBtnText');
   
-  if (!aiPreviewImg || !aiPreviewImg.src) {
-    showMessage('No AI image available', 'error');
+  // Validate AI image exists
+  if (!aiPreviewImg) {
+    console.error('removeBackgroundFromAI: AI preview image element not found');
+    showMessage('Error: Image preview not found', 'error');
+    return;
+  }
+  
+  if (!aiPreviewImg.src || aiPreviewImg.src === '' || aiPreviewImg.src === window.location.href) {
+    console.error('removeBackgroundFromAI: No image source available');
+    showMessage('Please wait for AI image to generate first', 'error');
     return;
   }
   
   // Get the current AI image URL
   const imageUrl = aiPreviewImg.src;
+  console.log('removeBackgroundFromAI: Processing image URL:', imageUrl);
   
-  // Update button state
-  const originalText = removeBgBtn ? removeBgBtn.innerHTML : '';
+  // Update button state to show processing
+  const originalText = btnText ? btnText.textContent : 'Remove Background';
+  if (btnText) {
+    btnText.textContent = 'Processing...';
+  }
   if (removeBgBtn) {
-    removeBgBtn.innerHTML = '<span class="spinner-small"></span> Processing...';
     removeBgBtn.disabled = true;
   }
   
   try {
-    console.log('Removing background from AI image:', imageUrl);
+    console.log('removeBackgroundFromAI: Calling removeBackground API...');
     
     const processedUrl = await removeBackground(imageUrl, true);
     
     if (processedUrl) {
+      console.log('removeBackgroundFromAI: Success! New URL:', processedUrl);
+      
       // Update the AI preview image
       aiPreviewImg.src = processedUrl;
       aiPreviewImg.classList.add('transparent-bg');
@@ -263,27 +303,36 @@ async function removeBackgroundFromAI() {
       // Update ID card preview with the new transparent image
       updateIdCardPreview();
       
-      // Hide the Remove Background button since it's now transparent
-      if (elements.aiActions) {
-        elements.aiActions.style.display = 'none';
+      // Update button text to indicate it can be re-processed
+      if (btnText) {
+        btnText.textContent = 'Re-process Background';
+      }
+      if (removeBgBtn) {
+        removeBgBtn.disabled = false;
       }
       
       showMessage('Background removed successfully!', 'success');
+      console.log('removeBackgroundFromAI: Complete');
     } else {
-      showMessage('Failed to remove background', 'error');
-      // Restore button
+      console.error('removeBackgroundFromAI: API returned null/empty result');
+      showMessage('Failed to remove background. Please try again.', 'error');
+      // Restore button state
+      if (btnText) {
+        btnText.textContent = originalText;
+      }
       if (removeBgBtn) {
-        removeBgBtn.innerHTML = originalText;
         removeBgBtn.disabled = false;
       }
     }
     
   } catch (error) {
-    console.error('Error removing background:', error);
-    showMessage('Error removing background', 'error');
-    // Restore button
+    console.error('removeBackgroundFromAI: Error occurred:', error);
+    showMessage('Error removing background: ' + (error.message || 'Unknown error'), 'error');
+    // Restore button state
+    if (btnText) {
+      btnText.textContent = originalText;
+    }
     if (removeBgBtn) {
-      removeBgBtn.innerHTML = originalText;
       removeBgBtn.disabled = false;
     }
   }
