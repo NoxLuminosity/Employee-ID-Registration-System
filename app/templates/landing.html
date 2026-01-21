@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ID Registration System</title>
+  <meta name="description" content="Employee ID Registration System - Apply for your company ID or manage requests">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/static/landing.css">
+</head>
+
+<body>
+  <!-- Cursor Follower -->
+  <div class="cursor-glow" id="cursorGlow"></div>
+
+  <!-- Navigation -->
+  <nav class="nav-bar" id="navBar">
+    <div class="nav-content">
+      <a href="/" class="nav-logo">
+        <div class="logo-mark">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <rect x="3" y="5" width="26" height="22" rx="3" stroke="currentColor" stroke-width="2" />
+            <circle cx="13" cy="14" r="4" stroke="currentColor" stroke-width="1.5" />
+            <path d="M7 23c0-3 2.5-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.5" />
+            <rect x="20" y="10" width="6" height="1.5" rx="0.75" fill="currentColor" />
+            <rect x="20" y="14" width="5" height="1.5" rx="0.75" fill="currentColor" />
+            <rect x="20" y="18" width="4" height="1.5" rx="0.75" fill="currentColor" />
+          </svg>
+        </div>
+        <span class="logo-text">ID Registration</span>
+      </a>
+      <div class="nav-actions">
+        <a href="#roles" class="nav-link nav-link-primary">Choose Your Path</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero-section" id="hero">
+    <div class="hero-background">
+      <div class="grid-pattern"></div>
+      <div class="gradient-orb orb-green"></div>
+      <div class="gradient-orb orb-orange"></div>
+      <div class="flow-lines">
+        <div class="flow-line line-1"></div>
+        <div class="flow-line line-2"></div>
+        <div class="flow-line line-3"></div>
+      </div>
+    </div>
+
+    <div class="hero-content">
+      <div class="hero-text-side">
+        <div class="hero-badge">
+          <span class="badge-dot"></span>
+          Employee Identity Management
+        </div>
+        <h1 class="hero-title">
+          <span class="title-line">Employee ID</span>
+          <span class="title-line accent">Registration</span>
+          <span class="title-line">System</span>
+        </h1>
+        <p class="hero-description">
+          Streamlined identity registration for employees and HR teams.
+          Simple, secure, and efficient.
+        </p>
+        <a href="#roles" class="hero-cta">
+          <span>Get Started</span>
+          <svg viewBox="0 0 20 20" fill="none">
+            <path d="M4 10h12M12 6l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+        </a>
+      </div>
+
+      <!-- Floating ID Card Animation -->
+      <div class="hero-visual-side">
+        <div class="id-card-container" id="idCardContainer">
+          <div class="id-card" id="idCard">
+            <div class="card-header-bar">
+              <div class="card-chip"></div>
+              <span class="card-type">EMPLOYEE ID</span>
+            </div>
+            <div class="card-photo-area">
+              <div class="photo-placeholder">
+                <svg viewBox="0 0 40 40" fill="none">
+                  <circle cx="20" cy="16" r="8" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M6 36c0-8 6-12 14-12s14 4 14 12" stroke="currentColor" stroke-width="1.5" />
+                </svg>
+              </div>
+            </div>
+            <div class="card-info">
+              <div class="info-row animate-in" style="--delay: 0.2s">
+                <span class="info-label">NAME</span>
+                <span class="info-value typing-effect">John Anderson</span>
+              </div>
+              <div class="info-row animate-in" style="--delay: 0.4s">
+                <span class="info-label">ID NO.</span>
+                <span class="info-value mono">EMP-2024-0847</span>
+              </div>
+              <div class="info-row animate-in" style="--delay: 0.6s">
+                <span class="info-label">DEPT</span>
+                <span class="info-value">Engineering</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="card-barcode"></div>
+              <div class="card-valid">VALID 2024-2026</div>
+            </div>
+            <!-- Data flow lines emanating from card -->
+            <div class="data-lines">
+              <div class="data-line line-1"></div>
+              <div class="data-line line-2"></div>
+              <div class="data-line line-3"></div>
+            </div>
+          </div>
+          <!-- Floating particles around card -->
+          <div class="floating-particles">
+            <div class="particle p1"></div>
+            <div class="particle p2"></div>
+            <div class="particle p3"></div>
+            <div class="particle p4"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- Role Selection Section - NOW FIRST -->
+  <section class="roles-section" id="roles">
+    <div class="section-container">
+      <div class="roles-header scroll-reveal">
+        <h2 class="section-title">Choose Your Path</h2>
+        <p class="section-subtitle">Select your role to get started</p>
+      </div>
+
+      <div class="roles-grid">
+        <!-- Applicant Card -->
+        <a href="/apply" class="role-card role-applicant scroll-reveal" data-delay="100" id="roleApplicant">
+          <div class="role-glow"></div>
+          <div class="role-content">
+            <div class="role-icon-wrapper">
+              <div class="role-icon">
+                <svg viewBox="0 0 48 48" fill="none">
+                  <circle cx="24" cy="18" r="10" stroke="currentColor" stroke-width="2" />
+                  <path d="M8 44c0-10 7-14 16-14s16 4 16 14" stroke="currentColor" stroke-width="2" />
+                </svg>
+              </div>
+              <div class="icon-rings">
+                <div class="ring ring-1"></div>
+                <div class="ring ring-2"></div>
+              </div>
+            </div>
+
+            <h3 class="role-title">Apply for ID</h3>
+            <p class="role-description">New employee? Submit your information and photo for your company ID card.</p>
+
+            <!-- Animated form wireframe -->
+            <div class="role-preview">
+              <div class="preview-steps">
+                <div class="step-item step-active">
+                  <div class="step-dot"></div>
+                  <span>Personal Info</span>
+                </div>
+                <div class="step-line"></div>
+                <div class="step-item">
+                  <div class="step-dot"></div>
+                  <span>Upload Photo</span>
+                </div>
+                <div class="step-line"></div>
+                <div class="step-item">
+                  <div class="step-dot"></div>
+                  <span>Submit</span>
+                </div>
+              </div>
+              <div class="preview-form">
+                <div class="form-field">
+                  <div class="field-label"></div>
+                  <div class="field-input typing"></div>
+                </div>
+                <div class="form-field">
+                  <div class="field-label"></div>
+                  <div class="field-input"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="role-cta">
+              <span>Start Application</span>
+              <svg viewBox="0 0 20 20" fill="none">
+                <path d="M4 10h12M12 6l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </div>
+          </div>
+          <div class="card-shine"></div>
+        </a>
+
+        <!-- HR Card -->
+        <a href="/hr/dashboard" class="role-card role-hr scroll-reveal" data-delay="200" id="roleHR">
+          <div class="role-glow"></div>
+          <div class="role-content">
+            <div class="role-icon-wrapper">
+              <div class="role-icon">
+                <svg viewBox="0 0 48 48" fill="none">
+                  <rect x="6" y="10" width="36" height="28" rx="3" stroke="currentColor" stroke-width="2" />
+                  <path d="M6 18h36" stroke="currentColor" stroke-width="2" />
+                  <rect x="10" y="14" width="4" height="2" rx="1" fill="currentColor" />
+                  <rect x="16" y="14" width="4" height="2" rx="1" fill="currentColor" />
+                  <rect x="22" y="14" width="4" height="2" rx="1" fill="currentColor" />
+                  <rect x="10" y="24" width="16" height="3" rx="1" fill="currentColor" opacity="0.4" />
+                  <rect x="10" y="30" width="12" height="3" rx="1" fill="currentColor" opacity="0.3" />
+                  <rect x="30" y="24" width="8" height="10" rx="1" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M32 27l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+              </div>
+              <div class="icon-rings">
+                <div class="ring ring-1"></div>
+                <div class="ring ring-2"></div>
+              </div>
+            </div>
+
+            <h3 class="role-title">HR Dashboard</h3>
+            <p class="role-description">Review, verify, and manage employee ID requests.</p>
+
+            <!-- Animated table preview -->
+            <div class="role-preview">
+              <div class="preview-table">
+                <div class="table-row header">
+                  <div class="cell">Name</div>
+                  <div class="cell">Dept</div>
+                  <div class="cell">Status</div>
+                </div>
+                <div class="table-row">
+                  <div class="cell">
+                    <div class="cell-content"></div>
+                  </div>
+                  <div class="cell">
+                    <div class="cell-content short"></div>
+                  </div>
+                  <div class="cell"><span class="status-badge pending">Pending</span></div>
+                </div>
+                <div class="table-row animating">
+                  <div class="cell">
+                    <div class="cell-content"></div>
+                  </div>
+                  <div class="cell">
+                    <div class="cell-content short"></div>
+                  </div>
+                  <div class="cell"><span class="status-badge approved">Approved</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="role-cta">
+              <span>Access Dashboard</span>
+              <svg viewBox="0 0 20 20" fill="none">
+                <path d="M4 10h12M12 6l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </div>
+          </div>
+          <div class="card-shine"></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Flow Section - How It Works - NOW SECOND -->
+  <section class="flow-section" id="flowSection">
+    <div class="section-container">
+      <div class="flow-header scroll-reveal">
+        <h2 class="section-title">How It Works</h2>
+        <p class="section-subtitle">Identity flows through a secure, streamlined process</p>
+      </div>
+
+      <div class="flow-visualization">
+        <!-- Central node -->
+        <div class="flow-center scroll-reveal" data-delay="100">
+          <div class="center-icon" id="centerIcon">
+            <svg viewBox="0 0 48 48" fill="none">
+              <rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" stroke-width="2" />
+              <circle cx="18" cy="22" r="6" stroke="currentColor" stroke-width="1.5" />
+              <path d="M10 36c0-5 4-8 8-8s8 3 8 8" stroke="currentColor" stroke-width="1.5" />
+              <rect x="28" y="18" width="12" height="2" rx="1" fill="currentColor" />
+              <rect x="28" y="24" width="10" height="2" rx="1" fill="currentColor" />
+              <rect x="28" y="30" width="8" height="2" rx="1" fill="currentColor" />
+            </svg>
+          </div>
+          <span class="center-label">Identity Created</span>
+        </div>
+
+        <!-- Timeline container -->
+        <div class="timeline-container">
+          <!-- Vertical connector from center -->
+          <div class="timeline-stem"></div>
+          
+          <!-- Horizontal connector line -->
+          <div class="timeline-horizontal">
+            <div class="timeline-line"></div>
+            <div class="timeline-dot timeline-dot-left"></div>
+            <div class="timeline-dot timeline-dot-right"></div>
+          </div>
+
+          <!-- Vertical connectors to cards -->
+          <div class="timeline-verticals">
+            <div class="timeline-vertical timeline-vertical-left"></div>
+            <div class="timeline-vertical timeline-vertical-right"></div>
+          </div>
+          
+          <!-- Flowing dots - Green path (Identity Created → Applicant) -->
+          <div class="flow-dot flow-dot-green" aria-hidden="true"></div>
+          <!-- Flowing dots - Orange path (Identity Created → HR Reviewer) -->
+          <div class="flow-dot flow-dot-orange" aria-hidden="true"></div>
+        </div>
+
+        <!-- Destination cards -->
+        <div class="flow-destinations">
+          <div class="destination-card dest-applicant scroll-reveal" data-delay="200" id="destApplicant">
+            <div class="dest-icon">
+              <svg viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="14" r="8" stroke="currentColor" stroke-width="2" />
+                <path d="M6 38c0-8 6-12 14-12s14 4 14 12" stroke="currentColor" stroke-width="2" />
+              </svg>
+            </div>
+            <h3>Applicant</h3>
+            <p>Submit your information</p>
+          </div>
+
+          <div class="destination-card dest-hr scroll-reveal" data-delay="300" id="destHR">
+            <div class="dest-icon">
+              <svg viewBox="0 0 40 40" fill="none">
+                <rect x="4" y="6" width="32" height="28" rx="2" stroke="currentColor" stroke-width="2" />
+                <path d="M4 14h32" stroke="currentColor" stroke-width="2" />
+                <circle cx="12" cy="10" r="2" fill="currentColor" />
+                <circle cx="20" cy="10" r="2" fill="currentColor" />
+                <rect x="8" y="20" width="10" height="4" rx="1" fill="currentColor" opacity="0.5" />
+                <rect x="8" y="28" width="8" height="2" rx="1" fill="currentColor" opacity="0.3" />
+                <rect x="22" y="20" width="10" height="4" rx="1" fill="currentColor" opacity="0.5" />
+                <rect x="22" y="28" width="6" height="2" rx="1" fill="currentColor" opacity="0.3" />
+              </svg>
+            </div>
+            <h3>HR Reviewer</h3>
+            <p>Verify & approve requests</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Simple Footer -->
+  <footer class="main-footer">
+    <div class="footer-content">
+      <p>&copy; 2026 Employee ID Registration System</p>
+    </div>
+  </footer>
+
+  <script src="/static/landing.js"></script>
+</body>
+
+</html>

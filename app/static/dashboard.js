@@ -1,0 +1,610 @@
+/**
+ * HR Dashboard JavaScript
+ * Handles data fetching, filtering, and actions
+ */
+
+// ============================================
+// State Management
+// ============================================
+const dashboardState = {
+  employees: [],
+  filteredEmployees: [],
+  isLoading: true
+};
+
+// ============================================
+// DOM Elements
+// ============================================
+const elements = {
+  loadingState: document.getElementById('loadingState'),
+  tableSection: document.getElementById('tableSection'),
+  employeeTableBody: document.getElementById('employeeTableBody'),
+  emptyState: document.getElementById('emptyState'),
+  tableCount: document.getElementById('tableCount'),
+  searchInput: document.getElementById('searchInput'),
+  statusFilter: document.getElementById('statusFilter'),
+  departmentFilter: document.getElementById('departmentFilter'),
+  totalCount: document.getElementById('totalCount'),
+  reviewingCount: document.getElementById('reviewingCount'),
+  approvedCount: document.getElementById('approvedCount'),
+  completedCount: document.getElementById('completedCount'),
+  detailsModal: document.getElementById('detailsModal'),
+  modalBody: document.getElementById('modalBody'),
+  modalFooter: document.getElementById('modalFooter'),
+  closeModal: document.getElementById('closeModal'),
+  toast: document.getElementById('toast'),
+  toastMessage: document.getElementById('toastMessage'),
+  viewGalleryBtn: document.getElementById('viewGalleryBtn'),
+  syncSheetsBtn: document.getElementById('syncSheetsBtn'),
+  exportDataBtn: document.getElementById('exportDataBtn'),
+  refreshDataBtn: document.getElementById('refreshDataBtn')
+};
+
+// ============================================
+// Initialization
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+  initEventListeners();
+  fetchEmployeeData();
+});
+
+function initEventListeners() {
+  // Search and filter
+  elements.searchInput.addEventListener('input', debounce(filterEmployees, 300));
+  elements.statusFilter.addEventListener('change', filterEmployees);
+  elements.departmentFilter.addEventListener('change', filterEmployees);
+
+  // Modal
+  elements.closeModal.addEventListener('click', closeModal);
+  elements.detailsModal.addEventListener('click', (e) => {
+    if (e.target === elements.detailsModal) closeModal();
+  });
+
+  // Quick actions
+  elements.viewGalleryBtn.addEventListener('click', () => {
+    window.location.href = '/hr/gallery';
+  });
+
+  elements.syncSheetsBtn.addEventListener('click', syncToGoogleSheets);
+  elements.exportDataBtn.addEventListener('click', exportData);
+  elements.refreshDataBtn.addEventListener('click', () => {
+    fetchEmployeeData();
+    showToast('Data refreshed successfully', 'success');
+  });
+
+  // Escape key to close modal
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+  });
+}
+
+// ============================================
+// Data Fetching
+// ============================================
+async function fetchEmployeeData() {
+  showLoading(true);
+
+  try {
+    const response = await fetch('/hr/api/employees');
+    const data = await response.json();
+
+    if (data.success) {
+      dashboardState.employees = data.employees || [];
+      dashboardState.filteredEmployees = [...dashboardState.employees];
+      updateStatusCounts();
+      renderEmployeeTable();
+    } else {
+      throw new Error(data.error || 'Failed to fetch data');
+    }
+  } catch (error) {
+    console.error('Error fetching employee data:', error);
+    showToast('Failed to load employee data', 'error');
+    dashboardState.employees = [];
+    dashboardState.filteredEmployees = [];
+    updateStatusCounts();
+    renderEmployeeTable();
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ============================================
+// UI Updates
+// ============================================
+function showLoading(show) {
+  dashboardState.isLoading = show;
+  elements.loadingState.style.display = show ? 'flex' : 'none';
+  elements.tableSection.style.display = show ? 'none' : 'block';
+}
+
+function updateStatusCounts() {
+  const employees = dashboardState.employees;
+  const total = employees.length;
+  const reviewing = employees.filter(e => e.status === 'Reviewing').length;
+  const approved = employees.filter(e => e.status === 'Approved').length;
+  const completed = employees.filter(e => e.status === 'Completed').length;
+
+  elements.totalCount.textContent = total;
+  elements.reviewingCount.textContent = reviewing;
+  elements.approvedCount.textContent = approved;
+  elements.completedCount.textContent = completed;
+}
+
+function renderEmployeeTable() {
+  const employees = dashboardState.filteredEmployees;
+  const total = dashboardState.employees.length;
+
+  // Update count
+  elements.tableCount.textContent = `${employees.length} of ${total} employees`;
+
+  // Check if empty
+  if (employees.length === 0) {
+    elements.employeeTableBody.innerHTML = '';
+    elements.emptyState.style.display = 'flex';
+    return;
+  }
+
+  elements.emptyState.style.display = 'none';
+
+  // Render table rows
+  const rows = employees.map(emp => {
+    // Use photo_url (Cloudinary) if available, otherwise fall back to local path
+    const photoSrc = emp.photo_url || (emp.photo_path ? `/static/${emp.photo_path}` : null);
+    const photoHtml = photoSrc 
+      ? `<img src="${photoSrc}" alt="${emp.employee_name}" class="employee-photo" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><div class="photo-placeholder" style="display:none;">👤</div>`
+      : `<div class="photo-placeholder">👤</div>`;
+
+    // AI-generated photo (new_photo_url)
+    const newPhotoSrc = emp.new_photo_url;
+    const newPhotoHtml = newPhotoSrc 
+      ? `<img src="${newPhotoSrc}" alt="AI Photo" class="employee-photo ai-photo" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><div class="photo-placeholder" style="display:none;">🤖</div>`
+      : `<div class="photo-placeholder no-ai">—</div>`;
+
+    const statusClass = emp.status.toLowerCase();
+    const submittedDate = emp.date_last_modified 
+      ? new Date(emp.date_last_modified).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        })
+      : '-';
+
+    const canApprove = emp.status === 'Reviewing';
+    const canDownload = emp.status === 'Approved' || emp.status === 'Completed';
+
+    return `
+      <tr data-id="${emp.id}">
+        <td>${photoHtml}</td>
+        <td>${newPhotoHtml}</td>
+        <td>
+          <div class="employee-info">
+            <span class="employee-name">${escapeHtml(emp.employee_name)}</span>
+            <span class="employee-id">${escapeHtml(emp.id_number)}</span>
+          </div>
+        </td>
+        <td><span class="employee-email">${escapeHtml(emp.email || '-')}</span></td>
+        <td>${escapeHtml(emp.department)}</td>
+        <td>${escapeHtml(emp.position)}</td>
+        <td><span class="status-badge ${statusClass}">${emp.status}</span></td>
+        <td>${submittedDate}</td>
+        <td>
+          <div class="action-buttons">
+            ${canApprove ? `<button class="action-btn-sm approve" onclick="approveEmployee(${emp.id})">Approve</button>` : ''}
+            <button class="action-btn-sm view" onclick="viewDetails(${emp.id})">Details</button>
+            ${canDownload ? `<button class="action-btn-sm download" onclick="downloadID(${emp.id})">Download</button>` : ''}
+            <button class="action-btn-sm remove" onclick="removeEmployee(${emp.id})">Remove</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  elements.employeeTableBody.innerHTML = rows;
+}
+
+// ============================================
+// Filtering
+// ============================================
+function filterEmployees() {
+  const searchTerm = elements.searchInput.value.toLowerCase().trim();
+  const statusFilter = elements.statusFilter.value;
+  const deptFilter = elements.departmentFilter.value;
+
+  dashboardState.filteredEmployees = dashboardState.employees.filter(emp => {
+    // Search filter
+    const matchesSearch = !searchTerm || 
+      emp.employee_name.toLowerCase().includes(searchTerm) ||
+      emp.id_number.toLowerCase().includes(searchTerm) ||
+      emp.department.toLowerCase().includes(searchTerm) ||
+      emp.position.toLowerCase().includes(searchTerm);
+
+    // Status filter
+    const matchesStatus = !statusFilter || emp.status === statusFilter;
+
+    // Department filter
+    const matchesDept = !deptFilter || emp.department === deptFilter;
+
+    return matchesSearch && matchesStatus && matchesDept;
+  });
+
+  renderEmployeeTable();
+}
+
+// ============================================
+// Actions
+// ============================================
+async function approveEmployee(id) {
+  if (!confirm('Are you sure you want to approve this application?')) return;
+
+  try {
+    const response = await fetch(`/hr/api/employees/${id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      // Update local state
+      const emp = dashboardState.employees.find(e => e.id === id);
+      if (emp) emp.status = 'Approved';
+      
+      updateStatusCounts();
+      filterEmployees();
+      showToast('Application approved successfully', 'success');
+    } else {
+      throw new Error(data.error || 'Failed to approve');
+    }
+  } catch (error) {
+    console.error('Error approving employee:', error);
+    showToast('Failed to approve application', 'error');
+  }
+}
+
+async function removeEmployee(id) {
+  const emp = dashboardState.employees.find(e => e.id === id);
+  const empName = emp ? emp.employee_name : 'this employee';
+  
+  if (!confirm(`Are you sure you want to remove ${empName}'s application? This action cannot be undone.`)) return;
+
+  try {
+    const response = await fetch(`/hr/api/employees/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      // Remove from local state
+      dashboardState.employees = dashboardState.employees.filter(e => e.id !== id);
+      dashboardState.filteredEmployees = dashboardState.filteredEmployees.filter(e => e.id !== id);
+      
+      updateStatusCounts();
+      renderEmployeeTable();
+      showToast(data.message || 'Application removed successfully', 'success');
+    } else {
+      throw new Error(data.error || 'Failed to remove');
+    }
+  } catch (error) {
+    console.error('Error removing employee:', error);
+    showToast('Failed to remove application', 'error');
+  }
+}
+
+async function removeBackground(id) {
+  const emp = dashboardState.employees.find(e => e.id === id);
+  if (!emp) {
+    console.error('Employee not found:', id);
+    return;
+  }
+
+  console.log('Starting background removal for employee:', id);
+  console.log('AI Photo URL:', emp.new_photo_url);
+
+  // Find the button by looking for it in the modal
+  const button = document.querySelector('.nobg-photo-box button');
+  let originalText = '';
+  
+  if (button) {
+    originalText = button.innerHTML;
+    button.innerHTML = '⏳ Processing...';
+    button.disabled = true;
+  }
+
+  try {
+    console.log('Sending request to /hr/api/employees/' + id + '/remove-background');
+    
+    const response = await fetch(`/hr/api/employees/${id}/remove-background`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    console.log('Response status:', response.status);
+    
+    const data = await response.json();
+    console.log('Response data:', data);
+
+    if (data.success) {
+      // Update local state
+      emp.nobg_photo_url = data.nobg_photo_url;
+      
+      // Re-render the details modal with updated photo
+      viewDetails(id);
+      
+      showToast(data.message || 'Background removed successfully', 'success');
+    } else {
+      throw new Error(data.error || 'Failed to remove background');
+    }
+  } catch (error) {
+    console.error('Error removing background:', error);
+    showToast('Failed to remove background: ' + error.message, 'error');
+    
+    // Restore button
+    if (button) {
+      button.innerHTML = originalText;
+      button.disabled = false;
+    }
+  }
+}
+
+function viewDetails(id) {
+  const emp = dashboardState.employees.find(e => e.id === id);
+  if (!emp) return;
+
+  // Original photo
+  const photoSrc = emp.photo_url || (emp.photo_path ? `/static/${emp.photo_path}` : null);
+  const photoHtml = photoSrc 
+    ? `<img src="${photoSrc}" alt="${emp.employee_name}">`
+    : '<p style="color: var(--color-text-muted);">No photo available</p>';
+
+  // AI-generated photo
+  const newPhotoHtml = emp.new_photo_url 
+    ? `<img src="${emp.new_photo_url}" alt="AI Generated Photo">`
+    : '<p style="color: var(--color-text-muted);">No AI photo generated</p>';
+
+  // Background-removed photo (for ID card)
+  const nobgPhotoHtml = emp.nobg_photo_url 
+    ? `<img src="${emp.nobg_photo_url}" alt="ID Card Photo" style="background: linear-gradient(45deg, #e0e0e0 25%, transparent 25%), linear-gradient(-45deg, #e0e0e0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e0e0e0 75%), linear-gradient(-45deg, transparent 75%, #e0e0e0 75%); background-size: 10px 10px; background-position: 0 0, 0 5px, 5px -5px, -5px 0px;">`
+    : (emp.new_photo_url 
+        ? `<button class="btn btn-sm btn-primary" onclick="removeBackground(${emp.id})">🖼️ Remove Background</button>`
+        : '<p style="color: var(--color-text-muted);">No AI photo available</p>');
+
+  const signatureHtml = emp.signature_url 
+    ? `<img src="${emp.signature_url}" alt="Signature" style="max-height: 60px;">`
+    : '<p style="color: var(--color-text-muted);">No signature available</p>';
+
+  elements.modalBody.innerHTML = `
+    <div class="detail-photos-row">
+      <div class="detail-item detail-photo">
+        <span class="detail-label">Original Photo</span>
+        ${photoHtml}
+      </div>
+      <div class="detail-item detail-photo ai-photo-box">
+        <span class="detail-label">AI Photo</span>
+        ${newPhotoHtml}
+      </div>
+      <div class="detail-item detail-photo nobg-photo-box">
+        <span class="detail-label">ID Photo</span>
+        ${nobgPhotoHtml}
+      </div>
+    </div>
+    <div class="details-grid">
+      <div class="detail-item">
+        <span class="detail-label">Employee Name</span>
+        <span class="detail-value">${escapeHtml(emp.employee_name)}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">ID Nickname</span>
+        <span class="detail-value">${escapeHtml(emp.id_nickname || '-')}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">ID Number</span>
+        <span class="detail-value">${escapeHtml(emp.id_number)}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Department</span>
+        <span class="detail-value">${escapeHtml(emp.department)}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Position</span>
+        <span class="detail-value">${escapeHtml(emp.position)}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Email</span>
+        <span class="detail-value">${escapeHtml(emp.email)}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Phone</span>
+        <span class="detail-value">${escapeHtml(emp.personal_number)}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Status</span>
+        <span class="detail-value">
+          <span class="status-badge ${emp.status.toLowerCase()}">${emp.status}</span>
+        </span>
+      </div>
+      <div class="detail-item full-width">
+        <span class="detail-label">Signature</span>
+        <div class="detail-value" style="background: white; text-align: center;">
+          ${signatureHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Footer buttons based on status
+  let footerHtml = `
+    <button class="btn btn-danger" onclick="removeEmployee(${emp.id}); closeModal();">Remove</button>
+    <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+  `;
+  
+  if (emp.status === 'Reviewing') {
+    footerHtml = `
+      <button class="btn btn-danger" onclick="removeEmployee(${emp.id}); closeModal();">Remove</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+      <button class="btn btn-primary" onclick="approveEmployee(${emp.id}); closeModal();">Approve</button>
+    `;
+  } else if (emp.status === 'Approved' || emp.status === 'Completed') {
+    footerHtml = `
+      <button class="btn btn-danger" onclick="removeEmployee(${emp.id}); closeModal();">Remove</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+      <button class="btn btn-primary" onclick="downloadID(${emp.id})">Download ID</button>
+    `;
+  }
+
+  elements.modalFooter.innerHTML = footerHtml;
+  elements.detailsModal.classList.add('active');
+}
+
+function closeModal() {
+  elements.detailsModal.classList.remove('active');
+}
+
+async function downloadID(id) {
+  const emp = dashboardState.employees.find(e => e.id === id);
+  if (!emp) return;
+
+  showToast('Generating ID card PDF...', 'success');
+
+  try {
+    // Call the download endpoint
+    const response = await fetch(`/hr/api/employees/${id}/download-id`);
+    
+    if (response.ok) {
+      // If we get a blob, download it
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      
+      // Mark as completed if approved
+      if (emp.status === 'Approved') {
+        await markAsCompleted(id);
+      }
+      
+      showToast('ID card downloaded successfully', 'success');
+    } else {
+      const data = await response.json();
+      throw new Error(data.error || 'Download failed');
+    }
+  } catch (error) {
+    console.error('Error downloading ID:', error);
+    showToast('ID template is being finalized. Download will be available soon.', 'error');
+  }
+}
+
+async function markAsCompleted(id) {
+  try {
+    const response = await fetch(`/hr/api/employees/${id}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (response.ok) {
+      const emp = dashboardState.employees.find(e => e.id === id);
+      if (emp) emp.status = 'Completed';
+      updateStatusCounts();
+      filterEmployees();
+    }
+  } catch (error) {
+    console.error('Error marking as completed:', error);
+  }
+}
+
+// ============================================
+// Quick Actions
+// ============================================
+async function syncToGoogleSheets() {
+  showToast('Syncing to Google Sheets...', 'success');
+
+  try {
+    const response = await fetch('/hr/api/sync-sheets', { method: 'POST' });
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Successfully synced to Google Sheets', 'success');
+    } else {
+      throw new Error(data.error || 'Sync failed');
+    }
+  } catch (error) {
+    console.error('Error syncing:', error);
+    showToast('Failed to sync to Google Sheets', 'error');
+  }
+}
+
+function exportData() {
+  const employees = dashboardState.filteredEmployees;
+  
+  if (employees.length === 0) {
+    showToast('No data to export', 'error');
+    return;
+  }
+
+  // Create CSV content
+  const headers = ['Employee Name', 'ID Number', 'Department', 'Position', 'Email', 'Phone', 'Status', 'Submitted Date'];
+  const rows = employees.map(emp => [
+    emp.employee_name,
+    emp.id_number,
+    emp.department,
+    emp.position,
+    emp.email,
+    emp.personal_number,
+    emp.status,
+    emp.date_last_modified || ''
+  ]);
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+  ].join('\n');
+
+  // Download CSV
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `employee_applications_${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(url);
+  a.remove();
+
+  showToast('Data exported successfully', 'success');
+}
+
+// ============================================
+// Utilities
+// ============================================
+function showToast(message, type = 'success') {
+  elements.toastMessage.textContent = message;
+  elements.toast.className = `toast show ${type}`;
+
+  setTimeout(() => {
+    elements.toast.classList.remove('show');
+  }, 3000);
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}

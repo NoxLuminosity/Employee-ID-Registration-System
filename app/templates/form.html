@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Employee ID Registration</title>
+  <meta name="description" content="Employee ID Registration System - Submit your details for company ID card">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="registration-card">
+    <!-- Header -->
+    <div class="card-header">
+      <h1>Employee ID Registration</h1>
+      <p class="subtitle">Complete all fields below and submit your information</p>
+    </div>
+
+    <!-- Form -->
+    <div class="card-body">
+      <form id="registrationForm" enctype="multipart/form-data">
+        <!-- Message Container -->
+        <div id="messageContainer"></div>
+
+        <!-- Personal Details Section -->
+        <section class="form-section">
+          <h2 class="section-title">Personal Details</h2>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="employee_name">Employee Name <span class="required">*</span></label>
+              <input type="text" id="employee_name" name="employee_name" required maxlength="40" placeholder="Enter your full name">
+            </div>
+            <div class="form-group">
+              <label for="id_nickname">ID Nickname</label>
+              <input type="text" id="id_nickname" name="id_nickname" maxlength="20" placeholder="Nickname for ID (optional)">
+            </div>
+            <div class="form-group">
+              <label for="id_number">ID Number <span class="required">*</span></label>
+              <input type="text" id="id_number" name="id_number" required placeholder="e.g., EMP-001">
+            </div>
+            <div class="form-group full-width">
+              <label>Photo <span class="required">*</span></label>
+              <div class="file-upload">
+                <div class="file-upload-area" id="photoUploadArea">
+                  <span class="icon">📷</span>
+                  <p>Click to upload or drag and drop</p>
+                  <p style="font-size: 0.75rem;">PNG, JPG up to 5MB</p>
+                </div>
+                <input type="file" id="photo" name="photo" accept="image/*" required>
+              </div>
+              <!-- Photo Preview: Raw + AI Generated side by side -->
+              <div class="photo-comparison" id="photoComparison" style="display: none;">
+                <div class="photo-comparison-item">
+                  <label>Original Photo</label>
+                  <div class="file-preview active">
+                    <img id="photoPreviewImg" src="" alt="Original photo">
+                  </div>
+                </div>
+                <div class="photo-comparison-item">
+                  <label>AI Enhanced Preview <span style="font-weight: normal; font-size: 0.75rem;">(click to view full size)</span></label>
+                  <div class="file-preview active ai-preview-container" id="aiPreviewContainer">
+                    <div class="ai-loading" id="aiLoading">
+                      <div class="spinner"></div>
+                      <p id="aiLoadingText">Generating professional headshot...</p>
+                    </div>
+                    <img id="aiPreviewImg" class="ai-clickable" src="" alt="AI generated headshot" style="display: none;" onclick="openLightbox(this.src)">
+                    <p class="ai-error" id="aiError" style="display: none;">AI generation unavailable</p>
+                  </div>
+                </div>
+              </div>
+              <!-- Hidden legacy preview for compatibility -->
+              <div class="file-preview" id="photoPreview" style="display: none;">
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Work Details Section -->
+        <section class="form-section">
+          <h2 class="section-title">Work Details</h2>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="position">Position <span class="required">*</span></label>
+              <input type="text" id="position" name="position" required maxlength="30" placeholder="e.g., Software Engineer">
+            </div>
+            <div class="form-group">
+              <label for="department">Department <span class="required">*</span></label>
+              <select id="department" name="department" required>
+                <option value="">Select Department</option>
+                <option value="HR">HR</option>
+                <option value="IT">IT</option>
+                <option value="Finance">Finance</option>
+                <option value="Operations">Operations</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Sales">Sales</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- Contact Info Section -->
+        <section class="form-section">
+          <h2 class="section-title">Contact Information</h2>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="email">Email Address <span class="required">*</span></label>
+              <input type="email" id="email" name="email" required placeholder="employee@company.com">
+            </div>
+            <div class="form-group">
+              <label for="personal_number">Personal Number <span class="required">*</span></label>
+              <input type="tel" id="personal_number" name="personal_number" required placeholder="+63 9XX XXX XXXX">
+            </div>
+          </div>
+        </section>
+
+        <!-- Signature Section -->
+        <section class="form-section">
+          <h2 class="section-title">Digital Signature</h2>
+          <div class="signature-container">
+            <label>Sign Below <span class="required">*</span></label>
+            <div class="signature-pad-wrapper">
+              <canvas id="signaturePad" class="signature-pad"></canvas>
+              <div class="signature-actions">
+                <button type="button" class="btn-clear" id="clearSignature">Clear</button>
+              </div>
+            </div>
+            <input type="hidden" id="signature_data" name="signature_data">
+          </div>
+        </section>
+
+        <!-- ID Card Preview Section -->
+        <section class="form-section id-preview-section">
+          <h2 class="section-title">ID Card Preview</h2>
+          <p class="review-subtitle">Live preview of your ID card. Fill in the form to see changes.</p>
+          
+          <div class="id-preview-wrapper">
+            <div class="id-card">
+              <!-- Photo Section with Blue Sidebar -->
+              <div class="id-card-top">
+                <!-- Blue vertical sidebar -->
+                <div class="id-sidebar">
+                  <span class="id-nickname-vertical" id="id_preview_nickname">Nickname</span>
+                </div>
+
+                <!-- Photo area -->
+                <div class="id-photo-section">
+                  <!-- Header with Logo -->
+                  <div class="id-header">
+                    <div class="id-logo-group">
+                      <span class="id-logo-spm">SPM</span>
+                      <span class="id-logo-divider">|</span>
+                    </div>
+                    <span class="id-logo-text">S.P. MADRID</span>
+                  </div>
+                  
+                  <!-- Photo placeholder with geometric background -->
+                  <div class="id-photo-container">
+                    <img id="id_preview_photo" src="" alt="Employee photo" style="display: none;">
+                    <span class="id-photo-placeholder" id="id_preview_photo_placeholder">AI Image</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bottom Info Section -->
+              <div class="id-card-bottom">
+                <div class="id-info-container">
+                  <!-- Left side - Name, Title, Barcode -->
+                  <div class="id-info-left">
+                    <h1 class="id-fullname" id="id_preview_fullname">Employee Fullname</h1>
+                    
+                    <div class="id-position-dept">
+                      <span id="id_preview_department">Department</span>
+                      <span class="id-dash">-</span>
+                      <span id="id_preview_position">Position</span>
+                    </div>
+
+                    <!-- Barcode area -->
+                    <div class="id-barcode-area">
+                      <div class="id-barcode-placeholder">
+                        <span>Barcode</span>
+                      </div>
+                      <p class="id-number-text" id="id_preview_idnumber">ID Number</p>
+                    </div>
+                  </div>
+
+                  <!-- Right side - Signature (larger area with geometric background) -->
+                  <div class="id-signature-area">
+                    <img id="id_preview_signature" src="" alt="Signature" style="display: none;">
+                    <span class="id-signature-placeholder" id="id_preview_signature_placeholder">Signature</span>
+                  </div>
+                </div>
+
+                <!-- Website icon and URL -->
+                <div class="id-website-strip">
+                  <p class="id-website-url">www.spmadrid.com</p>
+                  <svg class="id-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                  </svg>
+                </div>
+
+                <!-- Expiration Date -->
+                <div class="id-expiration">
+                  <span class="id-exp-label">Expiration Date:</span>
+                  <span class="id-exp-date">Date</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Review Summary Section -->
+        <section class="form-section review-section">
+          <h2 class="section-title">Review Your Information</h2>
+          <p class="review-subtitle">Please verify all details are correct before submitting.</p>
+          
+          <div class="review-card">
+            <h3 class="review-card-title">Personal Details</h3>
+            <div class="review-grid">
+              <div class="review-item">
+                <label>Employee Name</label>
+                <div class="value" id="review_employee_name">-</div>
+              </div>
+              <div class="review-item">
+                <label>ID Nickname</label>
+                <div class="value" id="review_id_nickname">-</div>
+              </div>
+              <div class="review-item">
+                <label>ID Number</label>
+                <div class="value" id="review_id_number">-</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="review-card">
+            <h3 class="review-card-title">Work Details</h3>
+            <div class="review-grid">
+              <div class="review-item">
+                <label>Position</label>
+                <div class="value" id="review_position">-</div>
+              </div>
+              <div class="review-item">
+                <label>Department</label>
+                <div class="value" id="review_department">-</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="review-card">
+            <h3 class="review-card-title">Contact Information</h3>
+            <div class="review-grid">
+              <div class="review-item">
+                <label>Email Address</label>
+                <div class="value" id="review_email">-</div>
+              </div>
+              <div class="review-item">
+                <label>Personal Number</label>
+                <div class="value" id="review_personal_number">-</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="review-card">
+            <h3 class="review-card-title">Uploaded Files</h3>
+            <div class="review-images-grid">
+              <div class="review-image-box">
+                <label>Photo</label>
+                <div class="review-image-container">
+                  <img id="review_photo" src="" alt="Employee photo">
+                  <span class="no-image" id="review_photo_placeholder">No photo uploaded</span>
+                </div>
+              </div>
+              <div class="review-image-box">
+                <label>Signature</label>
+                <div class="review-image-container signature-bg">
+                  <img id="review_signature" src="" alt="Signature">
+                  <span class="no-image" id="review_signature_placeholder">No signature provided</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-notice">
+            <strong>Note:</strong> Please verify all information is correct before submitting. 
+            Fields marked with <span class="required">*</span> are required.
+          </div>
+        </section>
+
+        <!-- Navigation Buttons -->
+        <div class="button-group">
+          <button type="button" class="btn btn-danger" id="btnCancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btnSubmit">Submit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Image Lightbox Modal -->
+  <div class="image-lightbox" id="imageLightbox" onclick="closeLightbox(event)">
+    <span class="lightbox-close" onclick="closeLightbox(event)">&times;</span>
+    <img id="lightboxImg" src="" alt="Full size preview">
+    <span class="lightbox-hint">Click anywhere to close</span>
+  </div>
+
+  <script>
+    // Lightbox functions
+    function openLightbox(src) {
+      const lightbox = document.getElementById('imageLightbox');
+      const lightboxImg = document.getElementById('lightboxImg');
+      lightboxImg.src = src;
+      lightbox.classList.add('active');
+      document.body.style.overflow = 'hidden'; // Prevent scrolling
+    }
+    
+    function closeLightbox(event) {
+      // Only close if clicking the backdrop or close button, not the image
+      if (event.target.id === 'lightboxImg') return;
+      const lightbox = document.getElementById('imageLightbox');
+      lightbox.classList.remove('active');
+      document.body.style.overflow = ''; // Restore scrolling
+    }
+    
+    // Close lightbox on Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const lightbox = document.getElementById('imageLightbox');
+        if (lightbox.classList.contains('active')) {
+          lightbox.classList.remove('active');
+          document.body.style.overflow = '';
+        }
+      }
+    });
+  </script>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
