@@ -165,14 +165,77 @@ def verify_api_session(hr_session: str = Cookie(None)):
     return session["username"]
 
 
-@router.get("/api/employees")
-def api_get_employees(hr_session: str = Cookie(None)):
-    """Get all employees for the dashboard"""
-    if not get_session(hr_session):
-        return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
+@router.get("/api/debug")
+def api_debug(hr_session: str = Cookie(None)):
+    """Debug endpoint to check database and session status"""
+    import os
+    
+    debug_info = {
+        "is_vercel": IS_VERCEL,
+        "db_name": DB_NAME,
+        "db_exists": os.path.exists(DB_NAME),
+        "session_present": hr_session is not None,
+        "session_valid": False,
+        "employee_count": 0,
+        "table_exists": False,
+        "error": None
+    }
+    
+    # Check session
+    session = get_session(hr_session)
+    if session:
+        debug_info["session_valid"] = True
+        debug_info["session_username"] = session.get("username")
+    
+    # Check database
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        
+        # Check if table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='employees'")
+        table_exists = cursor.fetchone()
+        debug_info["table_exists"] = table_exists is not None
+        
+        if table_exists:
+            cursor.execute("SELECT COUNT(*) as count FROM employees")
+            count = cursor.fetchone()
+            debug_info["employee_count"] = count["count"] if count else 0
+            
+            # Get status breakdown
+            cursor.execute("SELECT status, COUNT(*) as count FROM employees GROUP BY status")
+            status_counts = cursor.fetchall()
+            debug_info["status_breakdown"] = {row["status"] or "null": row["count"] for row in status_counts}
+        
+        conn.close()
+    except Exception as e:
+        debug_info["error"] = str(e)
+    
+    logger.info(f"Debug endpoint: {debug_info}")
+    return JSONResponse(content=debug_info)
+
+
+@router.get("/api/employees")
+def api_get_employees(hr_session: str = Cookie(None)):
+    """Get all employees for the dashboard"""
+    logger.info(f"API /api/employees called, hr_session present: {hr_session is not None}")
+    logger.info(f"IS_VERCEL: {IS_VERCEL}, DB_NAME: {DB_NAME}")
+    
+    session = get_session(hr_session)
+    if not session:
+        logger.warning("API /api/employees: Unauthorized - no valid session")
+        return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
+    
+    logger.info(f"API /api/employees: Authenticated as {session.get('username')}")
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if table exists first
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='employees'")
+        table_exists = cursor.fetchone()
+        logger.info(f"API /api/employees: employees table exists: {table_exists is not None}")
 
         cursor.execute("""
             SELECT id, employee_name, id_nickname, id_number, position, department,
@@ -184,6 +247,7 @@ def api_get_employees(hr_session: str = Cookie(None)):
         """)
         
         rows = cursor.fetchall()
+        logger.info(f"API /api/employees: Found {len(rows)} total employees")
         conn.close()
 
         employees = []
@@ -213,6 +277,7 @@ def api_get_employees(hr_session: str = Cookie(None)):
                 "emergency_address": row["emergency_address"] if "emergency_address" in row.keys() else None
             })
 
+        logger.info(f"API /api/employees: Returning {len(employees)} employees")
         return JSONResponse(content={"success": True, "employees": employees})
 
     except Exception as e:

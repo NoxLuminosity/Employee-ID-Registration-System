@@ -91,17 +91,26 @@ function initEventListeners() {
 // ============================================
 async function fetchGalleryData() {
   console.log('fetchGalleryData: Starting data fetch...');
+  console.log('fetchGalleryData: Current URL:', window.location.href);
   showLoading(true);
 
   try {
     // VERCEL FIX: Include credentials to ensure JWT cookie is sent with request
     // Without this, serverless functions may not receive the authentication cookie
-    console.log('fetchGalleryData: Fetching from /hr/api/employees...');
-    const response = await fetch('/hr/api/employees', {
-      credentials: 'include'
+    const apiUrl = '/hr/api/employees';
+    console.log('fetchGalleryData: Fetching from', apiUrl);
+    
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
     });
     
     console.log('fetchGalleryData: Response status:', response.status);
+    console.log('fetchGalleryData: Response headers:', Object.fromEntries(response.headers.entries()));
     
     // Handle unauthorized - redirect to login
     if (response.status === 401) {
@@ -110,8 +119,17 @@ async function fetchGalleryData() {
       return;
     }
     
+    // Handle other error status codes
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('fetchGalleryData: HTTP error', response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    
     const data = await response.json();
     console.log('fetchGalleryData: Response data:', data);
+    console.log('fetchGalleryData: Success:', data.success);
+    console.log('fetchGalleryData: Employee array length:', data.employees?.length);
 
     if (data.success) {
       // Filter only approved and completed IDs
