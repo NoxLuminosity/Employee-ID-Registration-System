@@ -867,3 +867,39 @@
     flex-direction: column;
   }
 }
+
+/* ============================================
+   Disabled Action Button Styles
+   ============================================ */
+.action-btn-sm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+.action-btn-sm:disabled:hover {
+  background: #e9ecef;
+  color: inherit;
+}
+
+.action-btn-sm.approve:disabled {
+  background: #e9ecef;
+  color: #6c757d;
+}
+
+.action-btn-sm.remove:disabled {
+  background: #e9ecef;
+  color: #6c757d;
+}
+
+/* Table cell styles for new columns */
+.employee-id-number {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.employee-phone {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}

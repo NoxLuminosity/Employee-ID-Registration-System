@@ -9,8 +9,37 @@
 const dashboardState = {
   employees: [],
   filteredEmployees: [],
-  isLoading: true
+  isLoading: true,
+  viewedEmployees: new Set() // Track which employees have had their details viewed
 };
+
+// Load viewed employees from sessionStorage on init
+function loadViewedEmployees() {
+  const stored = sessionStorage.getItem('viewedEmployees');
+  if (stored) {
+    try {
+      dashboardState.viewedEmployees = new Set(JSON.parse(stored));
+    } catch (e) {
+      dashboardState.viewedEmployees = new Set();
+    }
+  }
+}
+
+// Save viewed employees to sessionStorage
+function saveViewedEmployees() {
+  sessionStorage.setItem('viewedEmployees', JSON.stringify([...dashboardState.viewedEmployees]));
+}
+
+// Check if employee details have been viewed
+function hasViewedDetails(id) {
+  return dashboardState.viewedEmployees.has(id);
+}
+
+// Mark employee as viewed
+function markAsViewed(id) {
+  dashboardState.viewedEmployees.add(id);
+  saveViewedEmployees();
+}
 
 // ============================================
 // DOM Elements
@@ -44,6 +73,7 @@ const elements = {
 // Initialization
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
+  loadViewedEmployees();
   initEventListeners();
   fetchEmployeeData();
 });
@@ -171,6 +201,11 @@ function renderEmployeeTable() {
 
     const canApprove = emp.status === 'Reviewing';
     const canDownload = emp.status === 'Approved' || emp.status === 'Completed';
+    const viewed = hasViewedDetails(emp.id);
+    
+    // Disable Approve and Remove buttons until Details has been viewed
+    const approveDisabled = !viewed ? 'disabled title="View details first"' : '';
+    const removeDisabled = !viewed ? 'disabled title="View details first"' : '';
 
     return `
       <tr data-id="${emp.id}">
@@ -179,20 +214,21 @@ function renderEmployeeTable() {
         <td>
           <div class="employee-info">
             <span class="employee-name">${escapeHtml(emp.employee_name)}</span>
-            <span class="employee-id">${escapeHtml(emp.id_number)}</span>
           </div>
         </td>
+        <td><span class="employee-id-number">${escapeHtml(emp.id_number)}</span></td>
         <td><span class="employee-email">${escapeHtml(emp.email || '-')}</span></td>
+        <td><span class="employee-phone">${escapeHtml(emp.personal_number || '-')}</span></td>
         <td>${escapeHtml(emp.department)}</td>
         <td>${escapeHtml(emp.position)}</td>
         <td><span class="status-badge ${statusClass}">${emp.status}</span></td>
         <td>${submittedDate}</td>
         <td>
           <div class="action-buttons">
-            ${canApprove ? `<button class="action-btn-sm approve" onclick="approveEmployee(${emp.id})">Approve</button>` : ''}
             <button class="action-btn-sm view" onclick="viewDetails(${emp.id})">Details</button>
+            ${canApprove ? `<button class="action-btn-sm approve" onclick="approveEmployee(${emp.id})" ${approveDisabled}>Approve</button>` : ''}
             ${canDownload ? `<button class="action-btn-sm download" onclick="downloadID(${emp.id})">Download</button>` : ''}
-            <button class="action-btn-sm remove" onclick="removeEmployee(${emp.id})">Remove</button>
+            <button class="action-btn-sm remove" onclick="removeEmployee(${emp.id})" ${removeDisabled}>Remove</button>
           </div>
         </td>
       </tr>
@@ -351,6 +387,11 @@ async function removeBackground(id) {
 function viewDetails(id) {
   const emp = dashboardState.employees.find(e => e.id === id);
   if (!emp) return;
+
+  // Mark this employee as viewed (enables Approve/Remove buttons)
+  markAsViewed(id);
+  // Re-render the table to update button states
+  renderEmployeeTable();
 
   // Original photo
   const photoSrc = emp.photo_url || (emp.photo_path ? `/static/${emp.photo_path}` : null);

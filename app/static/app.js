@@ -625,15 +625,12 @@ function initFormSubmission() {
       if (response.ok && (result.success !== false)) {
         showMessage('Registration submitted successfully! Your ID will be processed shortly.', 'success');
 
-        // Disable all inputs
-        elements.form.querySelectorAll('input, select, button').forEach(el => {
-          el.disabled = true;
-        });
-
-        // Show success state
-        elements.btnSubmit.textContent = '✓ Submitted';
+        // Show success modal with options
+        showSuccessModal();
+        
+        // Reset submit button state
         elements.btnSubmit.classList.remove('loading');
-        elements.btnCancel.style.display = 'none';
+        elements.btnSubmit.textContent = 'Submit';
       } else {
         throw new Error(result.detail || result.error || 'Submission failed');
       }
@@ -648,6 +645,68 @@ function initFormSubmission() {
     }
   });
 }
+
+// ============================================
+// Success Modal
+// ============================================
+function showSuccessModal() {
+  const modal = document.getElementById('successModal');
+  if (modal) {
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function hideSuccessModal() {
+  const modal = document.getElementById('successModal');
+  if (modal) {
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+}
+
+function submitAnotherForm() {
+  hideSuccessModal();
+  // Reset the form completely
+  elements.form.reset();
+  
+  // Clear signature
+  if (signaturePad) {
+    signaturePad.clear();
+  }
+  elements.signatureData.value = '';
+  
+  // Reset photo previews
+  const photoComparison = document.getElementById('photoComparison');
+  const photoUploadArea = document.getElementById('photoUploadArea');
+  const aiPreviewImg = document.getElementById('aiPreviewImg');
+  const aiLoading = document.getElementById('aiLoading');
+  const aiError = document.getElementById('aiError');
+  
+  if (photoComparison) photoComparison.style.display = 'none';
+  if (photoUploadArea) photoUploadArea.style.display = 'flex';
+  if (aiPreviewImg) {
+    aiPreviewImg.style.display = 'none';
+    aiPreviewImg.src = '';
+  }
+  if (aiLoading) aiLoading.style.display = 'none';
+  if (aiError) aiError.style.display = 'none';
+  
+  // Reset review section
+  const reviewSection = document.getElementById('reviewSection');
+  if (reviewSection) {
+    reviewSection.style.display = 'none';
+  }
+  
+  // Clear messages
+  elements.messageContainer.innerHTML = '';
+  
+  // Scroll to top
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Make submitAnotherForm available globally for onclick
+window.submitAnotherForm = submitAnotherForm;
 
 // ============================================
 // Cancel Button
