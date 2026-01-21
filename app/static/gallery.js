@@ -657,27 +657,6 @@ async function downloadIDPdf(emp) {
   }
 }
 
-    const imgData = canvas.toDataURL('image/png');
-    pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 125);
-    
-    // Download the PDF
-    pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}.pdf`);
-
-    // Cleanup
-    document.body.removeChild(tempContainer);
-    
-    // Mark as completed if approved
-    if (emp.status === 'Approved') {
-      await markAsCompleted(emp.id);
-    }
-
-    showToast('PDF downloaded successfully', 'success');
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    showToast('Failed to generate PDF. Please try again.', 'error');
-  }
-}
-
 // Download all IDs as PDFs (front and back)
 async function downloadAllPdfs() {
   const employees = galleryState.filteredEmployees;
