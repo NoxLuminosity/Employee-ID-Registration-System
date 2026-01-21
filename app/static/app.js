@@ -295,13 +295,28 @@ async function removeBackgroundFromAI() {
     if (processedUrl) {
       console.log('removeBackgroundFromAI: Success! New URL:', processedUrl);
       
-      // Update the AI preview image
-      aiPreviewImg.src = processedUrl;
-      aiPreviewImg.classList.add('transparent-bg');
-      aiPreviewImg.dataset.transparent = 'true';
+      // Update the AI preview image with onload handler to ensure preview updates after image loads
+      aiPreviewImg.onload = function() {
+        console.log('removeBackgroundFromAI: Image loaded successfully');
+        aiPreviewImg.classList.add('transparent-bg');
+        aiPreviewImg.dataset.transparent = 'true';
+        
+        // Update ID card preview with the new transparent image after it's loaded
+        updateIdCardPreview();
+        
+        showMessage('Background removed successfully!', 'success');
+        console.log('removeBackgroundFromAI: Complete');
+      };
       
-      // Update ID card preview with the new transparent image
-      updateIdCardPreview();
+      aiPreviewImg.onerror = function() {
+        console.error('removeBackgroundFromAI: Failed to load processed image');
+        showMessage('Failed to load processed image', 'error');
+        if (btnText) btnText.textContent = originalText;
+        if (removeBgBtn) removeBgBtn.disabled = false;
+      };
+      
+      // Set the new source - this triggers the onload/onerror handlers
+      aiPreviewImg.src = processedUrl;
       
       // Update button text to indicate it can be re-processed
       if (btnText) {
@@ -310,9 +325,6 @@ async function removeBackgroundFromAI() {
       if (removeBgBtn) {
         removeBgBtn.disabled = false;
       }
-      
-      showMessage('Background removed successfully!', 'success');
-      console.log('removeBackgroundFromAI: Complete');
     } else {
       console.error('removeBackgroundFromAI: API returned null/empty result');
       showMessage('Failed to remove background. Please try again.', 'error');
