@@ -7,7 +7,8 @@ aiofiles==23.2.1
 # Templates
 jinja2==3.1.2
 
-# Database (SQLite - no external DB needed)
+# Database
+supabase==2.10.0
 
 # Authentication
 bcrypt==4.1.2

@@ -812,11 +812,13 @@ function submitAnotherForm() {
   // Reset the form completely
   elements.form.reset();
   
-  // Clear signature
-  if (signaturePad) {
-    signaturePad.clear();
+  // Clear signature canvas
+  const canvas = elements.signatureCanvas;
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
-  elements.signatureData.value = '';
+  if (elements.signatureData) elements.signatureData.value = '';
   
   // Reset photo previews
   const photoComparison = document.getElementById('photoComparison');
@@ -942,6 +944,22 @@ function updateIdCardBackside() {
 // ============================================
 // Messages
 // ============================================
+// ============================================
+// Back Button Navigation
+// ============================================
+function goBack() {
+  // Check if there's history to go back to
+  if (window.history.length > 1 && document.referrer) {
+    window.history.back();
+  } else {
+    // No history - navigate to landing page
+    window.location.href = '/';
+  }
+}
+
+// Make goBack available globally for onclick
+window.goBack = goBack;
+
 function showMessage(message, type = 'success') {
   elements.messageContainer.innerHTML = `
     <div class="message message-${type}">

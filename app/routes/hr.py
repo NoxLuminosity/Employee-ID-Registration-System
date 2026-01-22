@@ -6,12 +6,24 @@ Includes background removal functionality for AI-generated photos.
 from fastapi import APIRouter, Request, Depends, Cookie
 from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
 from fastapi.templating import Jinja2Templates
-import sqlite3
 import os
 from pathlib import Path
 from datetime import datetime
 import logging
 import json
+
+# Database abstraction layer (supports Supabase and SQLite)
+from app.database import (
+    get_all_employees,
+    get_employee_by_id,
+    update_employee,
+    delete_employee,
+    table_exists,
+    get_employee_count,
+    get_status_breakdown,
+    USE_SUPABASE,
+    get_sqlite_connection
+)
 
 # Import services for background removal
 from app.services.background_removal_service import remove_background_from_url
@@ -37,13 +49,6 @@ logger = logging.getLogger(__name__)
 
 # Check if running on Vercel (serverless) or locally
 IS_VERCEL = os.environ.get("VERCEL", False)
-DB_NAME = "/tmp/database.db" if IS_VERCEL else "database.db"
-
-
-def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 # ============================================
@@ -171,9 +176,8 @@ def api_debug(hr_session: str = Cookie(None)):
     import os
     
     debug_info = {
+        "use_supabase": USE_SUPABASE,
         "is_vercel": IS_VERCEL,
-        "db_name": DB_NAME,
-        "db_exists": os.path.exists(DB_NAME),
         "session_present": hr_session is not None,
         "session_valid": False,
         "employee_count": 0,
@@ -189,25 +193,9 @@ def api_debug(hr_session: str = Cookie(None)):
     
     # Check database
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Check if table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='employees'")
-        table_exists = cursor.fetchone()
-        debug_info["table_exists"] = table_exists is not None
-        
-        if table_exists:
-            cursor.execute("SELECT COUNT(*) as count FROM employees")
-            count = cursor.fetchone()
-            debug_info["employee_count"] = count["count"] if count else 0
-            
-            # Get status breakdown
-            cursor.execute("SELECT status, COUNT(*) as count FROM employees GROUP BY status")
-            status_counts = cursor.fetchall()
-            debug_info["status_breakdown"] = {row["status"] or "null": row["count"] for row in status_counts}
-        
-        conn.close()
+        debug_info["table_exists"] = table_exists()
+        debug_info["employee_count"] = get_employee_count()
+        debug_info["status_breakdown"] = get_status_breakdown()
     except Exception as e:
         debug_info["error"] = str(e)
     
@@ -219,7 +207,7 @@ def api_debug(hr_session: str = Cookie(None)):
 def api_get_employees(hr_session: str = Cookie(None)):
     """Get all employees for the dashboard"""
     logger.info(f"API /api/employees called, hr_session present: {hr_session is not None}")
-    logger.info(f"IS_VERCEL: {IS_VERCEL}, DB_NAME: {DB_NAME}")
+    logger.info(f"USE_SUPABASE: {USE_SUPABASE}, IS_VERCEL: {IS_VERCEL}")
     
     session = get_session(hr_session)
     if not session:
@@ -229,58 +217,40 @@ def api_get_employees(hr_session: str = Cookie(None)):
     logger.info(f"API /api/employees: Authenticated as {session.get('username')}")
     
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
         # Check if table exists first
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='employees'")
-        table_exists = cursor.fetchone()
-        logger.info(f"API /api/employees: employees table exists: {table_exists is not None}")
-        
-        # VERCEL FIX: If table doesn't exist, return empty list gracefully
-        if not table_exists:
-            conn.close()
+        if not table_exists():
             logger.info("API /api/employees: Table does not exist, returning empty list")
             return JSONResponse(content={"success": True, "employees": []})
 
-        cursor.execute("""
-            SELECT id, employee_name, id_nickname, id_number, position, department,
-                   email, personal_number, photo_path, photo_url, new_photo, new_photo_url,
-                   nobg_photo_url, signature_path, signature_url, status, date_last_modified,
-                   id_generated, render_url, emergency_name, emergency_contact, emergency_address
-            FROM employees
-            ORDER BY date_last_modified DESC
-        """)
-        
-        rows = cursor.fetchall()
+        # Get all employees using abstraction layer
+        rows = get_all_employees()
         logger.info(f"API /api/employees: Found {len(rows)} total employees")
-        conn.close()
 
         employees = []
         for row in rows:
             employees.append({
-                "id": row["id"],
-                "employee_name": row["employee_name"],
-                "id_nickname": row["id_nickname"],
-                "id_number": row["id_number"],
-                "position": row["position"],
-                "department": row["department"],
-                "email": row["email"],
-                "personal_number": row["personal_number"],
-                "photo_path": row["photo_path"],
-                "photo_url": row["photo_url"],
-                "new_photo": bool(row["new_photo"]),
-                "new_photo_url": row["new_photo_url"],
-                "nobg_photo_url": row["nobg_photo_url"],
-                "signature_path": row["signature_path"],
-                "signature_url": row["signature_url"],
-                "status": row["status"] or "Reviewing",
-                "date_last_modified": row["date_last_modified"],
-                "id_generated": bool(row["id_generated"]),
-                "render_url": row["render_url"],
-                "emergency_name": row["emergency_name"] if "emergency_name" in row.keys() else None,
-                "emergency_contact": row["emergency_contact"] if "emergency_contact" in row.keys() else None,
-                "emergency_address": row["emergency_address"] if "emergency_address" in row.keys() else None
+                "id": row.get("id"),
+                "employee_name": row.get("employee_name"),
+                "id_nickname": row.get("id_nickname"),
+                "id_number": row.get("id_number"),
+                "position": row.get("position"),
+                "department": row.get("department"),
+                "email": row.get("email"),
+                "personal_number": row.get("personal_number"),
+                "photo_path": row.get("photo_path"),
+                "photo_url": row.get("photo_url"),
+                "new_photo": bool(row.get("new_photo")),
+                "new_photo_url": row.get("new_photo_url"),
+                "nobg_photo_url": row.get("nobg_photo_url"),
+                "signature_path": row.get("signature_path"),
+                "signature_url": row.get("signature_url"),
+                "status": row.get("status") or "Reviewing",
+                "date_last_modified": row.get("date_last_modified"),
+                "id_generated": bool(row.get("id_generated")),
+                "render_url": row.get("render_url"),
+                "emergency_name": row.get("emergency_name"),
+                "emergency_contact": row.get("emergency_contact"),
+                "emergency_address": row.get("emergency_address")
             })
 
         logger.info(f"API /api/employees: Returning {len(employees)} employees")
@@ -300,20 +270,7 @@ def api_get_employee(employee_id: int, hr_session: str = Cookie(None)):
     if not get_session(hr_session):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT id, employee_name, id_nickname, id_number, position, department,
-                   email, personal_number, photo_path, photo_url, new_photo, new_photo_url,
-                   nobg_photo_url, signature_path, signature_url, status, date_last_modified,
-                   id_generated, render_url, emergency_name, emergency_contact, emergency_address
-            FROM employees
-            WHERE id = ?
-        """, (employee_id,))
-        
-        row = cursor.fetchone()
-        conn.close()
+        row = get_employee_by_id(employee_id)
 
         if not row:
             return JSONResponse(
@@ -322,28 +279,28 @@ def api_get_employee(employee_id: int, hr_session: str = Cookie(None)):
             )
 
         employee = {
-            "id": row["id"],
-            "employee_name": row["employee_name"],
-            "id_nickname": row["id_nickname"],
-            "id_number": row["id_number"],
-            "position": row["position"],
-            "department": row["department"],
-            "email": row["email"],
-            "personal_number": row["personal_number"],
-            "photo_path": row["photo_path"],
-            "photo_url": row["photo_url"],
-            "new_photo": bool(row["new_photo"]),
-            "new_photo_url": row["new_photo_url"],
-            "nobg_photo_url": row["nobg_photo_url"],
-            "signature_path": row["signature_path"],
-            "signature_url": row["signature_url"],
-            "status": row["status"] or "Reviewing",
-            "date_last_modified": row["date_last_modified"],
-            "id_generated": bool(row["id_generated"]),
-            "render_url": row["render_url"],
-            "emergency_name": row["emergency_name"] if "emergency_name" in row.keys() else None,
-            "emergency_contact": row["emergency_contact"] if "emergency_contact" in row.keys() else None,
-            "emergency_address": row["emergency_address"] if "emergency_address" in row.keys() else None
+            "id": row.get("id"),
+            "employee_name": row.get("employee_name"),
+            "id_nickname": row.get("id_nickname"),
+            "id_number": row.get("id_number"),
+            "position": row.get("position"),
+            "department": row.get("department"),
+            "email": row.get("email"),
+            "personal_number": row.get("personal_number"),
+            "photo_path": row.get("photo_path"),
+            "photo_url": row.get("photo_url"),
+            "new_photo": bool(row.get("new_photo")),
+            "new_photo_url": row.get("new_photo_url"),
+            "nobg_photo_url": row.get("nobg_photo_url"),
+            "signature_path": row.get("signature_path"),
+            "signature_url": row.get("signature_url"),
+            "status": row.get("status") or "Reviewing",
+            "date_last_modified": row.get("date_last_modified"),
+            "id_generated": bool(row.get("id_generated")),
+            "render_url": row.get("render_url"),
+            "emergency_name": row.get("emergency_name"),
+            "emergency_contact": row.get("emergency_contact"),
+            "emergency_address": row.get("emergency_address")
         }
 
         return JSONResponse(content={"success": True, "employee": employee})
@@ -362,36 +319,32 @@ def api_approve_employee(employee_id: int, hr_session: str = Cookie(None)):
     if not get_session(hr_session):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         # Check if employee exists and is in Reviewing status
-        cursor.execute("SELECT status FROM employees WHERE id = ?", (employee_id,))
-        row = cursor.fetchone()
+        row = get_employee_by_id(employee_id)
 
         if not row:
-            conn.close()
             return JSONResponse(
                 status_code=404,
                 content={"success": False, "error": "Employee not found"}
             )
 
-        if row["status"] != "Reviewing":
-            conn.close()
+        if row.get("status") != "Reviewing":
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": f"Cannot approve. Current status: {row['status']}"}
+                content={"success": False, "error": f"Cannot approve. Current status: {row.get('status')}"}
             )
 
         # Update status to Approved
-        cursor.execute("""
-            UPDATE employees 
-            SET status = 'Approved', date_last_modified = ?
-            WHERE id = ?
-        """, (datetime.now().isoformat(), employee_id))
+        success = update_employee(employee_id, {
+            "status": "Approved",
+            "date_last_modified": datetime.now().isoformat()
+        })
 
-        conn.commit()
-        conn.close()
+        if not success:
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": "Failed to update employee"}
+            )
 
         logger.info(f"Employee {employee_id} approved")
         return JSONResponse(content={"success": True, "message": "Application approved"})
@@ -410,26 +363,25 @@ def api_delete_employee(employee_id: int, hr_session: str = Cookie(None)):
     if not get_session(hr_session):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         # Check if employee exists
-        cursor.execute("SELECT id, employee_name FROM employees WHERE id = ?", (employee_id,))
-        row = cursor.fetchone()
+        row = get_employee_by_id(employee_id)
 
         if not row:
-            conn.close()
             return JSONResponse(
                 status_code=404,
                 content={"success": False, "error": "Employee not found"}
             )
 
-        employee_name = row["employee_name"]
+        employee_name = row.get("employee_name")
 
         # Delete the employee
-        cursor.execute("DELETE FROM employees WHERE id = ?", (employee_id,))
-        conn.commit()
-        conn.close()
+        success = delete_employee(employee_id)
+        
+        if not success:
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": "Failed to delete employee"}
+            )
 
         logger.info(f"Employee {employee_id} ({employee_name}) deleted")
         return JSONResponse(content={"success": True, "message": f"Application for {employee_name} removed"})
@@ -453,25 +405,19 @@ def api_remove_background(employee_id: int, hr_session: str = Cookie(None)):
     logger.info(f"=== REMOVE BACKGROUND REQUEST for employee {employee_id} ===")
     
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         # Get the employee's AI photo URL
-        cursor.execute("SELECT id_number, new_photo_url, nobg_photo_url FROM employees WHERE id = ?", (employee_id,))
-        row = cursor.fetchone()
+        row = get_employee_by_id(employee_id)
 
         if not row:
-            conn.close()
             logger.error(f"Employee {employee_id} not found")
             return JSONResponse(
                 status_code=404,
                 content={"success": False, "error": "Employee not found"}
             )
 
-        logger.info(f"Employee found: id_number={row['id_number']}, new_photo_url={row['new_photo_url'][:50] if row['new_photo_url'] else 'None'}...")
+        logger.info(f"Employee found: id_number={row.get('id_number')}, new_photo_url={row.get('new_photo_url', '')[:50] if row.get('new_photo_url') else 'None'}...")
 
-        if not row["new_photo_url"]:
-            conn.close()
+        if not row.get("new_photo_url"):
             logger.error(f"No AI photo available for employee {employee_id}")
             return JSONResponse(
                 status_code=400,
@@ -479,17 +425,16 @@ def api_remove_background(employee_id: int, hr_session: str = Cookie(None)):
             )
 
         # If already has nobg photo, return it
-        if row["nobg_photo_url"]:
-            conn.close()
-            logger.info(f"Employee {employee_id} already has nobg photo: {row['nobg_photo_url'][:50]}...")
+        if row.get("nobg_photo_url"):
+            logger.info(f"Employee {employee_id} already has nobg photo: {row.get('nobg_photo_url', '')[:50]}...")
             return JSONResponse(content={
                 "success": True, 
-                "nobg_photo_url": row["nobg_photo_url"],
+                "nobg_photo_url": row.get("nobg_photo_url"),
                 "message": "Background already removed"
             })
 
-        ai_photo_url = row["new_photo_url"]
-        safe_id = row["id_number"].replace(' ', '_').replace('/', '-').replace('\\', '-')
+        ai_photo_url = row.get("new_photo_url")
+        safe_id = row.get("id_number", "").replace(' ', '_').replace('/', '-').replace('\\', '-')
 
         logger.info(f"Starting background removal for employee {employee_id}...")
         logger.info(f"AI Photo URL: {ai_photo_url}")
@@ -499,7 +444,6 @@ def api_remove_background(employee_id: int, hr_session: str = Cookie(None)):
         nobg_bytes, error = remove_background_from_url(ai_photo_url)
         
         if not nobg_bytes:
-            conn.close()
             logger.error(f"Background removal failed: {error}")
             return JSONResponse(
                 status_code=500,
@@ -518,7 +462,6 @@ def api_remove_background(employee_id: int, hr_session: str = Cookie(None)):
         )
 
         if not nobg_url:
-            conn.close()
             logger.error("Cloudinary upload failed")
             return JSONResponse(
                 status_code=500,
@@ -528,14 +471,13 @@ def api_remove_background(employee_id: int, hr_session: str = Cookie(None)):
         logger.info(f"Uploaded to Cloudinary: {nobg_url}")
 
         # Update database with nobg URL
-        cursor.execute("""
-            UPDATE employees 
-            SET nobg_photo_url = ?, date_last_modified = ?
-            WHERE id = ?
-        """, (nobg_url, datetime.now().isoformat(), employee_id))
+        success = update_employee(employee_id, {
+            "nobg_photo_url": nobg_url,
+            "date_last_modified": datetime.now().isoformat()
+        })
 
-        conn.commit()
-        conn.close()
+        if not success:
+            logger.error("Failed to update employee with nobg URL")
 
         logger.info(f"=== BACKGROUND REMOVAL COMPLETE for employee {employee_id} ===")
         return JSONResponse(content={
@@ -559,36 +501,33 @@ def api_complete_employee(employee_id: int, hr_session: str = Cookie(None)):
     if not get_session(hr_session):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         # Check if employee exists and is Approved
-        cursor.execute("SELECT status FROM employees WHERE id = ?", (employee_id,))
-        row = cursor.fetchone()
+        row = get_employee_by_id(employee_id)
 
         if not row:
-            conn.close()
             return JSONResponse(
                 status_code=404,
                 content={"success": False, "error": "Employee not found"}
             )
 
-        if row["status"] not in ["Approved", "Completed"]:
-            conn.close()
+        if row.get("status") not in ["Approved", "Completed"]:
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": f"Cannot mark as complete. Current status: {row['status']}"}
+                content={"success": False, "error": f"Cannot mark as complete. Current status: {row.get('status')}"}
             )
 
         # Update status to Completed
-        cursor.execute("""
-            UPDATE employees 
-            SET status = 'Completed', id_generated = 1, date_last_modified = ?
-            WHERE id = ?
-        """, (datetime.now().isoformat(), employee_id))
+        success = update_employee(employee_id, {
+            "status": "Completed",
+            "id_generated": 1,
+            "date_last_modified": datetime.now().isoformat()
+        })
 
-        conn.commit()
-        conn.close()
+        if not success:
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": "Failed to update employee"}
+            )
 
         logger.info(f"Employee {employee_id} marked as completed")
         return JSONResponse(content={"success": True, "message": "ID marked as completed"})
@@ -610,18 +549,7 @@ def api_download_id(employee_id: int, hr_session: str = Cookie(None)):
     if not get_session(hr_session):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT id, employee_name, id_nickname, id_number, position, department,
-                   email, personal_number, photo_url, signature_url, status
-            FROM employees
-            WHERE id = ?
-        """, (employee_id,))
-        
-        row = cursor.fetchone()
-        conn.close()
+        row = get_employee_by_id(employee_id)
 
         if not row:
             return JSONResponse(
@@ -629,7 +557,7 @@ def api_download_id(employee_id: int, hr_session: str = Cookie(None)):
                 content={"success": False, "error": "Employee not found"}
             )
 
-        if row["status"] not in ["Approved", "Completed"]:
+        if row.get("status") not in ["Approved", "Completed"]:
             return JSONResponse(
                 status_code=400,
                 content={"success": False, "error": "ID not yet approved"}
@@ -643,12 +571,12 @@ def api_download_id(employee_id: int, hr_session: str = Cookie(None)):
                 "success": False,
                 "error": "PDF generation coming soon. Templated.io integration pending.",
                 "employee_data": {
-                    "name": row["employee_name"],
-                    "id_number": row["id_number"],
-                    "position": row["position"],
-                    "department": row["department"],
-                    "email": row["email"],
-                    "phone": row["personal_number"]
+                    "name": row.get("employee_name"),
+                    "id_number": row.get("id_number"),
+                    "position": row.get("position"),
+                    "department": row.get("department"),
+                    "email": row.get("email"),
+                    "phone": row.get("personal_number")
                 }
             }
         )
@@ -670,20 +598,7 @@ def api_sync_sheets(hr_session: str = Cookie(None)):
         # Import Google Sheets service
         from app.services.google_sheets import sync_employees_to_sheets
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT id, employee_name, id_nickname, id_number, position, department,
-                   email, personal_number, photo_url, signature_url, status, 
-                   date_last_modified
-            FROM employees
-        """)
-        
-        rows = cursor.fetchall()
-        conn.close()
-
-        employees = [dict(row) for row in rows]
+        employees = get_all_employees()
         
         # Attempt to sync
         success = sync_employees_to_sheets(employees)
@@ -715,29 +630,17 @@ def api_get_stats(hr_session: str = Cookie(None)):
     if not get_session(hr_session):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Get counts by status
-        cursor.execute("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'Reviewing' THEN 1 ELSE 0 END) as reviewing,
-                SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) as approved,
-                SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed
-            FROM employees
-        """)
-        
-        row = cursor.fetchone()
-        conn.close()
+        # Get status breakdown using abstraction layer
+        status_counts = get_status_breakdown()
+        total = get_employee_count()
 
         return JSONResponse(content={
             "success": True,
             "stats": {
-                "total": row["total"] or 0,
-                "reviewing": row["reviewing"] or 0,
-                "approved": row["approved"] or 0,
-                "completed": row["completed"] or 0
+                "total": total,
+                "reviewing": status_counts.get("Reviewing", 0),
+                "approved": status_counts.get("Approved", 0),
+                "completed": status_counts.get("Completed", 0)
             }
         })
 

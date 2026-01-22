@@ -6,7 +6,6 @@ from fastapi import APIRouter, Request, UploadFile, File, Form, HTTPException, B
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import shutil
-import sqlite3
 import os
 import logging
 import traceback
@@ -15,6 +14,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
+
+# Database abstraction layer (supports Supabase and SQLite)
+from app.database import insert_employee, USE_SUPABASE
 
 # Lark Bitable integration (for appending data)
 from app.services.lark_service import append_employee_submission
@@ -39,7 +41,6 @@ logger = logging.getLogger(__name__)
 
 # Check if running on Vercel (serverless) or locally
 IS_VERCEL = os.environ.get("VERCEL", False)
-DB_NAME = "/tmp/database.db" if IS_VERCEL else "database.db"
 
 
 # Request model for generate-headshot endpoint
@@ -388,41 +389,40 @@ async def submit_employee(
                 except Exception as e:
                     logger.error(f"Error uploading AI headshot to Cloudinary: {str(e)}")
 
-        # Save to local database
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO employees
-            (employee_name, id_nickname, id_number, position, department, email, personal_number,
-             photo_path, photo_url, new_photo, new_photo_url, signature_path, signature_url, status,
-             date_last_modified, id_generated, render_url, emergency_name, emergency_contact, emergency_address)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            employee_name,
-            id_nickname,
-            id_number,
-            position,
-            department,
-            email,
-            personal_number,
-            photo_local_path,
-            cloudinary_photo_url or '',
-            1,  # new_photo = True
-            cloudinary_ai_headshot_url or '',  # new_photo_url (AI generated)
-            signature_local_path,
-            cloudinary_signature_url or '',
-            'Reviewing',
-            date_last_modified,
-            0,  # id_generated = False
-            '',  # render_url (empty for now)
-            emergency_name or '',
-            emergency_contact or '',
-            emergency_address or ''
-        ))
-
-        conn.commit()
-        conn.close()
+        # Save to database using abstraction layer
+        employee_data = {
+            'employee_name': employee_name,
+            'id_nickname': id_nickname,
+            'id_number': id_number,
+            'position': position,
+            'department': department,
+            'email': email,
+            'personal_number': personal_number,
+            'photo_path': photo_local_path,
+            'photo_url': cloudinary_photo_url or '',
+            'new_photo': 1,  # True
+            'new_photo_url': cloudinary_ai_headshot_url or '',
+            'signature_path': signature_local_path or '',
+            'signature_url': cloudinary_signature_url or '',
+            'status': 'Reviewing',
+            'date_last_modified': date_last_modified,
+            'id_generated': 0,  # False
+            'render_url': '',
+            'emergency_name': emergency_name or '',
+            'emergency_contact': emergency_contact or '',
+            'emergency_address': emergency_address or ''
+        }
+        
+        employee_id = insert_employee(employee_data)
+        
+        if employee_id is None:
+            logger.error(f"Failed to insert employee: {id_number}")
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": "Database error", "detail": "Failed to save employee"}
+            )
+        
+        logger.info(f"Employee saved to database (id={employee_id}, supabase={USE_SUPABASE})")
         
         # Step 4: Append submission to Lark Bitable
         try:
@@ -457,12 +457,6 @@ async def submit_employee(
             content={"success": True, "message": "Submission successful"}
         )
         
-    except sqlite3.Error as e:
-        logger.error(f"Database error: {str(e)}\n{traceback.format_exc()}")
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "error": "Database error", "detail": str(e)}
-        )
     except Exception as e:
         logger.error(f"Submit error: {str(e)}\n{traceback.format_exc()}")
         return JSONResponse(

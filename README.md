@@ -22,7 +22,7 @@ A full-stack employee ID registration system with AI-powered headshot generation
 ## 🚀 Tech Stack
 
 - **Backend**: FastAPI (Python)
-- **Database**: SQLite (Vercel-compatible with /tmp path)
+- **Database**: Supabase PostgreSQL (production) / SQLite (local development)
 - **Frontend**: Vanilla JavaScript, CSS
 - **Templates**: Jinja2
 - **Image Storage**: Cloudinary
@@ -32,6 +32,32 @@ A full-stack employee ID registration system with AI-powered headshot generation
 - **Integrations**:
   - Google Sheets (data sync)
   - Lark Bitable (optional)
+
+## 🗄️ Database Setup (Supabase)
+
+For persistent data on Vercel, the system uses Supabase PostgreSQL.
+
+### Setting up Supabase
+
+1. **Create a Supabase account** at https://supabase.com
+
+2. **Create a new project** and note down:
+   - Project URL (e.g., `https://xxxxx.supabase.co`)
+   - Anon/Service key (found in Settings > API)
+
+3. **Create the employees table**:
+   - Go to SQL Editor in Supabase Dashboard
+   - Run the script from `supabase_setup.sql`
+
+4. **Add environment variables** in Vercel:
+   ```
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_KEY=your-service-role-key
+   ```
+
+### Local Development (SQLite)
+
+For local development without Supabase, the system automatically falls back to SQLite. No configuration needed - just run the app and it will create a local `database.db` file.
 
 ## 📦 Installation
 
@@ -85,6 +111,8 @@ A full-stack employee ID registration system with AI-powered headshot generation
 
 | Variable | Description | Required |
 |----------|-------------|----------|
+| `SUPABASE_URL` | Supabase project URL | Yes (production) |
+| `SUPABASE_KEY` | Supabase anon/service key | Yes (production) |
 | `BYTEPLUS_API_KEY` | BytePlus Seedream API key for AI headshots | Yes |
 | `BYTEPLUS_MODEL` | BytePlus model name (default: seedream-4-5-251128) | Yes |
 | `BYTEPLUS_ENDPOINT` | BytePlus API endpoint | Yes |
