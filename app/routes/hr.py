@@ -236,6 +236,12 @@ def api_get_employees(hr_session: str = Cookie(None)):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='employees'")
         table_exists = cursor.fetchone()
         logger.info(f"API /api/employees: employees table exists: {table_exists is not None}")
+        
+        # VERCEL FIX: If table doesn't exist, return empty list gracefully
+        if not table_exists:
+            conn.close()
+            logger.info("API /api/employees: Table does not exist, returning empty list")
+            return JSONResponse(content={"success": True, "employees": []})
 
         cursor.execute("""
             SELECT id, employee_name, id_nickname, id_number, position, department,

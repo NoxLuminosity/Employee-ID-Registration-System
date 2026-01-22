@@ -559,10 +559,12 @@
   height: 16px;
 }
 
-/* ID Card Back Side */
+/* ID Card Back Side - Match front side dimensions exactly */
 .id-card-back,
 .gallery-id-card-back {
   width: 420px;
+  height: auto;
+  min-height: 620px;  /* Match front side height */
   background: white;
   border-radius: 16px;
   overflow: hidden;
@@ -581,7 +583,7 @@
   overflow: hidden;
 }
 
-/* Geometric Background Pattern */
+/* Geometric Background Pattern - No dark overlay, square corners */
 .id-back-pattern {
   position: absolute;
   top: 0;
@@ -589,15 +591,16 @@
   right: 0;
   bottom: 0;
   background-color: #f3f4f6;
-  background-image: 
-    linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
-    linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
-    linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
-  background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-  border-bottom-left-radius: 80px;
-  border-bottom-right-radius: 80px;
+  background-image: url('/static/images/id-card-backside-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 0;  /* Square corners - no rounded edges */
+  z-index: 0;
+  /* Ensure no dark overlay or filter */
+  opacity: 1;
+  filter: none;
+  mix-blend-mode: normal;
 }
 
 /* QR Code Content */

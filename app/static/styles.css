@@ -853,9 +853,10 @@ input::placeholder {
   padding: var(--spacing-lg);
 }
 
-/* ID Card Container */
+/* ID Card Container - Fixed dimensions for consistency */
 .id-card {
   width: 420px;
+  min-height: 620px;  /* Match back side height for consistency */
   background: white;
   border-radius: 16px;
   overflow: hidden;
@@ -1008,12 +1009,10 @@ input::placeholder {
   right: 0;
   bottom: 0;
   background-color: #ffffff;
-  /* Use PNG if available, fallback to SVG */
-  background-image: url('/static/images/id-card-bg.png'), url('/static/images/id-card-bg.svg');
+  background-image: url('/static/images/id-card-frontside-bg.png');
   background-size: cover;
-  background-position: center top;
+  background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.85;
   z-index: 0;
 }
 
@@ -1100,16 +1099,16 @@ input::placeholder {
   margin-top: 4px;
 }
 
-/* Signature Area - Enlarged to fully capture wide signatures */
+/* Signature Area - Enlarged for maximum visibility */
 .id-signature-area {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-top: 30px;
-  margin-right: 15px;
-  width: 220px;   /* Increased from 180px to capture wider signatures */
-  height: 120px;  /* Increased from 100px to maintain aspect ratio */
+  margin-top: 20px;
+  margin-right: 10px;
+  width: 240px;   /* Larger width for better signature visibility */
+  height: 140px;  /* Larger height for better signature visibility */
   position: relative;
   overflow: hidden;
   /* Geometric squares background pattern */
@@ -1133,14 +1132,14 @@ input::placeholder {
 .id-signature-area img {
   width: 100%;
   height: 100%;
-  object-fit: contain;  /* Changed from cover to contain - ensures full signature is visible */
+  object-fit: contain;  /* Ensures full signature is visible */
   object-position: center center;
   /* Fill the entire container */
   position: absolute;
   top: 0;
   left: 0;
   z-index: 1;
-  padding: 8px;  /* Add padding so signature doesn't touch edges */
+  padding: 10px;  /* Padding for clean edges */
   margin: 0;
   box-sizing: border-box;
 }
@@ -1253,9 +1252,10 @@ input::placeholder {
   height: 16px;
 }
 
-/* ID Card Back Side */
+/* ID Card Back Side - Match front side dimensions exactly */
 .id-card-back {
   width: 420px;
+  min-height: 620px;  /* Match front side height */
   background: white;
   border-radius: 16px;
   overflow: hidden;
@@ -1274,24 +1274,24 @@ input::placeholder {
   overflow: hidden;
 }
 
-/* Geometric Background Pattern */
+/* Geometric Background Pattern - No dark overlay, no rounded corners */
 .id-back-pattern {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  /* Subtle geometric pattern */
   background-color: #f3f4f6;
-  background-image: 
-    linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
-    linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
-    linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
-  background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-  border-bottom-left-radius: 80px;
-  border-bottom-right-radius: 80px;
+  background-image: url('/static/images/id-card-backside-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 0;  /* Square corners - no rounded edges */
+  z-index: 0;
+  /* Ensure no dark overlay or filter */
+  opacity: 1;
+  filter: none;
+  mix-blend-mode: normal;
 }
 
 /* QR Code Content */

@@ -94,6 +94,13 @@ async function fetchGalleryData() {
   console.log('fetchGalleryData: Current URL:', window.location.href);
   showLoading(true);
 
+  // VERCEL FIX: Add timeout to prevent infinite loading on serverless cold starts
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.log('fetchGalleryData: Request timeout - aborting');
+    controller.abort();
+  }, 15000); // 15 second timeout
+
   try {
     // VERCEL FIX: Include credentials to ensure JWT cookie is sent with request
     // Without this, serverless functions may not receive the authentication cookie
@@ -106,8 +113,11 @@ async function fetchGalleryData() {
       headers: {
         'Accept': 'application/json',
         'Cache-Control': 'no-cache'
-      }
+      },
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     
     console.log('fetchGalleryData: Response status:', response.status);
     console.log('fetchGalleryData: Response headers:', Object.fromEntries(response.headers.entries()));
@@ -154,14 +164,24 @@ async function fetchGalleryData() {
       throw new Error(data.error || 'Failed to fetch data');
     }
   } catch (error) {
+    clearTimeout(timeoutId);
     console.error('fetchGalleryData: Error occurred:', error);
-    showToast('Failed to load gallery data: ' + error.message, 'error');
+    
+    // VERCEL FIX: Handle abort/timeout gracefully
+    if (error.name === 'AbortError') {
+      showToast('Request timed out. Please refresh the page.', 'error');
+    } else {
+      showToast('Failed to load gallery data: ' + error.message, 'error');
+    }
+    
+    // VERCEL FIX: Always set empty state on error to prevent infinite loading
     galleryState.employees = [];
     galleryState.filteredEmployees = [];
     updateStats();
     renderGallery();
   } finally {
     console.log('fetchGalleryData: Hiding loading state');
+    // VERCEL FIX: Always hide loading state, even on error
     showLoading(false);
   }
 }
@@ -172,17 +192,24 @@ async function fetchGalleryData() {
 function showLoading(show) {
   console.log('showLoading:', show);
   galleryState.isLoading = show;
-  if (elements.loadingState) {
-    elements.loadingState.style.display = show ? 'flex' : 'none';
-    console.log('showLoading: loadingState display =', elements.loadingState.style.display);
-  } else {
-    console.warn('showLoading: loadingState element not found');
-  }
-  if (elements.gallerySection) {
-    elements.gallerySection.style.display = show ? 'none' : 'block';
-    console.log('showLoading: gallerySection display =', elements.gallerySection.style.display);
-  } else {
-    console.warn('showLoading: gallerySection element not found');
+  
+  // VERCEL FIX: Use try-catch to prevent any DOM errors from blocking UI updates
+  try {
+    if (elements.loadingState) {
+      elements.loadingState.style.display = show ? 'flex' : 'none';
+      console.log('showLoading: loadingState display =', elements.loadingState.style.display);
+    } else {
+      console.warn('showLoading: loadingState element not found');
+    }
+    
+    if (elements.gallerySection) {
+      elements.gallerySection.style.display = show ? 'none' : 'block';
+      console.log('showLoading: gallerySection display =', elements.gallerySection.style.display);
+    } else {
+      console.warn('showLoading: gallerySection element not found');
+    }
+  } catch (e) {
+    console.error('showLoading: Error updating UI', e);
   }
 }
 
