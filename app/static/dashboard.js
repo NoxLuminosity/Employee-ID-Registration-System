@@ -114,12 +114,34 @@ function initEventListeners() {
 async function fetchEmployeeData() {
   showLoading(true);
 
+  // VERCEL FIX: Add timeout to prevent infinite loading on serverless cold starts
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.log('fetchEmployeeData: Request timeout - aborting');
+    controller.abort();
+  }, 15000); // 15 second timeout
+
   try {
     // VERCEL FIX: Include credentials to ensure JWT cookie is sent with request
     // Without this, serverless functions may not receive the authentication cookie
     const response = await fetch('/hr/api/employees', {
-      credentials: 'include'
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
+      },
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
+    
+    // Handle unauthorized - redirect to login
+    if (response.status === 401) {
+      console.log('fetchEmployeeData: Unauthorized, redirecting to login');
+      window.location.href = '/hr/login';
+      return;
+    }
+    
     const data = await response.json();
 
     if (data.success) {
@@ -131,8 +153,17 @@ async function fetchEmployeeData() {
       throw new Error(data.error || 'Failed to fetch data');
     }
   } catch (error) {
+    clearTimeout(timeoutId);
     console.error('Error fetching employee data:', error);
-    showToast('Failed to load employee data', 'error');
+    
+    // VERCEL FIX: Handle abort/timeout gracefully
+    if (error.name === 'AbortError') {
+      showToast('Request timed out. Please refresh the page.', 'error');
+    } else {
+      showToast('Failed to load employee data: ' + error.message, 'error');
+    }
+    
+    // Always set empty state to prevent stuck loading
     dashboardState.employees = [];
     dashboardState.filteredEmployees = [];
     updateStatusCounts();

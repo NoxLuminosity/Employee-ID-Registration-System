@@ -323,11 +323,7 @@ function generateIDCardHtml(emp) {
         <div class="id-photo-section">
           <!-- Header with Logo -->
           <div class="id-header">
-            <div class="id-logo-group">
-              <span class="id-logo-spm">SPM</span>
-              <span class="id-logo-divider">|</span>
-            </div>
-            <span class="id-logo-text">S.P. MADRID</span>
+            <img src="/static/images/SPM%20Logo%201.png" alt="SPM Logo" class="id-logo-image" crossorigin="anonymous">
           </div>
           
           <!-- Photo placeholder with geometric background -->
@@ -425,9 +421,7 @@ function generateIDCardBackHtml(emp) {
       <div class="id-back-bottom">
         <!-- SPM Logo -->
         <div class="id-back-logo">
-          <span class="id-back-logo-spm">SPM</span>
-          <span class="id-back-logo-divider">|</span>
-          <span class="id-back-logo-text">S.P. MADRID</span>
+          <img src="/static/images/SPM%20Logo%201.png" alt="SPM Logo" class="id-back-logo-image" crossorigin="anonymous">
         </div>
 
         <!-- Emergency Contact Info -->
@@ -610,43 +604,71 @@ async function downloadIDPdf(emp) {
   showToast('Generating PDF...', 'success');
 
   try {
-    // Create a temporary container for the ID card
+    // Create a temporary container for the ID card - MUST be visible for proper rendering
     const tempContainer = document.createElement('div');
-    tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px';
+    tempContainer.style.position = 'fixed';
+    tempContainer.style.left = '0';
     tempContainer.style.top = '0';
+    tempContainer.style.zIndex = '-9999';
+    tempContainer.style.opacity = '0';
+    tempContainer.style.pointerEvents = 'none';
     
-    // Render front side
-    tempContainer.innerHTML = `<div class="pdf-id-card-wrapper">${generateIDCardHtml(emp)}</div>`;
+    // Render front side with explicit dimensions matching preview
+    tempContainer.innerHTML = `<div class="pdf-id-card-wrapper" style="width: 420px;">${generateIDCardHtml(emp)}</div>`;
     document.body.appendChild(tempContainer);
 
-    // Wait a bit for images to load
-    await new Promise(resolve => setTimeout(resolve, 800));
+    // Wait for images to fully load
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    
+    // Preload all images in the container
+    const images = tempContainer.querySelectorAll('img');
+    await Promise.all(Array.from(images).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+    }));
 
     const frontCardEl = tempContainer.querySelector('.id-card');
     
-    // Capture front side with html2canvas
+    // Capture front side with html2canvas - match exact preview dimensions
     const frontCanvas = await html2canvas(frontCardEl, {
-      scale: 2,
+      scale: 3,  // Higher scale for better quality
       useCORS: true,
       allowTaint: true,
-      backgroundColor: '#ffffff'
+      backgroundColor: '#ffffff',
+      width: 420,
+      height: 620,
+      logging: false
     });
 
-    // Render back side
-    tempContainer.innerHTML = `<div class="pdf-id-card-wrapper">${generateIDCardBackHtml(emp)}</div>`;
+    // Render back side with explicit dimensions
+    tempContainer.innerHTML = `<div class="pdf-id-card-wrapper" style="width: 420px;">${generateIDCardBackHtml(emp)}</div>`;
     
-    // Wait for rendering
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // Wait for back side images
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    const backImages = tempContainer.querySelectorAll('img');
+    await Promise.all(Array.from(backImages).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+    }));
     
     const backCardEl = tempContainer.querySelector('.id-card');
     
-    // Capture back side with html2canvas
+    // Capture back side with html2canvas - same dimensions as front
     const backCanvas = await html2canvas(backCardEl, {
-      scale: 2,
+      scale: 3,
       useCORS: true,
       allowTaint: true,
-      backgroundColor: '#ffffff'
+      backgroundColor: '#ffffff',
+      width: 420,
+      height: 620,
+      logging: false
     });
 
     // Create PDF with jsPDF - 2 pages (front and back)

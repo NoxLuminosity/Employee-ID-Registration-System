@@ -559,6 +559,19 @@
   height: 16px;
 }
 
+/* Logo Image styles for gallery */
+.id-logo-image {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+}
+
+.id-back-logo-image {
+  height: 56px;
+  width: auto;
+  object-fit: contain;
+}
+
 /* ID Card Back Side - Match front side dimensions exactly */
 .id-card-back,
 .gallery-id-card-back {
@@ -807,5 +820,4 @@
     transform: scale(0.32);
     margin-bottom: -350px;
   }
-}
 }

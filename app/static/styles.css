@@ -881,6 +881,7 @@ input::placeholder {
   position: relative;
   border-bottom-left-radius: 80px;
   padding-top: 32px;
+  z-index: 5;  /* Ensure sidebar is above photo container */
 }
 
 .id-nickname-vertical {
@@ -891,6 +892,7 @@ input::placeholder {
   transform: rotate(-90deg);
   white-space: nowrap;
   position: absolute;
+  z-index: 10;  /* Ensure nickname is above everything in the card */
 }
 
 /* Photo Section */
@@ -911,6 +913,13 @@ input::placeholder {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* Logo Image - replaces text-based logo */
+.id-logo-image {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
 }
 
 .id-logo-group {
@@ -1390,6 +1399,63 @@ input::placeholder {
     width: 150px;
     height: 50px;
   }
+  
+  /* Logo image scaling for mobile */
+  .id-logo-image {
+    height: 32px;
+  }
+  
+  .id-back-logo-image {
+    height: 40px;
+  }
+  
+  /* Back side mobile responsive - Employee form */
+  .id-card-back {
+    width: 100%;
+    max-width: 280px;
+    min-height: auto;
+  }
+  
+  .id-back-top {
+    padding: 16px;
+    min-height: 200px;
+  }
+  
+  .id-qr-code svg,
+  .id-qr-code img {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .id-vcard-label {
+    font-size: 1.5rem;
+  }
+  
+  .id-vcard-url {
+    font-size: 0.8rem;
+  }
+  
+  .id-back-bottom {
+    padding: 16px;
+  }
+  
+  .id-back-logo {
+    margin-bottom: 16px;
+  }
+  
+  .id-emergency-title {
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+  
+  .id-emergency-label {
+    min-width: 70px;
+    font-size: 0.75rem;
+  }
+  
+  .id-emergency-value {
+    font-size: 0.75rem;
+  }
 }
 
 /* ============================================
@@ -1531,6 +1597,13 @@ input::placeholder {
   justify-content: center;
   gap: 12px;
   margin-bottom: 24px;
+}
+
+/* Back Logo Image - replaces text-based logo */
+.id-back-logo-image {
+  height: 56px;
+  width: auto;
+  object-fit: contain;
 }
 
 .id-back-logo-spm {
