@@ -1204,7 +1204,7 @@ input::placeholder {
   font-weight: 700;
 }
 
-/* ID Card Responsive - Comprehensive mobile support with SCALE-based approach */
+/* ID Card Responsive - ONLY scale the card, don't change internal elements */
 @media (max-width: 768px) {
   .id-preview-section {
     padding: var(--spacing-md);
@@ -1214,144 +1214,19 @@ input::placeholder {
   
   .id-preview-wrapper {
     padding: var(--spacing-sm);
-    overflow: hidden;  /* Prevent any overflow */
+    overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    /* Container height accounts for scaled card */
     min-height: 480px;
   }
   
-  /* Use transform scale to maintain exact proportions - NO aspect-ratio */
+  /* ONLY scale - keep all internal dimensions identical to desktop */
   .id-card,
   .id-card-back {
-    width: 420px !important;  /* Fixed width */
-    min-height: 620px !important;  /* Fixed min-height */
-    height: auto;
-    transform: scale(0.72);  /* Scale down to fit ~302px wide */
+    transform: scale(0.76);
     transform-origin: top center;
-    margin-bottom: -174px;  /* Compensate for scaled empty space: 620 * (1 - 0.72) */
-  }
-  
-  /* Scale internal elements proportionally */
-  .id-sidebar {
-    width: 90px;
-    min-height: 320px;
-  }
-  
-  .id-nickname-vertical {
-    font-size: 3.2rem;
-  }
-  
-  .id-photo-container {
-    height: 300px;
-    width: calc(100% + 24px);
-    margin-left: -24px;
-    margin-top: 60px;
-  }
-  
-  .id-header {
-    top: 20px;
-    right: 16px;
-  }
-  
-  .id-logo-spm {
-    font-size: 24px;
-  }
-  
-  .id-logo-divider {
-    font-size: 24px;
-  }
-  
-  .id-logo-text {
-    font-size: 14px;
-  }
-  
-  .id-card-bottom {
-    padding: 16px 20px;
-    min-height: 160px;
-  }
-  
-  .id-fullname {
-    font-size: 1.8rem;
-    max-width: 180px;
-  }
-  
-  .id-position-dept {
-    font-size: 13px;
-    margin-top: 8px;
-    margin-bottom: 12px;
-  }
-  
-  .id-barcode-placeholder {
-    width: 180px;
-    height: 60px;
-  }
-  
-  .id-signature-area {
-    width: 160px;
-    height: 100px;
-    margin-top: 15px;
-    margin-right: 5px;
-  }
-  
-  .id-website-strip {
-    right: -30px;
-  }
-  
-  .id-website-url {
-    font-size: 11px;
-  }
-  
-  .id-expiration {
-    font-size: 11px;
-    bottom: 8px;
-    right: 8px;
-  }
-  
-  /* Back side mobile scaling */
-  .id-back-top {
-    padding: 20px;
-    min-height: 260px;
-  }
-  
-  .id-qr-code svg,
-  .id-qr-code img {
-    width: 140px;
-    height: 140px;
-  }
-  
-  .id-vcard-label {
-    font-size: 1.8rem;
-  }
-  
-  .id-vcard-url {
-    font-size: 0.9rem;
-  }
-  
-  .id-back-bottom {
-    padding: 20px;
-  }
-  
-  .id-back-logo-spm {
-    font-size: 1.6rem;
-  }
-  
-  .id-back-logo-text {
-    font-size: 1rem;
-  }
-  
-  .id-emergency-title {
-    font-size: 0.95rem;
-  }
-  
-  .id-emergency-label {
-    min-width: 80px;
-    font-size: 0.85rem;
-  }
-  
-  .id-emergency-value {
-    font-size: 0.85rem;
+    margin-bottom: -149px;  /* 620 * (1 - 0.76) */
   }
   
   /* Flip toggle mobile sizing */
@@ -1365,7 +1240,7 @@ input::placeholder {
   }
 }
 
-/* Extra small screens (< 480px) - smaller scale */
+/* Extra small screens (< 480px) - smaller scale only */
 @media (max-width: 480px) {
   .id-preview-section {
     padding: var(--spacing-sm);
@@ -1373,102 +1248,15 @@ input::placeholder {
   }
   
   .id-preview-wrapper {
-    min-height: 400px;  /* Smaller container for smaller scale */
+    min-height: 420px;
   }
   
-  /* Smaller scale for very small screens */
+  /* Smaller scale - no internal element changes */
   .id-card,
   .id-card-back {
-    width: 420px !important;
-    min-height: 620px !important;
-    transform: scale(0.62);  /* ~260px wide */
+    transform: scale(0.65);
     transform-origin: top center;
-    margin-bottom: -236px;  /* 620 * (1 - 0.62) */
-  }
-  
-  .id-sidebar {
-    width: 70px;
-    min-height: 280px;
-  }
-  
-  .id-nickname-vertical {
-    font-size: 2.5rem;
-  }
-  
-  .id-photo-container {
-    height: 260px;
-    margin-top: 50px;
-  }
-  
-  .id-fullname {
-    font-size: 1.5rem;
-    max-width: 150px;
-  }
-  
-  .id-signature-area {
-    width: 130px;
-    height: 80px;
-  }
-  
-  .id-barcode-placeholder {
-    width: 150px;
-    height: 50px;
-  }
-  
-  /* Logo image scaling for mobile */
-  .id-logo-image {
-    height: 32px;
-  }
-  
-  .id-back-logo-image {
-    height: 40px;
-  }
-  
-  /* Back side mobile responsive - Employee form (scale handles sizing) */
-  .id-card-back {
-    width: 420px !important;
-    min-height: 620px !important;
-  }
-  
-  .id-back-top {
-    padding: 16px;
-    min-height: 200px;
-  }
-  
-  .id-qr-code svg,
-  .id-qr-code img {
-    width: 120px;
-    height: 120px;
-  }
-  
-  .id-vcard-label {
-    font-size: 1.5rem;
-  }
-  
-  .id-vcard-url {
-    font-size: 0.8rem;
-  }
-  
-  .id-back-bottom {
-    padding: 16px;
-  }
-  
-  .id-back-logo {
-    margin-bottom: 16px;
-  }
-  
-  .id-emergency-title {
-    font-size: 0.85rem;
-    margin-bottom: 12px;
-  }
-  
-  .id-emergency-label {
-    min-width: 70px;
-    font-size: 0.75rem;
-  }
-  
-  .id-emergency-value {
-    font-size: 0.75rem;
+    margin-bottom: -217px;  /* 620 * (1 - 0.65) */
   }
 }
 

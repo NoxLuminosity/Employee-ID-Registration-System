@@ -600,34 +600,35 @@ function downloadSinglePdf(id) {
 }
 
 // Download ID card as PDF using jsPDF and html2canvas - includes both front and back
-// FIXED: Uses consistent 420x620 dimensions matching the CSS-defined card size
+// Captures FULL card content - no cropping
 async function downloadIDPdf(emp) {
   showToast('Generating PDF...', 'success');
 
   try {
-    // Create a temporary container - position off-screen but VISIBLE for accurate rendering
+    // Create a temporary container - position off-screen but rendered
     const tempContainer = document.createElement('div');
     tempContainer.style.position = 'absolute';
     tempContainer.style.left = '-9999px';
     tempContainer.style.top = '0';
-    tempContainer.style.width = '420px';  // Fixed width matching CSS
+    tempContainer.style.width = '450px';  // Slightly wider to ensure no clipping
     tempContainer.style.background = '#ffffff';
     document.body.appendChild(tempContainer);
     
-    // Render front side with FIXED dimensions matching CSS .id-card
+    // Render front side
     tempContainer.innerHTML = `
-      <div class="pdf-id-card-wrapper" style="width: 420px; padding: 0; background: white;">
+      <div class="pdf-id-card-wrapper" style="width: 420px; padding: 0; background: white; display: inline-block;">
         ${generateIDCardHtml(emp)}
       </div>
     `;
 
-    // Force the card to have exact dimensions
+    // Force the card to have exact width, let height be natural
     const frontCardEl = tempContainer.querySelector('.id-card');
     frontCardEl.style.width = '420px';
     frontCardEl.style.minHeight = '620px';
     frontCardEl.style.height = 'auto';
     frontCardEl.style.transform = 'none';
     frontCardEl.style.margin = '0';
+    frontCardEl.style.overflow = 'visible';
 
     // Wait for images to fully load
     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -642,20 +643,26 @@ async function downloadIDPdf(emp) {
       });
     }));
     
-    // Capture front side - FIXED dimensions
+    // Get ACTUAL dimensions after render
+    const frontHeight = Math.max(620, frontCardEl.scrollHeight, frontCardEl.offsetHeight);
+    console.log('PDF Front card height:', frontHeight);
+    
+    // Capture front side - use ACTUAL height to prevent cropping
     const frontCanvas = await html2canvas(frontCardEl, {
       scale: 3,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       width: 420,
-      height: 620,
+      height: frontHeight,
+      scrollY: 0,
+      scrollX: 0,
       logging: false
     });
 
-    // Render back side with FIXED dimensions
+    // Render back side
     tempContainer.innerHTML = `
-      <div class="pdf-id-card-wrapper" style="width: 420px; padding: 0; background: white;">
+      <div class="pdf-id-card-wrapper" style="width: 420px; padding: 0; background: white; display: inline-block;">
         ${generateIDCardBackHtml(emp)}
       </div>
     `;
@@ -666,6 +673,7 @@ async function downloadIDPdf(emp) {
     backCardEl.style.height = 'auto';
     backCardEl.style.transform = 'none';
     backCardEl.style.margin = '0';
+    backCardEl.style.overflow = 'visible';
     
     // Wait for back side images
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -679,23 +687,33 @@ async function downloadIDPdf(emp) {
       });
     }));
     
-    // Capture back side - FIXED dimensions (same as front)
+    // Get ACTUAL back side height
+    const backHeight = Math.max(620, backCardEl.scrollHeight, backCardEl.offsetHeight);
+    console.log('PDF Back card height:', backHeight);
+    
+    // Capture back side - use ACTUAL height
     const backCanvas = await html2canvas(backCardEl, {
       scale: 3,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       width: 420,
-      height: 620,
+      height: backHeight,
+      scrollY: 0,
+      scrollX: 0,
       logging: false
     });
 
-    // PDF dimensions: 420x620 at 96 DPI scaled 3x = 1260x1860 canvas
-    // Convert to mm: 420px * (25.4mm/96dpi) = 111.125mm, 620px * (25.4mm/96dpi) = 164.04mm
-    const pdfWidthMm = 111.125;
-    const pdfHeightMm = 164.04;
+    // Use the taller of the two for consistent PDF page size
+    const maxHeight = Math.max(frontHeight, backHeight);
+    
+    // Convert px to mm at 96 DPI: px * (25.4 / 96)
+    const pdfWidthMm = 420 * (25.4 / 96);   // ~111.125mm
+    const pdfHeightMm = maxHeight * (25.4 / 96);
+    
+    console.log('PDF dimensions (mm):', pdfWidthMm, 'x', pdfHeightMm);
 
-    // Create PDF with EXACT proportional dimensions
+    // Create PDF with calculated dimensions
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -703,17 +721,19 @@ async function downloadIDPdf(emp) {
       format: [pdfWidthMm, pdfHeightMm]
     });
 
-    // Add front side - fill entire page
+    // Add front side - scale to fit page
     const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
-    pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm);
+    const frontPdfHeight = frontHeight * (25.4 / 96);
+    pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, frontPdfHeight);
     
-    // Add back side on new page with same size
+    // Add back side on new page
     pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
     const backImgData = backCanvas.toDataURL('image/png', 1.0);
-    pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm);
+    const backPdfHeight = backHeight * (25.4 / 96);
+    pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, backPdfHeight);
     
     // Download the PDF
-    pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}.pdf`);
+    pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\\s+/g, '_')}.pdf`);
 
     // Cleanup
     document.body.removeChild(tempContainer);
@@ -730,7 +750,7 @@ async function downloadIDPdf(emp) {
   }
 }
 
-// Download all IDs as PDFs (front and back) - uses FIXED 420x620 dimensions
+// Download all IDs as PDFs (front and back) - captures full content
 async function downloadAllPdfs() {
   const employees = galleryState.filteredEmployees;
   
@@ -749,27 +769,23 @@ async function downloadAllPdfs() {
   `;
 
   try {
-    // Create a temporary container - off-screen but rendered
+    // Create a temporary container
     const tempContainer = document.createElement('div');
     tempContainer.style.position = 'absolute';
     tempContainer.style.left = '-9999px';
     tempContainer.style.top = '0';
-    tempContainer.style.width = '420px';
+    tempContainer.style.width = '450px';
     tempContainer.style.background = '#ffffff';
     document.body.appendChild(tempContainer);
 
     const { jsPDF } = window.jspdf;
-    
-    // Fixed PDF dimensions
-    const pdfWidthMm = 111.125;
-    const pdfHeightMm = 164.04;
 
     for (let i = 0; i < employees.length; i++) {
       const emp = employees[i];
       
-      // Render front side with fixed dimensions
+      // Render front side
       tempContainer.innerHTML = `
-        <div class="pdf-id-card-wrapper" style="width: 420px; padding: 0; background: white;">
+        <div class="pdf-id-card-wrapper" style="width: 420px; padding: 0; background: white; display: inline-block;">
           ${generateIDCardHtml(emp)}
         </div>
       `;
@@ -777,9 +793,10 @@ async function downloadAllPdfs() {
       const frontCardEl = tempContainer.querySelector('.id-card');
       frontCardEl.style.width = '420px';
       frontCardEl.style.minHeight = '620px';
+      frontCardEl.style.height = 'auto';
       frontCardEl.style.transform = 'none';
+      frontCardEl.style.overflow = 'visible';
       
-      // Wait for images to load
       await new Promise(resolve => setTimeout(resolve, 800));
       
       const frontImages = tempContainer.querySelectorAll('img');
@@ -791,19 +808,21 @@ async function downloadAllPdfs() {
         });
       }));
       
-      // Capture front with FIXED dimensions
+      // Get actual height
+      const frontHeight = Math.max(620, frontCardEl.scrollHeight, frontCardEl.offsetHeight);
+      
       const frontCanvas = await html2canvas(frontCardEl, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         width: 420,
-        height: 620
+        height: frontHeight
       });
       
-      // Render back side with fixed dimensions
+      // Render back side
       tempContainer.innerHTML = `
-        <div class="pdf-id-card-wrapper" style="width: 420px; padding: 0; background: white;">
+        <div class="pdf-id-card-wrapper" style="width: 420px; padding: 0; background: white; display: inline-block;">
           ${generateIDCardBackHtml(emp)}
         </div>
       `;
@@ -811,7 +830,9 @@ async function downloadAllPdfs() {
       const backCardEl = tempContainer.querySelector('.id-card');
       backCardEl.style.width = '420px';
       backCardEl.style.minHeight = '620px';
+      backCardEl.style.height = 'auto';
       backCardEl.style.transform = 'none';
+      backCardEl.style.overflow = 'visible';
       
       await new Promise(resolve => setTimeout(resolve, 500));
       
@@ -824,17 +845,23 @@ async function downloadAllPdfs() {
         });
       }));
       
-      // Capture back with FIXED dimensions
+      // Get actual height
+      const backHeight = Math.max(620, backCardEl.scrollHeight, backCardEl.offsetHeight);
+      
       const backCanvas = await html2canvas(backCardEl, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         width: 420,
-        height: 620
+        height: backHeight
       });
 
-      // Create PDF with fixed dimensions
+      // Calculate PDF dimensions from actual content
+      const maxHeight = Math.max(frontHeight, backHeight);
+      const pdfWidthMm = 420 * (25.4 / 96);
+      const pdfHeightMm = maxHeight * (25.4 / 96);
+
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -843,23 +870,19 @@ async function downloadAllPdfs() {
 
       // Add front side
       const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm);
+      pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, frontHeight * (25.4 / 96));
       
-      // Add back side on new page
+      // Add back side
       pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
       const backImgData = backCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm);
+      pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, backHeight * (25.4 / 96));
       
-      // Download
       pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}.pdf`);
 
-      // Small delay between downloads
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    // Cleanup
     document.body.removeChild(tempContainer);
-
     showToast(`Successfully downloaded ${employees.length} PDFs (Front + Back)`, 'success');
   } catch (error) {
     console.error('Error downloading PDFs:', error);
