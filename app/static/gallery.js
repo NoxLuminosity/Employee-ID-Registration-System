@@ -600,25 +600,31 @@ function downloadSinglePdf(id) {
 }
 
 // Download ID card as PDF using jsPDF and html2canvas - includes both front and back
+// CRITICAL: Captures ACTUAL rendered dimensions to prevent cropping
 async function downloadIDPdf(emp) {
   showToast('Generating PDF...', 'success');
 
   try {
-    // Create a temporary container for the ID card - MUST be visible for proper rendering
+    // Create a temporary container - VISIBLE position for accurate rendering
     const tempContainer = document.createElement('div');
     tempContainer.style.position = 'fixed';
     tempContainer.style.left = '0';
     tempContainer.style.top = '0';
-    tempContainer.style.zIndex = '-9999';
-    tempContainer.style.opacity = '0';
+    tempContainer.style.zIndex = '99999';
+    tempContainer.style.background = '#ffffff';
+    tempContainer.style.opacity = '0.01';  // Nearly invisible but still rendered
     tempContainer.style.pointerEvents = 'none';
     
-    // Render front side with explicit dimensions matching preview
-    tempContainer.innerHTML = `<div class="pdf-id-card-wrapper" style="width: 420px;">${generateIDCardHtml(emp)}</div>`;
+    // Render front side - DO NOT constrain dimensions, let card render naturally
+    tempContainer.innerHTML = `
+      <div class="pdf-id-card-wrapper" style="display: inline-block; background: white; padding: 0;">
+        ${generateIDCardHtml(emp)}
+      </div>
+    `;
     document.body.appendChild(tempContainer);
 
     // Wait for images to fully load
-    await new Promise(resolve => setTimeout(resolve, 1200));
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     // Preload all images in the container
     const images = tempContainer.querySelectorAll('img');
@@ -632,22 +638,39 @@ async function downloadIDPdf(emp) {
 
     const frontCardEl = tempContainer.querySelector('.id-card');
     
-    // Capture front side with html2canvas - match exact preview dimensions
+    // Get ACTUAL rendered dimensions - DO NOT hardcode
+    const frontRect = frontCardEl.getBoundingClientRect();
+    const frontWidth = Math.ceil(frontRect.width);
+    const frontHeight = Math.ceil(frontRect.height);
+    console.log('PDF: Front card actual dimensions:', frontWidth, 'x', frontHeight);
+    
+    // Capture front side - use ACTUAL dimensions, no cropping
     const frontCanvas = await html2canvas(frontCardEl, {
-      scale: 3,  // Higher scale for better quality
+      scale: 3,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
-      width: 420,
-      height: 620,
-      logging: false
+      width: frontWidth,
+      height: frontHeight,
+      windowWidth: frontWidth,
+      windowHeight: frontHeight,
+      logging: false,
+      onclone: (clonedDoc, element) => {
+        // Ensure cloned element has no transforms that could affect size
+        element.style.transform = 'none';
+        element.style.margin = '0';
+      }
     });
 
-    // Render back side with explicit dimensions
-    tempContainer.innerHTML = `<div class="pdf-id-card-wrapper" style="width: 420px;">${generateIDCardBackHtml(emp)}</div>`;
+    // Render back side
+    tempContainer.innerHTML = `
+      <div class="pdf-id-card-wrapper" style="display: inline-block; background: white; padding: 0;">
+        ${generateIDCardBackHtml(emp)}
+      </div>
+    `;
     
     // Wait for back side images
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     const backImages = tempContainer.querySelectorAll('img');
     await Promise.all(Array.from(backImages).map(img => {
@@ -660,33 +683,57 @@ async function downloadIDPdf(emp) {
     
     const backCardEl = tempContainer.querySelector('.id-card');
     
-    // Capture back side with html2canvas - same dimensions as front
+    // Get ACTUAL back side dimensions
+    const backRect = backCardEl.getBoundingClientRect();
+    const backWidth = Math.ceil(backRect.width);
+    const backHeight = Math.ceil(backRect.height);
+    console.log('PDF: Back card actual dimensions:', backWidth, 'x', backHeight);
+    
+    // Capture back side with ACTUAL dimensions
     const backCanvas = await html2canvas(backCardEl, {
       scale: 3,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
-      width: 420,
-      height: 620,
-      logging: false
+      width: backWidth,
+      height: backHeight,
+      windowWidth: backWidth,
+      windowHeight: backHeight,
+      logging: false,
+      onclone: (clonedDoc, element) => {
+        element.style.transform = 'none';
+        element.style.margin = '0';
+      }
     });
 
-    // Create PDF with jsPDF - 2 pages (front and back)
+    // Calculate PDF page size from canvas dimensions (maintain exact aspect ratio)
+    // Use larger of front/back for consistent page size
+    const maxWidth = Math.max(frontCanvas.width, backCanvas.width);
+    const maxHeight = Math.max(frontCanvas.height, backCanvas.height);
+    
+    // Convert to mm (assuming 96 DPI screen, scale 3x = 288 DPI effective)
+    // 1 inch = 25.4mm, 288 pixels per inch
+    const pdfWidthMm = (maxWidth / 3) * (25.4 / 96);
+    const pdfHeightMm = (maxHeight / 3) * (25.4 / 96);
+    
+    console.log('PDF: Page size (mm):', pdfWidthMm.toFixed(2), 'x', pdfHeightMm.toFixed(2));
+
+    // Create PDF with EXACT dimensions from captured canvas
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({
-      orientation: 'portrait',
+      orientation: pdfHeightMm > pdfWidthMm ? 'portrait' : 'landscape',
       unit: 'mm',
-      format: [85.6, 125] // Proportional to ID card design
+      format: [pdfWidthMm, pdfHeightMm]
     });
 
-    // Add front side
-    const frontImgData = frontCanvas.toDataURL('image/png');
-    pdf.addImage(frontImgData, 'PNG', 0, 0, 85.6, 125);
+    // Add front side - fill entire page
+    const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
+    pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm);
     
-    // Add back side on new page
-    pdf.addPage([85.6, 125], 'portrait');
-    const backImgData = backCanvas.toDataURL('image/png');
-    pdf.addImage(backImgData, 'PNG', 0, 0, 85.6, 125);
+    // Add back side on new page with same size
+    pdf.addPage([pdfWidthMm, pdfHeightMm], pdfHeightMm > pdfWidthMm ? 'portrait' : 'landscape');
+    const backImgData = backCanvas.toDataURL('image/png', 1.0);
+    pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm);
     
     // Download the PDF
     pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}.pdf`);
@@ -706,7 +753,7 @@ async function downloadIDPdf(emp) {
   }
 }
 
-// Download all IDs as PDFs (front and back)
+// Download all IDs as PDFs (front and back) - uses ACTUAL rendered dimensions
 async function downloadAllPdfs() {
   const employees = galleryState.filteredEmployees;
   
@@ -725,11 +772,15 @@ async function downloadAllPdfs() {
   `;
 
   try {
-    // Create a temporary container for rendering
+    // Create a temporary container - nearly invisible but rendered
     const tempContainer = document.createElement('div');
-    tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px';
+    tempContainer.style.position = 'fixed';
+    tempContainer.style.left = '0';
     tempContainer.style.top = '0';
+    tempContainer.style.zIndex = '99999';
+    tempContainer.style.background = '#ffffff';
+    tempContainer.style.opacity = '0.01';
+    tempContainer.style.pointerEvents = 'none';
     document.body.appendChild(tempContainer);
 
     const { jsPDF } = window.jspdf;
@@ -738,57 +789,99 @@ async function downloadAllPdfs() {
       const emp = employees[i];
       
       // Render front side
-      tempContainer.innerHTML = `<div class="pdf-id-card-wrapper">${generateIDCardHtml(emp)}</div>`;
+      tempContainer.innerHTML = `
+        <div class="pdf-id-card-wrapper" style="display: inline-block; background: white; padding: 0;">
+          ${generateIDCardHtml(emp)}
+        </div>
+      `;
       
       // Wait for images to load
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const frontImages = tempContainer.querySelectorAll('img');
+      await Promise.all(Array.from(frontImages).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      }));
 
       const frontCardEl = tempContainer.querySelector('.id-card');
+      const frontRect = frontCardEl.getBoundingClientRect();
       
-      // Capture front with html2canvas
+      // Capture front with ACTUAL dimensions
       const frontCanvas = await html2canvas(frontCardEl, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        width: Math.ceil(frontRect.width),
+        height: Math.ceil(frontRect.height),
+        windowWidth: Math.ceil(frontRect.width),
+        windowHeight: Math.ceil(frontRect.height)
       });
       
       // Render back side
-      tempContainer.innerHTML = `<div class="pdf-id-card-wrapper">${generateIDCardBackHtml(emp)}</div>`;
+      tempContainer.innerHTML = `
+        <div class="pdf-id-card-wrapper" style="display: inline-block; background: white; padding: 0;">
+          ${generateIDCardBackHtml(emp)}
+        </div>
+      `;
       
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const backImages = tempContainer.querySelectorAll('img');
+      await Promise.all(Array.from(backImages).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      }));
       
       const backCardEl = tempContainer.querySelector('.id-card');
+      const backRect = backCardEl.getBoundingClientRect();
       
-      // Capture back with html2canvas
+      // Capture back with ACTUAL dimensions
       const backCanvas = await html2canvas(backCardEl, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        width: Math.ceil(backRect.width),
+        height: Math.ceil(backRect.height),
+        windowWidth: Math.ceil(backRect.width),
+        windowHeight: Math.ceil(backRect.height)
       });
 
-      // Create PDF (portrait format with 2 pages)
+      // Calculate PDF size from canvas
+      const maxWidth = Math.max(frontCanvas.width, backCanvas.width);
+      const maxHeight = Math.max(frontCanvas.height, backCanvas.height);
+      const pdfWidthMm = (maxWidth / 2) * (25.4 / 96);
+      const pdfHeightMm = (maxHeight / 2) * (25.4 / 96);
+
+      // Create PDF with exact dimensions
       const pdf = new jsPDF({
-        orientation: 'portrait',
+        orientation: pdfHeightMm > pdfWidthMm ? 'portrait' : 'landscape',
         unit: 'mm',
-        format: [85.6, 125]
+        format: [pdfWidthMm, pdfHeightMm]
       });
 
       // Add front side
-      const frontImgData = frontCanvas.toDataURL('image/png');
-      pdf.addImage(frontImgData, 'PNG', 0, 0, 85.6, 125);
+      const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
+      pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm);
       
       // Add back side on new page
-      pdf.addPage([85.6, 125], 'portrait');
-      const backImgData = backCanvas.toDataURL('image/png');
-      pdf.addImage(backImgData, 'PNG', 0, 0, 85.6, 125);
+      pdf.addPage([pdfWidthMm, pdfHeightMm], pdfHeightMm > pdfWidthMm ? 'portrait' : 'landscape');
+      const backImgData = backCanvas.toDataURL('image/png', 1.0);
+      pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm);
       
       // Download
       pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}.pdf`);
 
-      // Small delay between downloads to prevent browser blocking
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Small delay between downloads
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
     // Cleanup

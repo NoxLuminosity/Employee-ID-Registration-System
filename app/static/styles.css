@@ -870,7 +870,7 @@ input::placeholder {
   position: relative;
 }
 
-/* Blue Sidebar */
+/* Blue Sidebar - MUST be BELOW AI image, only nickname on top */
 .id-sidebar {
   width: 120px;
   min-height: 420px;
@@ -881,7 +881,7 @@ input::placeholder {
   position: relative;
   border-bottom-left-radius: 80px;
   padding-top: 32px;
-  z-index: 5;  /* Ensure sidebar is above photo container */
+  z-index: 1;  /* LOW z-index - sidebar is BELOW AI image */
 }
 
 .id-nickname-vertical {
@@ -892,7 +892,7 @@ input::placeholder {
   transform: rotate(-90deg);
   white-space: nowrap;
   position: absolute;
-  z-index: 10;  /* Ensure nickname is above everything in the card */
+  z-index: 100;  /* HIGH z-index - nickname is ABOVE everything */
 }
 
 /* Photo Section */
@@ -948,7 +948,7 @@ input::placeholder {
   letter-spacing: 0.05em;
 }
 
-/* Photo Container */
+/* Photo Container - z-index 10 puts AI image ABOVE sidebar (z-index 1) but BELOW nickname (z-index 100) */
 .id-photo-container {
   width: calc(100% + 32px);
   height: 400px;
@@ -959,6 +959,7 @@ input::placeholder {
   margin-left: -32px;
   position: relative;
   overflow: hidden;
+  z-index: 10;  /* AI image container ABOVE sidebar, BELOW nickname */
   /* Geometric squares background pattern */
   background-color: #e5e7eb;
   background-image: 
@@ -981,11 +982,11 @@ input::placeholder {
   height: 100%;
   object-fit: cover;
   object-position: center center;
-  /* Ensure image is above the background pattern */
+  /* AI image positioned absolutely within container */
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 1;
+  z-index: 1;  /* Above background pattern within container */
 }
 
 /* When image has transparent background - still use cover to fill container */
@@ -1203,7 +1204,7 @@ input::placeholder {
   font-weight: 700;
 }
 
-/* ID Card Responsive - Comprehensive mobile support */
+/* ID Card Responsive - Comprehensive mobile support with locked aspect ratio */
 @media (max-width: 768px) {
   .id-preview-section {
     padding: var(--spacing-md);
@@ -1216,14 +1217,17 @@ input::placeholder {
     overflow-x: hidden;  /* Prevent horizontal scroll */
     display: flex;
     justify-content: center;
+    align-items: flex-start;
   }
   
   .id-card,
   .id-card-back {
     width: 100%;
     max-width: 320px;
-    min-height: auto;  /* Let height scale with width */
-    transform: none;  /* Remove transform to use natural scaling */
+    min-height: unset;  /* Remove min-height to allow aspect-ratio to work */
+    height: auto;
+    aspect-ratio: 420 / 620;  /* Lock aspect ratio: width / height */
+    transform: none;
     transform-origin: center center;
   }
   
@@ -1369,6 +1373,9 @@ input::placeholder {
   .id-card,
   .id-card-back {
     max-width: 280px;
+    aspect-ratio: 420 / 620;  /* Maintain locked aspect ratio */
+    height: auto;
+    min-height: unset;
   }
   
   .id-sidebar {
@@ -1409,11 +1416,13 @@ input::placeholder {
     height: 40px;
   }
   
-  /* Back side mobile responsive - Employee form */
+  /* Back side mobile responsive - Employee form with locked aspect ratio */
   .id-card-back {
     width: 100%;
     max-width: 280px;
-    min-height: auto;
+    min-height: unset;
+    height: auto;
+    aspect-ratio: 420 / 620;  /* Same aspect ratio as front */
   }
   
   .id-back-top {
