@@ -761,28 +761,31 @@
     grid-template-columns: 1fr;
   }
   
-  /* Gallery modal ID card responsive with locked aspect ratio */
+  /* Gallery modal ID card responsive with SCALE-based approach */
   .id-preview-wrapper {
     padding: var(--spacing-sm);
-    overflow-x: hidden;
+    overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: flex-start;
+    min-height: 420px;
   }
   
+  /* Use fixed dimensions + scale for consistent proportions */
   .id-preview-wrapper .id-card,
   .id-preview-wrapper .id-card-back,
   .id-preview-wrapper .gallery-id-card-back {
+    width: 420px !important;
+    min-height: 620px !important;
     transform: scale(0.65);
     transform-origin: top center;
-    margin-bottom: -150px;
-    aspect-ratio: 420 / 620;  /* Lock aspect ratio */
+    margin-bottom: -217px;  /* 620 * (1 - 0.65) */
   }
   
   .id-card-back,
   .gallery-id-card-back {
-    max-width: 100%;
-    aspect-ratio: 420 / 620;  /* Ensure back side has locked aspect ratio */
+    width: 420px !important;
+    min-height: 620px !important;
   }
   
   /* Gallery card scaling */
@@ -812,14 +815,20 @@
   }
 }
 
-/* Extra small screens for gallery with locked aspect ratio */
+/* Extra small screens for gallery - smaller scale */
 @media (max-width: 480px) {
+  .id-preview-wrapper {
+    min-height: 360px;
+  }
+  
   .id-preview-wrapper .id-card,
   .id-preview-wrapper .id-card-back,
   .id-preview-wrapper .gallery-id-card-back {
+    width: 420px !important;
+    min-height: 620px !important;
     transform: scale(0.55);
-    margin-bottom: -180px;
-    aspect-ratio: 420 / 620;  /* Lock aspect ratio on small screens */
+    transform-origin: top center;
+    margin-bottom: -279px;  /* 620 * (1 - 0.55) */
   }
   
   .id-card-image-wrapper .id-card.gallery-id-card {

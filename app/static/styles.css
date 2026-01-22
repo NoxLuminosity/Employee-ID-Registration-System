@@ -1204,7 +1204,7 @@ input::placeholder {
   font-weight: 700;
 }
 
-/* ID Card Responsive - Comprehensive mobile support with locked aspect ratio */
+/* ID Card Responsive - Comprehensive mobile support with SCALE-based approach */
 @media (max-width: 768px) {
   .id-preview-section {
     padding: var(--spacing-md);
@@ -1214,21 +1214,23 @@ input::placeholder {
   
   .id-preview-wrapper {
     padding: var(--spacing-sm);
-    overflow-x: hidden;  /* Prevent horizontal scroll */
+    overflow: hidden;  /* Prevent any overflow */
     display: flex;
     justify-content: center;
     align-items: flex-start;
+    /* Container height accounts for scaled card */
+    min-height: 480px;
   }
   
+  /* Use transform scale to maintain exact proportions - NO aspect-ratio */
   .id-card,
   .id-card-back {
-    width: 100%;
-    max-width: 320px;
-    min-height: unset;  /* Remove min-height to allow aspect-ratio to work */
+    width: 420px !important;  /* Fixed width */
+    min-height: 620px !important;  /* Fixed min-height */
     height: auto;
-    aspect-ratio: 420 / 620;  /* Lock aspect ratio: width / height */
-    transform: none;
-    transform-origin: center center;
+    transform: scale(0.72);  /* Scale down to fit ~302px wide */
+    transform-origin: top center;
+    margin-bottom: -174px;  /* Compensate for scaled empty space: 620 * (1 - 0.72) */
   }
   
   /* Scale internal elements proportionally */
@@ -1363,19 +1365,25 @@ input::placeholder {
   }
 }
 
-/* Extra small screens (< 480px) */
+/* Extra small screens (< 480px) - smaller scale */
 @media (max-width: 480px) {
   .id-preview-section {
     padding: var(--spacing-sm);
     margin: var(--spacing-xs);
   }
   
+  .id-preview-wrapper {
+    min-height: 400px;  /* Smaller container for smaller scale */
+  }
+  
+  /* Smaller scale for very small screens */
   .id-card,
   .id-card-back {
-    max-width: 280px;
-    aspect-ratio: 420 / 620;  /* Maintain locked aspect ratio */
-    height: auto;
-    min-height: unset;
+    width: 420px !important;
+    min-height: 620px !important;
+    transform: scale(0.62);  /* ~260px wide */
+    transform-origin: top center;
+    margin-bottom: -236px;  /* 620 * (1 - 0.62) */
   }
   
   .id-sidebar {
@@ -1416,13 +1424,10 @@ input::placeholder {
     height: 40px;
   }
   
-  /* Back side mobile responsive - Employee form with locked aspect ratio */
+  /* Back side mobile responsive - Employee form (scale handles sizing) */
   .id-card-back {
-    width: 100%;
-    max-width: 280px;
-    min-height: unset;
-    height: auto;
-    aspect-ratio: 420 / 620;  /* Same aspect ratio as front */
+    width: 420px !important;
+    min-height: 620px !important;
   }
   
   .id-back-top {
