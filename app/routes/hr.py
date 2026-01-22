@@ -174,15 +174,20 @@ def verify_api_session(hr_session: str = Cookie(None)):
 def api_debug(hr_session: str = Cookie(None)):
     """Debug endpoint to check database and session status"""
     import os
+    from app.database import SUPABASE_URL, SUPABASE_KEY, SQLITE_DB
     
     debug_info = {
         "use_supabase": USE_SUPABASE,
         "is_vercel": IS_VERCEL,
+        "supabase_url_set": bool(SUPABASE_URL),
+        "supabase_key_set": bool(SUPABASE_KEY),
+        "sqlite_path": SQLITE_DB if not USE_SUPABASE else "N/A (using Supabase)",
         "session_present": hr_session is not None,
         "session_valid": False,
         "employee_count": 0,
         "table_exists": False,
-        "error": None
+        "error": None,
+        "recommendation": None
     }
     
     # Check session
@@ -198,6 +203,10 @@ def api_debug(hr_session: str = Cookie(None)):
         debug_info["status_breakdown"] = get_status_breakdown()
     except Exception as e:
         debug_info["error"] = str(e)
+    
+    # Add recommendation if data might be ephemeral
+    if IS_VERCEL and not USE_SUPABASE:
+        debug_info["recommendation"] = "WARNING: Using SQLite on Vercel (/tmp is ephemeral). Data will be lost on cold starts. Set SUPABASE_URL and SUPABASE_KEY environment variables for persistent storage."
     
     logger.info(f"Debug endpoint: {debug_info}")
     return JSONResponse(content=debug_info)

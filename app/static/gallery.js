@@ -11,8 +11,43 @@ const galleryState = {
   employees: [],
   filteredEmployees: [],
   isLoading: true,
-  currentEmployee: null
+  currentEmployee: null,
+  lastFetchTime: null
 };
+
+// Cache settings (shared cache key with dashboard for consistency)
+const GALLERY_CACHE_KEY = 'galleryEmployeeCache';
+const GALLERY_CACHE_DURATION_MS = 30000; // 30 seconds
+
+// Load cached employee data from sessionStorage
+function loadGalleryCachedData() {
+  try {
+    const cached = sessionStorage.getItem(GALLERY_CACHE_KEY);
+    if (cached) {
+      const { employees, timestamp } = JSON.parse(cached);
+      const age = Date.now() - timestamp;
+      if (age < GALLERY_CACHE_DURATION_MS && employees && employees.length > 0) {
+        console.log('Gallery: Using cached data, age:', Math.round(age/1000), 'seconds');
+        return employees;
+      }
+    }
+  } catch (e) {
+    console.warn('Gallery: Cache read error', e);
+  }
+  return null;
+}
+
+// Save employee data to sessionStorage cache
+function saveGalleryCachedData(employees) {
+  try {
+    sessionStorage.setItem(GALLERY_CACHE_KEY, JSON.stringify({
+      employees,
+      timestamp: Date.now()
+    }));
+  } catch (e) {
+    console.warn('Gallery: Cache write error', e);
+  }
+}
 
 // ============================================
 // DOM Elements (initialized after DOM loads)
@@ -89,9 +124,35 @@ function initEventListeners() {
 // ============================================
 // Data Fetching
 // ============================================
-async function fetchGalleryData() {
+async function fetchGalleryData(forceRefresh = false) {
   console.log('fetchGalleryData: Starting data fetch...');
   console.log('fetchGalleryData: Current URL:', window.location.href);
+  
+  // VERCEL FIX: Try to use cached data first to prevent data loss on navigation
+  if (!forceRefresh) {
+    const cachedData = loadGalleryCachedData();
+    if (cachedData) {
+      // Filter only approved and completed IDs from cache
+      galleryState.employees = cachedData.filter(
+        emp => emp.status === 'Approved' || emp.status === 'Completed'
+      );
+      galleryState.filteredEmployees = [...galleryState.employees];
+      galleryState.lastFetchTime = Date.now();
+      updateStats();
+      renderGallery();
+      showLoading(false);
+      
+      // Show/hide Download All button based on whether there are IDs
+      if (elements.downloadAllBtn) {
+        elements.downloadAllBtn.style.display = galleryState.employees.length > 0 ? 'flex' : 'none';
+      }
+      
+      // Still fetch fresh data in background to keep cache updated
+      fetchGalleryDataBackground();
+      return;
+    }
+  }
+  
   showLoading(true);
 
   // VERCEL FIX: Add timeout to prevent infinite loading on serverless cold starts
@@ -146,6 +207,10 @@ async function fetchGalleryData() {
       const allEmployees = data.employees || [];
       console.log('fetchGalleryData: Total employees:', allEmployees.length);
       
+      // VERCEL FIX: Cache all employees data
+      saveGalleryCachedData(allEmployees);
+      galleryState.lastFetchTime = Date.now();
+      
       galleryState.employees = allEmployees.filter(
         emp => emp.status === 'Approved' || emp.status === 'Completed'
       );
@@ -174,15 +239,69 @@ async function fetchGalleryData() {
       showToast('Failed to load gallery data: ' + error.message, 'error');
     }
     
-    // VERCEL FIX: Always set empty state on error to prevent infinite loading
-    galleryState.employees = [];
-    galleryState.filteredEmployees = [];
-    updateStats();
-    renderGallery();
+    // VERCEL FIX: Try to use cached data on error instead of showing empty state
+    const cachedData = loadGalleryCachedData();
+    if (cachedData && cachedData.length > 0) {
+      console.log('Gallery: Using cached data after fetch error');
+      galleryState.employees = cachedData.filter(
+        emp => emp.status === 'Approved' || emp.status === 'Completed'
+      );
+      galleryState.filteredEmployees = [...galleryState.employees];
+      updateStats();
+      renderGallery();
+      showToast('Showing cached data. Pull to refresh.', 'warning');
+    } else {
+      // Only set empty state if no cache available
+      galleryState.employees = [];
+      galleryState.filteredEmployees = [];
+      updateStats();
+      renderGallery();
+    }
   } finally {
     console.log('fetchGalleryData: Hiding loading state');
     // VERCEL FIX: Always hide loading state, even on error
     showLoading(false);
+  }
+}
+
+// Background fetch to update cache without blocking UI
+async function fetchGalleryDataBackground() {
+  try {
+    const response = await fetch('/hr/api/employees', {
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    
+    if (response.status === 401) return;
+    if (!response.ok) return;
+    
+    const data = await response.json();
+    if (data.success && data.employees) {
+      const allEmployees = data.employees;
+      const filteredNew = allEmployees.filter(
+        emp => emp.status === 'Approved' || emp.status === 'Completed'
+      );
+      
+      // Only update if data changed
+      if (JSON.stringify(filteredNew) !== JSON.stringify(galleryState.employees)) {
+        console.log('Gallery: Background fetch found updated data');
+        saveGalleryCachedData(allEmployees);
+        galleryState.employees = filteredNew;
+        galleryState.filteredEmployees = [...filteredNew];
+        galleryState.lastFetchTime = Date.now();
+        updateStats();
+        renderGallery();
+        
+        if (elements.downloadAllBtn) {
+          elements.downloadAllBtn.style.display = filteredNew.length > 0 ? 'flex' : 'none';
+        }
+      }
+    }
+  } catch (e) {
+    console.log('Gallery: Background fetch error (non-blocking)', e);
   }
 }
 

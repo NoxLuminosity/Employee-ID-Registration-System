@@ -1115,12 +1115,12 @@ input::placeholder {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-top: 20px;
+  margin-top: 10px;
   margin-right: 10px;
-  width: 240px;   /* Larger width for better signature visibility */
-  height: 140px;  /* Larger height for better signature visibility */
+  width: 280px;   /* Increased width for better signature visibility */
+  height: 180px;  /* Increased height for better signature visibility */
   position: relative;
-  overflow: hidden;
+  overflow: visible;  /* Allow slight overflow for larger signatures */
   /* Geometric squares background pattern */
   background-color: #f3f4f6;
   background-image: 
@@ -1149,7 +1149,7 @@ input::placeholder {
   top: 0;
   left: 0;
   z-index: 1;
-  padding: 10px;  /* Padding for clean edges */
+  padding: 8px;  /* Reduced padding for larger signature area */
   margin: 0;
   box-sizing: border-box;
 }
@@ -1157,7 +1157,7 @@ input::placeholder {
 .id-signature-placeholder {
   color: #9ca3af;
   font-weight: 500;
-  font-size: 16px;
+  font-size: 18px;  /* Larger placeholder text */
 }
 
 /* Website Strip */

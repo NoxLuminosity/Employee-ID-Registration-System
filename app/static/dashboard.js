@@ -10,8 +10,43 @@ const dashboardState = {
   employees: [],
   filteredEmployees: [],
   isLoading: true,
-  viewedEmployees: new Set() // Track which employees have had their details viewed
+  viewedEmployees: new Set(), // Track which employees have had their details viewed
+  lastFetchTime: null // Track when data was last fetched
 };
+
+// Cache settings
+const CACHE_KEY = 'dashboardEmployeeCache';
+const CACHE_DURATION_MS = 30000; // 30 seconds - short cache to balance freshness vs performance
+
+// Load cached employee data from sessionStorage
+function loadCachedData() {
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { employees, timestamp } = JSON.parse(cached);
+      const age = Date.now() - timestamp;
+      if (age < CACHE_DURATION_MS && employees && employees.length > 0) {
+        console.log('Dashboard: Using cached data, age:', Math.round(age/1000), 'seconds');
+        return employees;
+      }
+    }
+  } catch (e) {
+    console.warn('Dashboard: Cache read error', e);
+  }
+  return null;
+}
+
+// Save employee data to sessionStorage cache
+function saveCachedData(employees) {
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+      employees,
+      timestamp: Date.now()
+    }));
+  } catch (e) {
+    console.warn('Dashboard: Cache write error', e);
+  }
+}
 
 // Load viewed employees from sessionStorage on init
 function loadViewedEmployees() {
@@ -98,7 +133,8 @@ function initEventListeners() {
   elements.syncSheetsBtn.addEventListener('click', syncToGoogleSheets);
   elements.exportDataBtn.addEventListener('click', exportData);
   elements.refreshDataBtn.addEventListener('click', () => {
-    fetchEmployeeData();
+    // Force refresh bypasses cache
+    fetchEmployeeData(true);
     showToast('Data refreshed successfully', 'success');
   });
 
@@ -111,7 +147,23 @@ function initEventListeners() {
 // ============================================
 // Data Fetching
 // ============================================
-async function fetchEmployeeData() {
+async function fetchEmployeeData(forceRefresh = false) {
+  // VERCEL FIX: Try to use cached data first to prevent data loss on navigation
+  if (!forceRefresh) {
+    const cachedData = loadCachedData();
+    if (cachedData) {
+      dashboardState.employees = cachedData;
+      dashboardState.filteredEmployees = [...cachedData];
+      dashboardState.lastFetchTime = Date.now();
+      updateStatusCounts();
+      renderEmployeeTable();
+      showLoading(false);
+      // Still fetch fresh data in background to keep cache updated
+      fetchEmployeeDataBackground();
+      return;
+    }
+  }
+  
   showLoading(true);
 
   // VERCEL FIX: Add timeout to prevent infinite loading on serverless cold starts
@@ -147,6 +199,9 @@ async function fetchEmployeeData() {
     if (data.success) {
       dashboardState.employees = data.employees || [];
       dashboardState.filteredEmployees = [...dashboardState.employees];
+      dashboardState.lastFetchTime = Date.now();
+      // VERCEL FIX: Cache data to sessionStorage
+      saveCachedData(dashboardState.employees);
       updateStatusCounts();
       renderEmployeeTable();
     } else {
@@ -163,13 +218,55 @@ async function fetchEmployeeData() {
       showToast('Failed to load employee data: ' + error.message, 'error');
     }
     
-    // Always set empty state to prevent stuck loading
-    dashboardState.employees = [];
-    dashboardState.filteredEmployees = [];
-    updateStatusCounts();
-    renderEmployeeTable();
+    // VERCEL FIX: Try to use cached data on error instead of showing empty state
+    const cachedData = loadCachedData();
+    if (cachedData && cachedData.length > 0) {
+      console.log('Dashboard: Using cached data after fetch error');
+      dashboardState.employees = cachedData;
+      dashboardState.filteredEmployees = [...cachedData];
+      updateStatusCounts();
+      renderEmployeeTable();
+      showToast('Showing cached data. Pull to refresh.', 'warning');
+    } else {
+      // Only set empty state if no cache available
+      dashboardState.employees = [];
+      dashboardState.filteredEmployees = [];
+      updateStatusCounts();
+      renderEmployeeTable();
+    }
   } finally {
     showLoading(false);
+  }
+}
+
+// Background fetch to update cache without blocking UI
+async function fetchEmployeeDataBackground() {
+  try {
+    const response = await fetch('/hr/api/employees', {
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    
+    if (response.status === 401) return;
+    
+    const data = await response.json();
+    if (data.success && data.employees) {
+      // Only update if data changed
+      if (JSON.stringify(data.employees) !== JSON.stringify(dashboardState.employees)) {
+        console.log('Dashboard: Background fetch found updated data');
+        dashboardState.employees = data.employees;
+        dashboardState.filteredEmployees = [...data.employees];
+        dashboardState.lastFetchTime = Date.now();
+        saveCachedData(data.employees);
+        updateStatusCounts();
+        renderEmployeeTable();
+      }
+    }
+  } catch (e) {
+    console.log('Dashboard: Background fetch error (non-blocking)', e);
   }
 }
 
