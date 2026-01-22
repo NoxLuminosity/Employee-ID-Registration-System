@@ -581,26 +581,28 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  background-color: #ffffff;  /* White background to ensure no darkening */
 }
 
-/* Geometric Background Pattern - No dark overlay, square corners */
+/* Geometric Background Pattern - Full brightness, no dark overlay, square corners */
 .id-back-pattern {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #f3f4f6;
+  background-color: transparent;  /* Transparent to prevent gray tint */
   background-image: url('/static/images/id-card-backside-bg.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   border-radius: 0;  /* Square corners - no rounded edges */
   z-index: 0;
-  /* Ensure no dark overlay or filter */
+  /* Ensure full brightness - no dark overlay or filter */
   opacity: 1;
-  filter: none;
+  filter: brightness(1) contrast(1);  /* Explicit full brightness and contrast */
   mix-blend-mode: normal;
+  -webkit-filter: brightness(1) contrast(1);
 }
 
 /* QR Code Content */
@@ -722,7 +724,7 @@
   animation: spin 1s linear infinite;
 }
 
-/* Responsive */
+/* Responsive - Gallery */
 @media (max-width: 768px) {
   .gallery-stats {
     flex-direction: column;
@@ -745,4 +747,65 @@
   .preview-info-grid {
     grid-template-columns: 1fr;
   }
+  
+  /* Gallery modal ID card responsive */
+  .id-preview-wrapper {
+    padding: var(--spacing-sm);
+    overflow-x: hidden;
+  }
+  
+  .id-preview-wrapper .id-card,
+  .id-preview-wrapper .id-card-back,
+  .id-preview-wrapper .gallery-id-card-back {
+    transform: scale(0.65);
+    transform-origin: top center;
+    margin-bottom: -150px;
+  }
+  
+  .id-card-back,
+  .gallery-id-card-back {
+    max-width: 100%;
+  }
+  
+  /* Gallery card scaling */
+  .id-card-image-wrapper .id-card.gallery-id-card {
+    transform: scale(0.38);
+    margin-bottom: -320px;
+  }
+  
+  /* Back side mobile adjustments in gallery */
+  .id-back-top {
+    padding: 20px;
+    min-height: 280px;
+  }
+  
+  .id-qr-code svg,
+  .id-qr-code img {
+    width: 140px;
+    height: 140px;
+  }
+  
+  .id-vcard-label {
+    font-size: 1.8rem;
+  }
+  
+  .id-back-bottom {
+    padding: 20px;
+  }
+}
+
+/* Extra small screens for gallery */
+@media (max-width: 480px) {
+  .id-preview-wrapper .id-card,
+  .id-preview-wrapper .id-card-back,
+  .id-preview-wrapper .gallery-id-card-back {
+    transform: scale(0.55);
+    margin-bottom: -180px;
+  }
+  
+  .id-card-image-wrapper .id-card.gallery-id-card {
+    transform: scale(0.32);
+    margin-bottom: -350px;
+  }
+}
 }

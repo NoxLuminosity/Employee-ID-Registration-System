@@ -1194,18 +1194,201 @@ input::placeholder {
   font-weight: 700;
 }
 
-/* ID Card Responsive */
+/* ID Card Responsive - Comprehensive mobile support */
 @media (max-width: 768px) {
-  .id-card {
-    width: 100%;
-    max-width: 420px;
-    transform: scale(0.85);
-    transform-origin: top center;
+  .id-preview-section {
+    padding: var(--spacing-md);
+    margin: var(--spacing-sm);
+    border-radius: var(--radius-md);
   }
   
   .id-preview-wrapper {
     padding: var(--spacing-sm);
-    overflow-x: auto;
+    overflow-x: hidden;  /* Prevent horizontal scroll */
+    display: flex;
+    justify-content: center;
+  }
+  
+  .id-card,
+  .id-card-back {
+    width: 100%;
+    max-width: 320px;
+    min-height: auto;  /* Let height scale with width */
+    transform: none;  /* Remove transform to use natural scaling */
+    transform-origin: center center;
+  }
+  
+  /* Scale internal elements proportionally */
+  .id-sidebar {
+    width: 90px;
+    min-height: 320px;
+  }
+  
+  .id-nickname-vertical {
+    font-size: 3.2rem;
+  }
+  
+  .id-photo-container {
+    height: 300px;
+    width: calc(100% + 24px);
+    margin-left: -24px;
+    margin-top: 60px;
+  }
+  
+  .id-header {
+    top: 20px;
+    right: 16px;
+  }
+  
+  .id-logo-spm {
+    font-size: 24px;
+  }
+  
+  .id-logo-divider {
+    font-size: 24px;
+  }
+  
+  .id-logo-text {
+    font-size: 14px;
+  }
+  
+  .id-card-bottom {
+    padding: 16px 20px;
+    min-height: 160px;
+  }
+  
+  .id-fullname {
+    font-size: 1.8rem;
+    max-width: 180px;
+  }
+  
+  .id-position-dept {
+    font-size: 13px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+  }
+  
+  .id-barcode-placeholder {
+    width: 180px;
+    height: 60px;
+  }
+  
+  .id-signature-area {
+    width: 160px;
+    height: 100px;
+    margin-top: 15px;
+    margin-right: 5px;
+  }
+  
+  .id-website-strip {
+    right: -30px;
+  }
+  
+  .id-website-url {
+    font-size: 11px;
+  }
+  
+  .id-expiration {
+    font-size: 11px;
+    bottom: 8px;
+    right: 8px;
+  }
+  
+  /* Back side mobile scaling */
+  .id-back-top {
+    padding: 20px;
+    min-height: 260px;
+  }
+  
+  .id-qr-code svg,
+  .id-qr-code img {
+    width: 140px;
+    height: 140px;
+  }
+  
+  .id-vcard-label {
+    font-size: 1.8rem;
+  }
+  
+  .id-vcard-url {
+    font-size: 0.9rem;
+  }
+  
+  .id-back-bottom {
+    padding: 20px;
+  }
+  
+  .id-back-logo-spm {
+    font-size: 1.6rem;
+  }
+  
+  .id-back-logo-text {
+    font-size: 1rem;
+  }
+  
+  .id-emergency-title {
+    font-size: 0.95rem;
+  }
+  
+  .id-emergency-label {
+    min-width: 80px;
+    font-size: 0.85rem;
+  }
+  
+  .id-emergency-value {
+    font-size: 0.85rem;
+  }
+  
+  /* Flip toggle mobile sizing */
+  .id-flip-toggle {
+    gap: var(--spacing-xs);
+  }
+  
+  .flip-btn {
+    padding: 8px 14px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Extra small screens (< 480px) */
+@media (max-width: 480px) {
+  .id-preview-section {
+    padding: var(--spacing-sm);
+    margin: var(--spacing-xs);
+  }
+  
+  .id-card,
+  .id-card-back {
+    max-width: 280px;
+  }
+  
+  .id-sidebar {
+    width: 70px;
+    min-height: 280px;
+  }
+  
+  .id-nickname-vertical {
+    font-size: 2.5rem;
+  }
+  
+  .id-photo-container {
+    height: 260px;
+    margin-top: 50px;
+  }
+  
+  .id-fullname {
+    font-size: 1.5rem;
+    max-width: 150px;
+  }
+  
+  .id-signature-area {
+    width: 130px;
+    height: 80px;
+  }
+  
+  .id-barcode-placeholder {
+    width: 150px;
+    height: 50px;
   }
 }
 
@@ -1272,26 +1455,28 @@ input::placeholder {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  background-color: #ffffff;  /* White background to ensure no darkening */
 }
 
-/* Geometric Background Pattern - No dark overlay, no rounded corners */
+/* Geometric Background Pattern - Full brightness, no dark overlay, no rounded corners */
 .id-back-pattern {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #f3f4f6;
+  background-color: transparent;  /* Transparent to prevent gray tint */
   background-image: url('/static/images/id-card-backside-bg.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   border-radius: 0;  /* Square corners - no rounded edges */
   z-index: 0;
-  /* Ensure no dark overlay or filter */
+  /* Ensure full brightness - no dark overlay or filter */
   opacity: 1;
-  filter: none;
+  filter: brightness(1) contrast(1);  /* Explicit full brightness and contrast */
   mix-blend-mode: normal;
+  -webkit-filter: brightness(1) contrast(1);
 }
 
 /* QR Code Content */
