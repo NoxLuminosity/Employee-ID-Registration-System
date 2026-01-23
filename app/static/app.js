@@ -45,6 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initSignaturePad();
   initFormSubmission();
   initCancelButton();
+  initNameAutoPopulation(); // Auto-populate id_nickname from first_name
+  initPositionRadioButtons(); // Handle position radio button changes
+  initPrefilledFields(); // Handle prefilled fields from Lark
   updateReviewSection(); // Update on load
   updateIdCardPreview(); // Update ID card preview on load
   updateIdCardBackside(); // Update ID card backside on load
@@ -56,6 +59,65 @@ document.addEventListener('DOMContentLoaded', () => {
     el.addEventListener('blur', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); });
   });
 });
+
+// ============================================
+// Name Auto-Population (id_nickname from first_name)
+// ============================================
+function initNameAutoPopulation() {
+  const firstNameInput = document.getElementById('first_name');
+  const idNicknameInput = document.getElementById('id_nickname');
+  
+  if (firstNameInput && idNicknameInput) {
+    firstNameInput.addEventListener('input', () => {
+      // Auto-populate id_nickname with first name value
+      idNicknameInput.value = firstNameInput.value;
+      // Trigger change event to update previews
+      idNicknameInput.dispatchEvent(new Event('change'));
+    });
+  }
+}
+
+// ============================================
+// Handle Prefilled Fields from Lark
+// ============================================
+function initPrefilledFields() {
+  const firstNameInput = document.getElementById('first_name');
+  const idNicknameInput = document.getElementById('id_nickname');
+  
+  // If first_name is prefilled, auto-populate id_nickname
+  if (firstNameInput && idNicknameInput && firstNameInput.value) {
+    idNicknameInput.value = firstNameInput.value;
+    // Trigger change event to update previews
+    idNicknameInput.dispatchEvent(new Event('change'));
+  }
+  
+  // Remove prefilled styling when user edits the field
+  document.querySelectorAll('input.prefilled').forEach(input => {
+    input.addEventListener('input', function() {
+      this.classList.remove('prefilled');
+    });
+  });
+}
+
+// ============================================
+// Position Radio Button Handling
+// ============================================
+function initPositionRadioButtons() {
+  const positionRadios = document.querySelectorAll('input[name="position"]');
+  
+  positionRadios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      updateIdCardPreview();
+      updateReviewSection();
+    });
+  });
+}
+
+// Get selected position value
+function getSelectedPosition() {
+  const selectedRadio = document.querySelector('input[name="position"]:checked');
+  return selectedRadio ? selectedRadio.value : '';
+}
 
 // ============================================
 // Photo Upload with AI Generation
@@ -496,25 +558,76 @@ function updateIdCardPreview() {
     nicknameEl.textContent = nickname || 'Nickname';
   }
 
-  // Update Full Name
-  const fullname = getValue('employee_name');
+  // Update Full Name (constructed from first_name, middle_initial, last_name)
+  const firstName = getValue('first_name');
+  const middleInitial = getValue('middle_initial');
+  const lastName = getValue('last_name');
+  
+  // Build full name: "FirstName M.I. LastName" or "FirstName LastName" if no MI
+  let fullName = '';
+  if (firstName) {
+    fullName = firstName;
+    if (middleInitial) {
+      fullName += ' ' + middleInitial + (middleInitial.endsWith('.') ? '' : '.');
+    }
+    if (lastName) {
+      fullName += ' ' + lastName;
+    }
+  } else if (lastName) {
+    fullName = lastName;
+  }
+  
   const fullnameEl = document.getElementById('id_preview_fullname');
   if (fullnameEl) {
-    fullnameEl.textContent = fullname || 'Employee Fullname';
+    fullnameEl.textContent = fullName || 'Employee Fullname';
   }
 
-  // Update Department
-  const department = getValue('department');
-  const departmentEl = document.getElementById('id_preview_department');
-  if (departmentEl) {
-    departmentEl.textContent = department || 'Department';
-  }
-
-  // Update Position
-  const position = getValue('position');
+  // Update Position (with conditional display and transformation)
+  const position = getSelectedPosition();
   const positionEl = document.getElementById('id_preview_position');
-  if (positionEl) {
-    positionEl.textContent = position || 'Position';
+  const positionContainer = document.getElementById('id_position_container');
+  
+  if (positionEl && positionContainer) {
+    // Position display rules:
+    // - Field Officer -> Display "Legal Officer"
+    // - Freelancer, Intern -> Display as-is
+    // - Others -> Hide position entirely
+    if (position === 'Others' || !position) {
+      positionContainer.style.display = 'none';
+    } else {
+      positionContainer.style.display = 'block';
+      if (position === 'Field Officer') {
+        positionEl.textContent = 'Legal Officer';
+      } else {
+        positionEl.textContent = position;
+      }
+    }
+  }
+
+  // Update Expiration Date (conditional - only for Freelancer/Intern)
+  const expirationContainer = document.getElementById('id_expiration_container');
+  const expirationDateEl = document.getElementById('id_preview_expiration');
+  
+  if (expirationContainer) {
+    // Expiration date rules:
+    // - Show only for Freelancer or Intern
+    // - Hide for Field Officer and Others
+    if (position === 'Freelancer' || position === 'Intern') {
+      expirationContainer.style.display = 'flex';
+      // Calculate expiration date (1 year from now for preview)
+      if (expirationDateEl) {
+        const expirationDate = new Date();
+        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+        const formattedDate = expirationDate.toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        });
+        expirationDateEl.textContent = formattedDate;
+      }
+    } else {
+      expirationContainer.style.display = 'none';
+    }
   }
 
   // Update ID Number
@@ -632,14 +745,16 @@ function updateReviewSection() {
     }
   };
 
-  // Update text fields - Personal Details
-  setText('review_employee_name', getValue('employee_name'));
+  // Update text fields - Personal Details (new name fields)
+  setText('review_first_name', getValue('first_name'));
+  setText('review_middle_initial', getValue('middle_initial'));
+  setText('review_last_name', getValue('last_name'));
   setText('review_id_nickname', getValue('id_nickname'));
   setText('review_id_number', getValue('id_number'));
 
-  // Update text fields - Work Details
-  setText('review_position', getValue('position'));
-  setText('review_department', getValue('department'));
+  // Update text fields - Work Details (position from radio buttons)
+  const position = getSelectedPosition();
+  setText('review_position', position || '-');
 
   // Update text fields - Contact Information
   setText('review_email', getValue('email'));
@@ -751,8 +866,18 @@ function initFormSubmission() {
 
       const response = await fetch('/submit', {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'same-origin'  // Include cookies for authentication
       });
+
+      // Handle authentication error - redirect to login
+      if (response.status === 401) {
+        showMessage('Your session has expired. Redirecting to login...', 'error');
+        setTimeout(() => {
+          window.location.href = '/auth/login';
+        }, 1500);
+        return;
+      }
 
       // Safely parse response - handle non-JSON responses
       const responseText = await response.text();
@@ -904,16 +1029,16 @@ function updateIdCardBackside() {
     return el.value || '';
   };
   
-  // Update username (derived from employee name or id_nickname)
+  // Update username (derived from first_name or id_nickname)
   const idBackUsername = document.getElementById('id_back_username');
   if (idBackUsername) {
     const nickname = getValue('id_nickname');
-    const fullName = getValue('employee_name');
-    // Use nickname if available, otherwise use first name from full name
+    const firstName = getValue('first_name');
+    // Use nickname if available, otherwise use first name
     if (nickname) {
       idBackUsername.textContent = nickname.toLowerCase().replace(/\s+/g, '');
-    } else if (fullName) {
-      idBackUsername.textContent = fullName.split(' ')[0].toLowerCase();
+    } else if (firstName) {
+      idBackUsername.textContent = firstName.toLowerCase().replace(/\s+/g, '');
     } else {
       idBackUsername.textContent = 'username';
     }

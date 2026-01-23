@@ -460,8 +460,6 @@ function generateIDCardHtml(emp) {
             <h1 class="id-fullname">${escapeHtml(emp.employee_name)}</h1>
             
             <div class="id-position-dept">
-              <span>${escapeHtml(emp.department)}</span>
-              <span class="id-dash">-</span>
               <span>${escapeHtml(emp.position)}</span>
             </div>
 

@@ -125,13 +125,18 @@ def _base64url_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data)
 
 
-def create_session(username: str, hours: int = 8) -> str:
+def create_session(username: str, hours: int = 8, lark_data: dict = None) -> str:
     """
     Create a JWT token for an authenticated user.
     
     VERCEL FIX: Instead of storing session in memory (which is lost between
     function invocations), we create a signed JWT token. The token contains
     all session info and is verified by its HMAC signature.
+    
+    Args:
+        username: The username/identifier for the session
+        hours: Token validity in hours (default 8)
+        lark_data: Optional Lark OAuth data to include in session
     """
     # JWT Header
     header = {"alg": "HS256", "typ": "JWT"}
@@ -143,6 +148,20 @@ def create_session(username: str, hours: int = 8) -> str:
         "iat": int(now.timestamp()),  # Issued at
         "exp": int((now + timedelta(hours=hours)).timestamp()),  # Expiration
     }
+    
+    # Add Lark-specific data if provided
+    if lark_data:
+        payload["auth_type"] = "lark"
+        payload["lark_user_id"] = lark_data.get("user_id")
+        payload["lark_open_id"] = lark_data.get("open_id")
+        payload["lark_name"] = lark_data.get("name")
+        payload["lark_email"] = lark_data.get("email")
+        payload["lark_avatar"] = lark_data.get("avatar_url")
+        payload["lark_tenant"] = lark_data.get("tenant_key")
+        payload["lark_employee_no"] = lark_data.get("employee_no")  # Employee Number
+        payload["lark_mobile"] = lark_data.get("mobile")  # Personal Number
+    else:
+        payload["auth_type"] = "password"
     
     # Encode header and payload
     header_b64 = _base64url_encode(json.dumps(header).encode('utf-8'))
@@ -158,7 +177,7 @@ def create_session(username: str, hours: int = 8) -> str:
     signature_b64 = _base64url_encode(signature)
     
     token = f"{header_b64}.{payload_b64}.{signature_b64}"
-    logger.info(f"JWT token created for user: {username}")
+    logger.info(f"JWT token created for user: {username} (auth_type: {payload.get('auth_type')})")
     return token
 
 
@@ -205,11 +224,26 @@ def get_session(token: str) -> Optional[dict]:
             return None
         
         # Return session-like dict for compatibility
-        return {
+        # Include Lark data if present
+        session_data = {
             "username": payload.get('sub'),
+            "auth_type": payload.get('auth_type', 'password'),
             "created": datetime.fromtimestamp(payload.get('iat', 0)),
             "expires": datetime.fromtimestamp(exp)
         }
+        
+        # Add Lark-specific data if available
+        if payload.get('auth_type') == 'lark':
+            session_data["lark_user_id"] = payload.get('lark_user_id')
+            session_data["lark_open_id"] = payload.get('lark_open_id')
+            session_data["lark_name"] = payload.get('lark_name')
+            session_data["lark_email"] = payload.get('lark_email')
+            session_data["lark_avatar"] = payload.get('lark_avatar')
+            session_data["lark_tenant"] = payload.get('lark_tenant')
+            session_data["lark_employee_no"] = payload.get('lark_employee_no')  # Employee Number
+            session_data["lark_mobile"] = payload.get('lark_mobile')  # Personal Number
+        
+        return session_data
         
     except Exception as e:
         logger.error(f"JWT verification error: {e}")

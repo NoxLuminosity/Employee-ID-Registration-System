@@ -221,6 +221,65 @@
             }
         }
 
+        /* Divider */
+        .login-divider {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .login-divider::before,
+        .login-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e5e5e5;
+        }
+
+        .login-divider span {
+            font-size: 0.8rem;
+            color: #999;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Lark Login Button */
+        .lark-login-btn {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: #3370ff;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.625rem;
+            text-decoration: none;
+        }
+
+        .lark-login-btn:hover {
+            background: #245bdb;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(51, 112, 255, 0.3);
+        }
+
+        .lark-login-btn:active {
+            transform: translateY(0);
+        }
+
+        .lark-login-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
         /* Responsive */
         @media (max-width: 480px) {
             .login-card {
@@ -259,13 +318,25 @@
                 <p class="login-subtitle">Sign in to manage ID requests</p>
             </div>
 
-            <div class="error-message" id="errorMessage">
+            <div class="error-message{% if error %} show{% endif %}" id="errorMessage">
                 <svg viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd"
                         d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
                         clip-rule="evenodd" />
                 </svg>
-                <span id="errorText">Invalid credentials</span>
+                <span id="errorText">{% if error %}{{ error }}{% else %}Invalid credentials{% endif %}</span>
+            </div>
+
+            <!-- Lark SSO Login -->
+            <a href="/hr/lark/login" class="lark-login-btn">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+                Sign in with Lark
+            </a>
+
+            <div class="login-divider">
+                <span>or</span>
             </div>
 
             <form id="loginForm" class="login-form">

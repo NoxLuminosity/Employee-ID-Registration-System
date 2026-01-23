@@ -1,8 +1,9 @@
 """
 Employee Routes - From Code 1
 Handles employee registration, AI headshot generation, and form submission.
+Protected by Lark authentication.
 """
-from fastapi import APIRouter, Request, UploadFile, File, Form, HTTPException, Body
+from fastapi import APIRouter, Request, UploadFile, File, Form, HTTPException, Body, Cookie
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import shutil
@@ -30,6 +31,9 @@ from app.services.cloudinary_service import (
 # BytePlus Seedream integration (for AI headshot generation)
 from app.services.seedream_service import generate_headshot_from_url
 
+# Authentication
+from app.auth import get_session
+
 router = APIRouter()
 
 # Get the directory where this file is located
@@ -43,15 +47,26 @@ logger = logging.getLogger(__name__)
 IS_VERCEL = os.environ.get("VERCEL", False)
 
 
+def verify_employee_auth(employee_session: str) -> bool:
+    """Verify employee is authenticated via Lark"""
+    if not employee_session:
+        return False
+    session = get_session(employee_session)
+    if not session:
+        return False
+    return session.get("auth_type") == "lark"
+
+
 # Request model for generate-headshot endpoint
 class GenerateHeadshotRequest(BaseModel):
     image: str  # Base64-encoded image
 
 
 @router.post("/generate-headshot")
-async def api_generate_headshot(request: GenerateHeadshotRequest):
+async def api_generate_headshot(request: GenerateHeadshotRequest, employee_session: str = Cookie(None)):
     """
     Generate a professional headshot using BytePlus Seedream API with transparent background.
+    Requires Lark authentication.
     
     Complete Flow:
         1. Upload base64 image to Cloudinary (to get a public URL)
@@ -174,9 +189,10 @@ class RemoveBackgroundRequest(BaseModel):
 
 
 @router.post("/remove-background")
-async def api_remove_background(request: RemoveBackgroundRequest):
+async def api_remove_background(request: RemoveBackgroundRequest, employee_session: str = Cookie(None)):
     """
     Remove background from an image using Cloudinary AI.
+    Requires Lark authentication.
     
     Expects JSON body with:
         image: URL or base64-encoded image
@@ -262,11 +278,12 @@ async def background_removal_status():
 
 @router.post("/submit")
 async def submit_employee(
-    employee_name: str = Form(...),
+    first_name: str = Form(...),
+    middle_initial: str = Form(''),
+    last_name: str = Form(...),
     id_nickname: str = Form(''),
     id_number: str = Form(...),
     position: str = Form(...),
-    department: str = Form(...),
     email: str = Form(...),
     personal_number: str = Form(...),
     photo: UploadFile = File(...),
@@ -274,10 +291,29 @@ async def submit_employee(
     ai_headshot_data: Optional[str] = Form(None),  # AI-generated headshot URL from frontend
     emergency_name: Optional[str] = Form(''),  # Emergency contact name
     emergency_contact: Optional[str] = Form(''),  # Emergency contact number
-    emergency_address: Optional[str] = Form('')  # Emergency contact address
+    emergency_address: Optional[str] = Form(''),  # Emergency contact address
+    employee_session: str = Cookie(None)  # Lark authentication
 ):
-    """Submit employee registration - returns JSON response always."""
+    """Submit employee registration - requires Lark authentication, returns JSON response."""
     import base64
+    
+    # Verify Lark authentication
+    if not verify_employee_auth(employee_session):
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "error": "Authentication required. Please sign in with Lark."}
+        )
+    
+    # Construct full employee_name from parts for backward compatibility
+    employee_name_parts = [first_name]
+    if middle_initial:
+        mi = middle_initial.strip()
+        if not mi.endswith('.'):
+            mi += '.'
+        employee_name_parts.append(mi)
+    if last_name:
+        employee_name_parts.append(last_name)
+    employee_name = ' '.join(employee_name_parts)
     
     try:
         # Ensure uploads directory exists
@@ -391,11 +427,14 @@ async def submit_employee(
 
         # Save to database using abstraction layer
         employee_data = {
-            'employee_name': employee_name,
+            'employee_name': employee_name,  # Full name for backward compatibility
+            'first_name': first_name,
+            'middle_initial': middle_initial,
+            'last_name': last_name,
             'id_nickname': id_nickname,
             'id_number': id_number,
             'position': position,
-            'department': department,
+            'department': '',  # Deprecated - kept for backward compatibility
             'email': email,
             'personal_number': personal_number,
             'photo_path': photo_local_path,
@@ -431,7 +470,7 @@ async def submit_employee(
                 id_nickname=id_nickname,
                 id_number=id_number,
                 position=position,
-                department=department,
+                department='',  # Deprecated
                 email=email,
                 personal_number=personal_number,
                 photo_path=photo_local_path,
@@ -441,7 +480,10 @@ async def submit_employee(
                 photo_url=cloudinary_photo_url,
                 signature_url=cloudinary_signature_url,
                 ai_headshot_url=cloudinary_ai_headshot_url,
-                render_url=''
+                render_url='',
+                first_name=first_name,
+                middle_initial=middle_initial,
+                last_name=last_name
             )
             if lark_success:
                 logger.info(f"Successfully appended employee submission to Lark Bitable: {id_number}")

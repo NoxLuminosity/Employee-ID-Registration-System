@@ -11,16 +11,23 @@ import os
 import json
 import logging
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import urllib.request
 import urllib.error
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Lark Configuration - use provided credentials as defaults
+LARK_APP_ID = os.environ.get('LARK_APP_ID', 'cli_a866185f1638502f')
+LARK_APP_SECRET = os.environ.get('LARK_APP_SECRET', 'zaduPnvOLTxcb7W8XHYIaggtYgzOUOI6')
+LARK_BITABLE_ID = os.environ.get('LARK_BITABLE_ID', 'WxvXbLMt8aoPzzszjR3lIXhlgNc')
+LARK_TABLE_ID = os.environ.get('LARK_TABLE_ID', 'tbl3Jm6881dJMF6E')
+
 # Lark API endpoints
 LARK_TOKEN_URL = "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal"
-LARK_BITABLE_RECORD_URL = "https://open.larksuite.com/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records"
+LARK_BITABLE_BASE_URL = "https://open.larksuite.com/open-apis/bitable/v1/apps"
+LARK_BITABLE_RECORD_URL = f"{LARK_BITABLE_BASE_URL}/{{app_token}}/tables/{{table_id}}/records"
 
 # Cache for access token
 _cached_token: Optional[str] = None
@@ -46,7 +53,13 @@ def _make_request(url: str, method: str = "GET", headers: Dict = None, data: Dic
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8') if e.fp else str(e)
         logger.error(f"Lark API HTTP error {e.code}: {error_body}")
-        raise
+        try:
+            return json.loads(error_body)
+        except:
+            return {"code": e.code, "error": error_body}
+    except Exception as e:
+        logger.error(f"Lark API request error: {str(e)}")
+        return {"code": -1, "error": str(e)}
 
 
 def get_tenant_access_token() -> Optional[str]:
@@ -56,14 +69,15 @@ def get_tenant_access_token() -> Optional[str]:
     if _cached_token and time.time() < (_token_expiry - 300):
         return _cached_token
     
-    app_id = os.environ.get('LARK_APP_ID')
-    app_secret = os.environ.get('LARK_APP_SECRET')
+    # Use configured credentials
+    app_id = LARK_APP_ID
+    app_secret = LARK_APP_SECRET
     
     if not app_id:
-        logger.error("LARK_APP_ID environment variable not set")
+        logger.error("LARK_APP_ID not configured")
         return None
     if not app_secret:
-        logger.error("LARK_APP_SECRET environment variable not set")
+        logger.error("LARK_APP_SECRET not configured")
         return None
     
     try:
@@ -129,17 +143,21 @@ def append_employee_submission(
     photo_url: Optional[str] = None,
     signature_url: Optional[str] = None,
     ai_headshot_url: Optional[str] = None,
-    render_url: str = ''
+    render_url: str = '',
+    first_name: Optional[str] = None,
+    middle_initial: Optional[str] = None,
+    last_name: Optional[str] = None
 ) -> bool:
     """Append employee submission to Lark Bitable."""
-    app_token = os.environ.get('LARK_BITABLE_APP_TOKEN')
-    table_id = os.environ.get('LARK_BITABLE_TABLE_ID')
+    # Use configured Bitable credentials (fall back to env vars for backwards compatibility)
+    app_token = LARK_BITABLE_ID or os.environ.get('LARK_BITABLE_APP_TOKEN')
+    table_id = LARK_TABLE_ID or os.environ.get('LARK_BITABLE_TABLE_ID')
     
     if not app_token:
-        logger.warning("LARK_BITABLE_APP_TOKEN not set. Skipping Lark append.")
+        logger.warning("LARK_BITABLE_ID not configured. Skipping Lark append.")
         return False
     if not table_id:
-        logger.warning("LARK_BITABLE_TABLE_ID not set. Skipping Lark append.")
+        logger.warning("LARK_TABLE_ID not configured. Skipping Lark append.")
         return False
     
     from datetime import datetime
@@ -149,10 +167,13 @@ def append_employee_submission(
     # Field names must match your Lark Bitable columns EXACTLY
     fields = {
         "employee_name": employee_name,
+        "first_name": first_name or "",
+        "middle_initial": middle_initial or "",
+        "last_name": last_name or "",
         "id_nickname": id_nickname or "",
         "id_number": id_number,
         "position": position,
-        "department": department,
+        "department": department or "",  # Deprecated but kept for compatibility
         "email": email,
         "personal number": personal_number,
         "photo_preview": "",  # Empty - not backend-managed

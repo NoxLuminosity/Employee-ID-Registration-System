@@ -6,6 +6,114 @@
   <title>Employee ID Registration</title>
   <meta name="description" content="Employee ID Registration System - Submit your details for company ID card">
   <link rel="stylesheet" href="/static/styles.css?v=2">
+  <style>
+    /* User Info Bar Styles */
+    .user-info-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+    }
+    .user-info-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3370ff, #245bdb);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 1rem;
+      overflow: hidden;
+    }
+    .user-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .user-details {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+    }
+    .user-name {
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 0.9rem;
+    }
+    .user-email {
+      color: #64748b;
+      font-size: 0.8rem;
+    }
+    .user-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.625rem;
+      background: #dcfce7;
+      color: #15803d;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 500;
+    }
+    .user-badge svg {
+      width: 12px;
+      height: 12px;
+    }
+    .logout-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.5rem 0.875rem;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      color: #64748b;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+    .logout-btn:hover {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #dc2626;
+    }
+    .logout-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+    /* Prefilled field indicator */
+    .prefilled-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.7rem;
+      color: #3370ff;
+      margin-left: 0.5rem;
+    }
+    .prefilled-indicator svg {
+      width: 12px;
+      height: 12px;
+    }
+    input.prefilled {
+      background: #f0f7ff;
+      border-color: #93c5fd;
+    }
+    input.prefilled:focus {
+      background: white;
+    }
+  </style>
 </head>
 <body>
   <div class="registration-card">
@@ -23,6 +131,37 @@
       <p class="subtitle">Complete all fields below and submit your information</p>
     </div>
 
+    <!-- User Info Bar (shows logged in user) -->
+    {% if user %}
+    <div class="user-info-bar">
+      <div class="user-info-left">
+        <div class="user-avatar">
+          {% if user.avatar %}
+          <img src="{{ user.avatar }}" alt="Profile">
+          {% else %}
+          {{ (user.name or 'U')[0]|upper }}
+          {% endif %}
+        </div>
+        <div class="user-details">
+          <span class="user-name">{{ user.name or 'User' }}</span>
+          <span class="user-email">{{ user.email or '' }}</span>
+        </div>
+        <span class="user-badge">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+          </svg>
+          Verified via Lark
+        </span>
+      </div>
+      <a href="/auth/logout" class="logout-btn">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M13 3h4a1 1 0 011 1v12a1 1 0 01-1 1h-4M9 17l-5-5 5-5M14 12H4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Sign Out
+      </a>
+    </div>
+    {% endif %}
+
     <!-- Form -->
     <div class="card-body">
       <form id="registrationForm" enctype="multipart/form-data">
@@ -34,16 +173,64 @@
           <h2 class="section-title">Personal Details</h2>
           <div class="form-grid">
             <div class="form-group">
-              <label for="employee_name">Employee Name <span class="required">*</span></label>
-              <input type="text" id="employee_name" name="employee_name" required maxlength="40" placeholder="Enter your full name">
+              <label for="first_name">
+                First Name <span class="required">*</span>
+                {% if prefill and prefill.first_name %}
+                <span class="prefilled-indicator">
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                  from Lark
+                </span>
+                {% endif %}
+              </label>
+              <input type="text" id="first_name" name="first_name" required maxlength="20" placeholder="First name" 
+                     value="{{ prefill.first_name if prefill else '' }}"
+                     class="{% if prefill and prefill.first_name %}prefilled{% endif %}">
+            </div>
+            <div class="form-group">
+              <label for="middle_initial">
+                M.I.
+                {% if prefill and prefill.middle_initial %}
+                <span class="prefilled-indicator">
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                  from Lark
+                </span>
+                {% endif %}
+              </label>
+              <input type="text" id="middle_initial" name="middle_initial" maxlength="3" placeholder="M.I."
+                     value="{{ prefill.middle_initial if prefill else '' }}"
+                     class="{% if prefill and prefill.middle_initial %}prefilled{% endif %}">
+            </div>
+            <div class="form-group">
+              <label for="last_name">
+                Last Name <span class="required">*</span>
+                {% if prefill and prefill.last_name %}
+                <span class="prefilled-indicator">
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                  from Lark
+                </span>
+                {% endif %}
+              </label>
+              <input type="text" id="last_name" name="last_name" required maxlength="20" placeholder="Last name"
+                     value="{{ prefill.last_name if prefill else '' }}"
+                     class="{% if prefill and prefill.last_name %}prefilled{% endif %}">
             </div>
             <div class="form-group">
               <label for="id_nickname">ID Nickname</label>
-              <input type="text" id="id_nickname" name="id_nickname" maxlength="20" placeholder="Nickname for ID (optional)">
+              <input type="text" id="id_nickname" name="id_nickname" maxlength="20" placeholder="Auto-filled from First Name" readonly class="readonly-field">
             </div>
             <div class="form-group">
-              <label for="id_number">ID Number <span class="required">*</span></label>
-              <input type="text" id="id_number" name="id_number" required placeholder="e.g., EMP-001">
+              <label for="id_number">
+                ID Number <span class="required">*</span>
+                {% if prefill and prefill.employee_no %}
+                <span class="prefilled-indicator">
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                  from Lark
+                </span>
+                {% endif %}
+              </label>
+              <input type="text" id="id_number" name="id_number" required placeholder="e.g., EMP-001"
+                     value="{{ prefill.employee_no if prefill else '' }}"
+                     class="{% if prefill and prefill.employee_no %}prefilled{% endif %}">
             </div>
             <div class="form-group full-width">
               <label>Photo <span class="required">*</span></label>
@@ -97,21 +284,27 @@
         <section class="form-section">
           <h2 class="section-title">Work Details</h2>
           <div class="form-grid">
-            <div class="form-group">
-              <label for="position">Position <span class="required">*</span></label>
-              <input type="text" id="position" name="position" required maxlength="30" placeholder="e.g., Software Engineer">
-            </div>
-            <div class="form-group">
-              <label for="department">Department <span class="required">*</span></label>
-              <select id="department" name="department" required>
-                <option value="">Select Department</option>
-                <option value="HR">HR</option>
-                <option value="IT">IT</option>
-                <option value="Finance">Finance</option>
-                <option value="Operations">Operations</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Sales">Sales</option>
-              </select>
+            <div class="form-group full-width">
+              <label>Position <span class="required">*</span></label>
+              <div class="checkbox-group position-options">
+                <label class="checkbox-option">
+                  <input type="radio" id="position_field_officer" name="position" value="Field Officer" required>
+                  <span class="checkbox-label">Field Officer</span>
+                </label>
+                <label class="checkbox-option">
+                  <input type="radio" id="position_freelancer" name="position" value="Freelancer">
+                  <span class="checkbox-label">Freelancer</span>
+                </label>
+                <label class="checkbox-option">
+                  <input type="radio" id="position_intern" name="position" value="Intern">
+                  <span class="checkbox-label">Intern</span>
+                </label>
+                <label class="checkbox-option">
+                  <input type="radio" id="position_others" name="position" value="Others">
+                  <span class="checkbox-label">Others</span>
+                </label>
+              </div>
+              <input type="hidden" id="position_value" name="position_value">
             </div>
           </div>
         </section>
@@ -121,12 +314,32 @@
           <h2 class="section-title">Contact Information</h2>
           <div class="form-grid">
             <div class="form-group">
-              <label for="email">Email Address <span class="required">*</span></label>
-              <input type="email" id="email" name="email" required placeholder="employee@company.com">
+              <label for="email">
+                Email Address <span class="required">*</span>
+                {% if prefill and prefill.email %}
+                <span class="prefilled-indicator">
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                  from Lark
+                </span>
+                {% endif %}
+              </label>
+              <input type="email" id="email" name="email" required placeholder="employee@company.com"
+                     value="{{ prefill.email if prefill else '' }}"
+                     class="{% if prefill and prefill.email %}prefilled{% endif %}">
             </div>
             <div class="form-group">
-              <label for="personal_number">Personal Number <span class="required">*</span></label>
-              <input type="tel" id="personal_number" name="personal_number" required placeholder="+63 9XX XXX XXXX">
+              <label for="personal_number">
+                Personal Number <span class="required">*</span>
+                {% if prefill and prefill.personal_number %}
+                <span class="prefilled-indicator">
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                  from Lark
+                </span>
+                {% endif %}
+              </label>
+              <input type="tel" id="personal_number" name="personal_number" required placeholder="+63 9XX XXX XXXX"
+                     value="{{ prefill.personal_number if prefill else '' }}"
+                     class="{% if prefill and prefill.personal_number %}prefilled{% endif %}">
             </div>
           </div>
         </section>
@@ -223,9 +436,8 @@
                   <div class="id-info-left">
                     <h1 class="id-fullname" id="id_preview_fullname">Employee Fullname</h1>
                     
-                    <div class="id-position-dept">
-                      <span id="id_preview_department">Department</span>
-                      <span class="id-dash">-</span>
+                    <!-- Position (conditional - hidden for Others) -->
+                    <div class="id-position-dept" id="id_position_container">
                       <span id="id_preview_position">Position</span>
                     </div>
 
@@ -255,10 +467,10 @@
                   </svg>
                 </div>
 
-                <!-- Expiration Date -->
-                <div class="id-expiration">
+                <!-- Expiration Date (conditional - only for Freelancer/Intern) -->
+                <div class="id-expiration" id="id_expiration_container">
                   <span class="id-exp-label">Expiration Date:</span>
-                  <span class="id-exp-date">Date</span>
+                  <span class="id-exp-date" id="id_preview_expiration">Date</span>
                 </div>
               </div>
             </div>
@@ -331,8 +543,16 @@
             <h3 class="review-card-title">Personal Details</h3>
             <div class="review-grid">
               <div class="review-item">
-                <label>Employee Name</label>
-                <div class="value" id="review_employee_name">-</div>
+                <label>First Name</label>
+                <div class="value" id="review_first_name">-</div>
+              </div>
+              <div class="review-item">
+                <label>M.I.</label>
+                <div class="value" id="review_middle_initial">-</div>
+              </div>
+              <div class="review-item">
+                <label>Last Name</label>
+                <div class="value" id="review_last_name">-</div>
               </div>
               <div class="review-item">
                 <label>ID Nickname</label>
@@ -351,10 +571,6 @@
               <div class="review-item">
                 <label>Position</label>
                 <div class="value" id="review_position">-</div>
-              </div>
-              <div class="review-item">
-                <label>Department</label>
-                <div class="value" id="review_department">-</div>
               </div>
             </div>
           </div>

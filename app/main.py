@@ -7,13 +7,15 @@ Features:
 - HR dashboard with authentication
 - Background removal for ID card photos
 - Google Sheets and Lark Bitable integration
+- Mandatory Lark authentication for all access
 """
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Cookie
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from app.routes import employee, hr
+from app.routes import employee, hr, auth
 from app.database import init_db
+from app.auth import get_session
 import os
 import logging
 from pathlib import Path
@@ -60,28 +62,92 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # ============================================
+# Authentication Helper
+# ============================================
+def check_employee_auth(employee_session: str) -> bool:
+    """Check if employee is authenticated via Lark"""
+    if not employee_session:
+        return False
+    session = get_session(employee_session)
+    if not session:
+        return False
+    # Must be Lark authenticated
+    return session.get("auth_type") == "lark"
+
+
+# ============================================
 # HTML Page Routes (define BEFORE static mount)
 # ============================================
 
-# Landing page route
+# Root landing page - redirects to Lark login
 @app.get("/", response_class=HTMLResponse)
-async def landing_page(request: Request):
-    """Landing page with options for Apply or HR Dashboard"""
-    return templates.TemplateResponse("landing.html", {"request": request})
+async def landing_page(request: Request, employee_session: str = Cookie(None)):
+    """Landing page - redirects to login if not authenticated"""
+    if check_employee_auth(employee_session):
+        # Authenticated - show landing page with access to apply
+        return templates.TemplateResponse("landing.html", {"request": request, "authenticated": True})
+    # Not authenticated - redirect to Lark login
+    return RedirectResponse(url="/auth/login", status_code=302)
 
 
-# Apply route - redirect to employee form
+# Apply route - protected, requires Lark authentication
 @app.get("/apply", response_class=HTMLResponse)
-async def apply_page(request: Request):
-    """Employee ID application form"""
-    return templates.TemplateResponse("form.html", {"request": request})
+async def apply_page(request: Request, employee_session: str = Cookie(None)):
+    """Employee ID application form - requires Lark authentication"""
+    if not check_employee_auth(employee_session):
+        # Not authenticated - redirect to Lark login
+        return RedirectResponse(url="/auth/login", status_code=302)
+    
+    # Get session data for prefilling
+    session = get_session(employee_session)
+    
+    # Parse name for prefilling
+    full_name = session.get("lark_name") or session.get("username") or ""
+    name_parts = parse_lark_name(full_name)
+    
+    return templates.TemplateResponse("form.html", {
+        "request": request,
+        "authenticated": True,
+        "prefill": {
+            "first_name": name_parts.get("first_name", ""),
+            "middle_initial": name_parts.get("middle_initial", ""),
+            "last_name": name_parts.get("last_name", ""),
+            "email": session.get("lark_email", ""),
+            "full_name": full_name,
+            "employee_no": session.get("lark_employee_no", ""),  # Employee Number from Lark
+            "personal_number": session.get("lark_mobile", ""),  # Personal Number from Lark
+        },
+        "user": {
+            "name": session.get("lark_name"),
+            "email": session.get("lark_email"),
+            "avatar": session.get("lark_avatar"),
+        }
+    })
+
+
+def parse_lark_name(full_name: str) -> dict:
+    """Parse a full name into first, middle initial, and last name."""
+    if not full_name:
+        return {"first_name": "", "middle_initial": "", "last_name": ""}
+    
+    parts = full_name.strip().split()
+    
+    if len(parts) == 1:
+        return {"first_name": parts[0], "middle_initial": "", "last_name": ""}
+    elif len(parts) == 2:
+        return {"first_name": parts[0], "middle_initial": "", "last_name": parts[1]}
+    else:
+        middle = parts[1]
+        middle_initial = middle.replace(".", "")[0].upper() if middle else ""
+        return {"first_name": parts[0], "middle_initial": middle_initial, "last_name": parts[-1]}
 
 
 # ============================================
 # API Routes (include routers BEFORE static mount)
 # ============================================
-app.include_router(employee.router)
-app.include_router(hr.router)
+app.include_router(auth.router)  # Auth routes (/auth/*)
+app.include_router(employee.router)  # Employee routes
+app.include_router(hr.router)  # HR routes (/hr/*)
 
 
 # ============================================

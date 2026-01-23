@@ -2,8 +2,9 @@
 HR Routes - From Code 2
 Handles HR authentication, dashboard, gallery, and employee management.
 Includes background removal functionality for AI-generated photos.
+Supports both password-based and Lark SSO authentication.
 """
-from fastapi import APIRouter, Request, Depends, Cookie
+from fastapi import APIRouter, Request, Depends, Cookie, Query
 from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
 from fastapi.templating import Jinja2Templates
 import os
@@ -28,6 +29,13 @@ from app.database import (
 # Import services for background removal
 from app.services.background_removal_service import remove_background_from_url
 from app.services.cloudinary_service import upload_bytes_to_cloudinary
+
+# Import Lark OAuth service
+from app.services.lark_auth_service import (
+    get_authorization_url,
+    complete_oauth_flow,
+    LARK_APP_ID
+)
 
 # Import authentication
 from app.auth import (
@@ -119,6 +127,129 @@ def hr_logout(response: Response, hr_session: str = Cookie(None)):
     
     response = RedirectResponse(url="/hr/login", status_code=302)
     response.delete_cookie("hr_session")
+    return response
+
+
+# ============================================
+# Lark SSO Authentication Routes
+# ============================================
+
+@router.get("/lark/login")
+def lark_login(request: Request):
+    """
+    Initiate Lark OAuth login flow.
+    Redirects user to Lark authorization page.
+    """
+    # Build redirect URI based on current request
+    # This allows flexibility between local dev and production
+    scheme = request.url.scheme
+    host = request.headers.get('host', 'localhost:8000')
+    
+    # Normalize 127.0.0.1 to localhost for Lark compatibility
+    if '127.0.0.1' in host:
+        host = host.replace('127.0.0.1', 'localhost')
+    
+    # Use HTTPS in production (Vercel)
+    if IS_VERCEL or os.environ.get('VERCEL_ENV') == 'production':
+        scheme = 'https'
+    
+    redirect_uri = f"{scheme}://{host}/hr/lark/callback"
+    
+    # Override with environment variable if set
+    env_redirect_uri = os.environ.get('LARK_REDIRECT_URI')
+    if env_redirect_uri:
+        redirect_uri = env_redirect_uri
+    
+    logger.info(f"Initiating Lark OAuth with redirect_uri: {redirect_uri}")
+    
+    # Get authorization URL
+    auth_url, state = get_authorization_url(redirect_uri)
+    
+    return RedirectResponse(url=auth_url, status_code=302)
+
+
+@router.get("/lark/callback")
+def lark_callback(
+    request: Request,
+    code: str = Query(None),
+    state: str = Query(None),
+    error: str = Query(None),
+    error_description: str = Query(None)
+):
+    """
+    Handle Lark OAuth callback.
+    Exchanges authorization code for tokens and creates session.
+    """
+    # Handle authorization denial
+    if error:
+        logger.warning(f"Lark OAuth error: {error} - {error_description}")
+        return templates.TemplateResponse("hr_login.html", {
+            "request": request,
+            "error": f"Lark login denied: {error_description or error}"
+        })
+    
+    # Validate required parameters
+    if not code:
+        logger.error("Lark callback missing authorization code")
+        return templates.TemplateResponse("hr_login.html", {
+            "request": request,
+            "error": "Missing authorization code from Lark"
+        })
+    
+    if not state:
+        logger.error("Lark callback missing state parameter")
+        return templates.TemplateResponse("hr_login.html", {
+            "request": request,
+            "error": "Missing state parameter (security check failed)"
+        })
+    
+    # Complete OAuth flow
+    result = complete_oauth_flow(code, state)
+    
+    if not result.get("success"):
+        error_msg = result.get("error", "Unknown error during Lark authentication")
+        logger.error(f"Lark OAuth flow failed: {error_msg}")
+        return templates.TemplateResponse("hr_login.html", {
+            "request": request,
+            "error": f"Lark login failed: {error_msg}"
+        })
+    
+    # Extract user info
+    user = result.get("user", {})
+    tokens = result.get("tokens", {})
+    
+    user_name = user.get("name") or user.get("email") or user.get("user_id")
+    logger.info(f"Lark OAuth successful for user: {user_name}")
+    
+    # Create session with Lark data
+    session_id = create_session(
+        username=user_name,
+        hours=8,
+        lark_data={
+            "user_id": user.get("user_id"),
+            "open_id": user.get("open_id"),
+            "name": user.get("name"),
+            "email": user.get("email"),
+            "avatar_url": user.get("avatar_url"),
+            "tenant_key": user.get("tenant_key"),
+        }
+    )
+    
+    # Create redirect response with session cookie
+    response = RedirectResponse(url="/hr/dashboard", status_code=302)
+    
+    is_production = IS_VERCEL or os.environ.get('VERCEL_ENV') == 'production'
+    response.set_cookie(
+        key="hr_session",
+        value=session_id,
+        httponly=True,
+        max_age=28800,  # 8 hours
+        samesite="lax",
+        secure=is_production,
+        path="/"
+    )
+    
+    logger.info(f"Lark user logged in: {user_name}")
     return response
 
 

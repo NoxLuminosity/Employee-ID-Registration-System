@@ -59,10 +59,13 @@ def init_sqlite_db():
     CREATE TABLE IF NOT EXISTS employees (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         employee_name TEXT NOT NULL,
+        first_name TEXT,
+        middle_initial TEXT,
+        last_name TEXT,
         id_nickname TEXT,
         id_number TEXT NOT NULL,
         position TEXT NOT NULL,
-        department TEXT NOT NULL,
+        department TEXT,
         email TEXT,
         personal_number TEXT,
         photo_path TEXT NOT NULL,
@@ -88,7 +91,10 @@ def init_sqlite_db():
         "ALTER TABLE employees ADD COLUMN nobg_photo_url TEXT",
         "ALTER TABLE employees ADD COLUMN emergency_name TEXT",
         "ALTER TABLE employees ADD COLUMN emergency_contact TEXT",
-        "ALTER TABLE employees ADD COLUMN emergency_address TEXT"
+        "ALTER TABLE employees ADD COLUMN emergency_address TEXT",
+        "ALTER TABLE employees ADD COLUMN first_name TEXT",
+        "ALTER TABLE employees ADD COLUMN middle_initial TEXT",
+        "ALTER TABLE employees ADD COLUMN last_name TEXT"
     ]
     for sql in migrations:
         try:

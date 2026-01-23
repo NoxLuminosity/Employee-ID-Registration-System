@@ -19,10 +19,13 @@ class RemoveBackgroundRequest(BaseModel):
 class EmployeeBase(BaseModel):
     """Base employee model"""
     employee_name: str
+    first_name: Optional[str] = None
+    middle_initial: Optional[str] = None
+    last_name: Optional[str] = None
     id_nickname: Optional[str] = None
     id_number: str
     position: str
-    department: str
+    department: Optional[str] = None  # Deprecated - kept for backward compatibility
     email: Optional[str] = None
     personal_number: Optional[str] = None
     emergency_name: Optional[str] = None
