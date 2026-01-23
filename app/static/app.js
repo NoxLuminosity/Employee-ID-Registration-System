@@ -9,7 +9,9 @@
 const state = {
   signaturePad: null,
   isDrawing: false,
-  aiGenerationController: null  // AbortController for AI generation
+  aiGenerationController: null,  // AbortController for AI generation
+  aiGenerationComplete: false,   // Track if AI generation has successfully completed
+  aiGenerationInProgress: false  // Track if AI generation is currently in progress
 };
 
 // ============================================
@@ -48,9 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
   initNameAutoPopulation(); // Auto-populate id_nickname from first_name
   initPositionRadioButtons(); // Handle position radio button changes
   initPrefilledFields(); // Handle prefilled fields from Lark
+  initInputValidation(); // Initialize character restrictions on input fields
   updateReviewSection(); // Update on load
   updateIdCardPreview(); // Update ID card preview on load
   updateIdCardBackside(); // Update ID card backside on load
+  updateSubmitButtonState(); // Initialize submit button state
   
   // Auto-update review and ID card preview when form changes
   document.querySelectorAll('input, select, textarea').forEach(el => {
@@ -97,6 +101,125 @@ function initPrefilledFields() {
       this.classList.remove('prefilled');
     });
   });
+}
+
+// ============================================
+// Input Field Character Restrictions
+// ============================================
+function initInputValidation() {
+  // Contact Number fields - digits only (and + for country code)
+  const phoneFields = ['personal_number', 'emergency_contact'];
+  phoneFields.forEach(fieldId => {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      field.addEventListener('input', function(e) {
+        // Allow digits, +, spaces, and hyphens for phone formatting
+        this.value = this.value.replace(/[^0-9+\-\s]/g, '');
+      });
+      field.addEventListener('paste', function(e) {
+        e.preventDefault();
+        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+        const cleanedText = pastedText.replace(/[^0-9+\-\s]/g, '');
+        document.execCommand('insertText', false, cleanedText);
+      });
+    }
+  });
+
+  // Contact Name fields - alphanumeric + spaces only
+  const nameFields = ['first_name', 'last_name', 'emergency_name'];
+  nameFields.forEach(fieldId => {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      field.addEventListener('input', function(e) {
+        // Allow letters, numbers, spaces, and common name characters (hyphen, apostrophe, period)
+        this.value = this.value.replace(/[^a-zA-Z0-9\s\-'.]/g, '');
+      });
+      field.addEventListener('paste', function(e) {
+        e.preventDefault();
+        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+        const cleanedText = pastedText.replace(/[^a-zA-Z0-9\s\-'.]/g, '');
+        document.execCommand('insertText', false, cleanedText);
+      });
+    }
+  });
+
+  // Middle Initial - single letter only
+  const middleInitialField = document.getElementById('middle_initial');
+  if (middleInitialField) {
+    middleInitialField.addEventListener('input', function(e) {
+      // Allow only letters and period
+      this.value = this.value.replace(/[^a-zA-Z.]/g, '').substring(0, 2);
+    });
+    middleInitialField.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+      const cleanedText = pastedText.replace(/[^a-zA-Z.]/g, '').substring(0, 2);
+      document.execCommand('insertText', false, cleanedText);
+    });
+  }
+
+  // ID Number / Employee Number - alphanumeric and hyphens only
+  const idNumberField = document.getElementById('id_number');
+  if (idNumberField) {
+    idNumberField.addEventListener('input', function(e) {
+      // Allow letters, numbers, and hyphens (common in employee IDs like EMP-001)
+      this.value = this.value.replace(/[^a-zA-Z0-9\-]/g, '');
+    });
+    idNumberField.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+      const cleanedText = pastedText.replace(/[^a-zA-Z0-9\-]/g, '');
+      document.execCommand('insertText', false, cleanedText);
+    });
+  }
+
+  // Email - validate format on blur
+  const emailField = document.getElementById('email');
+  if (emailField) {
+    emailField.addEventListener('blur', function(e) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (this.value && !emailRegex.test(this.value)) {
+        this.style.borderColor = 'var(--color-danger)';
+        showMessage('Please enter a valid email address.', 'error');
+      } else {
+        this.style.borderColor = '';
+      }
+    });
+  }
+}
+
+// ============================================
+// Submit Button State Management
+// ============================================
+function updateSubmitButtonState() {
+  const submitBtn = elements.btnSubmit;
+  if (!submitBtn) return;
+
+  // Check if AI generation is required (photo has been uploaded)
+  const photoInput = elements.photoInput;
+  const hasPhoto = photoInput && photoInput.files && photoInput.files.length > 0;
+
+  if (hasPhoto) {
+    // If photo is uploaded, require AI generation to complete
+    if (state.aiGenerationInProgress) {
+      submitBtn.disabled = true;
+      submitBtn.title = 'Please wait for AI photo generation to complete';
+      submitBtn.classList.add('disabled-ai');
+    } else if (!state.aiGenerationComplete) {
+      submitBtn.disabled = true;
+      submitBtn.title = 'AI photo generation required';
+      submitBtn.classList.add('disabled-ai');
+    } else {
+      submitBtn.disabled = false;
+      submitBtn.title = '';
+      submitBtn.classList.remove('disabled-ai');
+    }
+  } else {
+    // No photo uploaded yet - button can be enabled (form validation will catch missing photo)
+    submitBtn.disabled = false;
+    submitBtn.title = '';
+    submitBtn.classList.remove('disabled-ai');
+  }
 }
 
 // ============================================
@@ -168,6 +291,11 @@ function initPhotoUpload() {
 async function generateAIHeadshot(imageBase64) {
   const loadingText = document.getElementById('aiLoadingText');
   
+  // Reset AI generation state
+  state.aiGenerationComplete = false;
+  state.aiGenerationInProgress = true;
+  updateSubmitButtonState();
+  
   try {
     // Cancel any previous generation request
     if (state.aiGenerationController) {
@@ -237,6 +365,12 @@ async function generateAIHeadshot(imageBase64) {
       if (result.message) {
         console.log('Server message:', result.message);
       }
+      
+      // Mark AI generation as complete and successful
+      state.aiGenerationComplete = true;
+      state.aiGenerationInProgress = false;
+      updateSubmitButtonState();
+      
     } else {
       throw new Error(result.error || 'Failed to generate headshot');
     }
@@ -244,6 +378,8 @@ async function generateAIHeadshot(imageBase64) {
   } catch (error) {
     if (error.name === 'AbortError') {
       console.log('AI generation aborted');
+      state.aiGenerationInProgress = false;
+      updateSubmitButtonState();
       return;
     }
     
@@ -254,6 +390,11 @@ async function generateAIHeadshot(imageBase64) {
     elements.aiPreviewImg.style.display = 'none';
     elements.aiError.style.display = 'block';
     elements.aiError.textContent = 'AI preview unavailable';
+    
+    // Mark AI generation as failed
+    state.aiGenerationComplete = false;
+    state.aiGenerationInProgress = false;
+    updateSubmitButtonState();
     
     // Still show Remove Background button - user can try after uploading new photo
     if (elements.aiActions) {
@@ -818,6 +959,20 @@ function initFormSubmission() {
   elements.form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
+    // Check if AI generation is in progress or failed (photo uploaded but not generated)
+    const photoInput = elements.photoInput;
+    const hasPhoto = photoInput && photoInput.files && photoInput.files.length > 0;
+    
+    if (hasPhoto && state.aiGenerationInProgress) {
+      showMessage('Please wait for AI photo generation to complete before submitting.', 'error');
+      return;
+    }
+    
+    if (hasPhoto && !state.aiGenerationComplete) {
+      showMessage('AI photo generation failed. Please upload a new photo and try again.', 'error');
+      return;
+    }
+
     // Validate all required fields
     const requiredInputs = elements.form.querySelectorAll('[required]');
     let isValid = true;
@@ -836,6 +991,17 @@ function initFormSubmission() {
     if (!isValid) {
       showMessage('Please fill in all required fields.', 'error');
       return;
+    }
+
+    // Validate email format
+    const emailField = document.getElementById('email');
+    if (emailField && emailField.value) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailField.value)) {
+        showMessage('Please enter a valid email address.', 'error');
+        emailField.style.borderColor = 'var(--color-danger)';
+        return;
+      }
     }
 
     // Validate signature

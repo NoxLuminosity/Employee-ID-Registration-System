@@ -480,6 +480,17 @@ input::placeholder {
   background: var(--color-primary-hover);
 }
 
+/* Disabled state for AI generation pending */
+.btn-primary.disabled-ai {
+  background: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.btn-primary.disabled-ai:hover {
+  background: #94a3b8;
+}
+
 /* Messages */
 .message {
   padding: var(--spacing-md);

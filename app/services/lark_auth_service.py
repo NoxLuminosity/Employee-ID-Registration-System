@@ -55,6 +55,17 @@ AUTHORIZE_URL = "https://accounts.larksuite.com/open-apis/authen/v1/authorize"
 TOKEN_URL = "https://open.larksuite.com/open-apis/authen/v2/oauth/token"
 USER_INFO_URL = "https://open.larksuite.com/open-apis/authen/v1/user_info"
 CONTACT_USER_URL = "https://open.larksuite.com/open-apis/contact/v3/users"
+DEPARTMENT_URL = "https://open.larksuite.com/open-apis/contact/v3/departments"
+
+# HR Portal Organization Access Control
+# Only users in this department path can access HR Portal via Lark
+# Hierarchy: S.P. Madrid & Associates > Solutions Management > People Development > People Support
+HR_ALLOWED_DEPARTMENTS = [
+    "People Support",
+    "People Development", 
+    "Solutions Management",
+    "S.P. Madrid & Associates"
+]
 
 # In-memory storage for OAuth state (short-lived, used during OAuth flow)
 # In production with multiple serverless instances, consider using Redis or database
@@ -352,6 +363,183 @@ def get_employee_no_from_contact_api(open_id: str) -> Optional[str]:
         logger.warning("Employee number not found in Contact API response")
     
     return employee_no
+
+
+def get_user_department_info(open_id: str) -> Dict[str, Any]:
+    """
+    Get user's department information from Lark Contact API.
+    Returns department IDs and names for validating organization access.
+    
+    Args:
+        open_id: User's open_id from authentication
+    
+    Returns:
+        Dict containing department_ids, department_names, and success status
+    """
+    from app.services.lark_service import get_tenant_access_token
+    
+    tenant_token = get_tenant_access_token()
+    if not tenant_token:
+        logger.warning("Could not get tenant_access_token for department info")
+        return {"success": False, "error": "No tenant access token"}
+    
+    # Call Contact API to get user details including department_ids
+    url = f"{CONTACT_USER_URL}/{open_id}?user_id_type=open_id&department_id_type=open_department_id"
+    headers = {
+        "Authorization": f"Bearer {tenant_token}"
+    }
+    
+    logger.info(f"Fetching department info from Contact API for open_id: {open_id[:10]}...")
+    response = _make_request(url, method="GET", headers=headers)
+    
+    if response.get("code") != 0:
+        error_msg = response.get("msg") or "Unknown error"
+        logger.warning(f"Contact API (department) failed: {error_msg} (code: {response.get('code')})")
+        return {"success": False, "error": error_msg}
+    
+    user_data = response.get("data", {}).get("user", {})
+    department_ids = user_data.get("department_ids", [])
+    
+    logger.info(f"User department IDs: {department_ids}")
+    
+    # Fetch department names for each department ID
+    department_names = []
+    for dept_id in department_ids:
+        dept_name = get_department_name(dept_id, tenant_token)
+        if dept_name:
+            department_names.append(dept_name)
+    
+    logger.info(f"User department names: {department_names}")
+    
+    return {
+        "success": True,
+        "department_ids": department_ids,
+        "department_names": department_names
+    }
+
+
+def get_department_name(department_id: str, tenant_token: str) -> Optional[str]:
+    """
+    Get department name from department ID.
+    
+    Args:
+        department_id: The department's open_department_id
+        tenant_token: Tenant access token
+    
+    Returns:
+        Department name or None
+    """
+    url = f"{DEPARTMENT_URL}/{department_id}?department_id_type=open_department_id"
+    headers = {
+        "Authorization": f"Bearer {tenant_token}"
+    }
+    
+    response = _make_request(url, method="GET", headers=headers)
+    
+    if response.get("code") != 0:
+        logger.warning(f"Failed to get department name for {department_id}")
+        return None
+    
+    dept_data = response.get("data", {}).get("department", {})
+    return dept_data.get("name")
+
+
+def get_department_path(department_id: str, tenant_token: str) -> list:
+    """
+    Get the full department hierarchy path from a department ID to root.
+    
+    Args:
+        department_id: The department's open_department_id
+        tenant_token: Tenant access token
+    
+    Returns:
+        List of department names from current to root
+    """
+    path = []
+    current_dept_id = department_id
+    max_depth = 10  # Prevent infinite loops
+    
+    while current_dept_id and max_depth > 0:
+        url = f"{DEPARTMENT_URL}/{current_dept_id}?department_id_type=open_department_id"
+        headers = {
+            "Authorization": f"Bearer {tenant_token}"
+        }
+        
+        response = _make_request(url, method="GET", headers=headers)
+        
+        if response.get("code") != 0:
+            break
+        
+        dept_data = response.get("data", {}).get("department", {})
+        dept_name = dept_data.get("name")
+        parent_dept_id = dept_data.get("parent_department_id")
+        
+        if dept_name:
+            path.append(dept_name)
+        
+        # Move to parent, stop if we reached root (parent_id is "0" or empty)
+        if not parent_dept_id or parent_dept_id == "0":
+            break
+        
+        current_dept_id = parent_dept_id
+        max_depth -= 1
+    
+    return path
+
+
+def validate_hr_portal_access(open_id: str) -> Dict[str, Any]:
+    """
+    Validate if a user has access to the HR Portal based on their organization.
+    
+    The user must belong to the following organization hierarchy:
+    S.P. Madrid & Associates > Solutions Management > People Development > People Support
+    
+    Args:
+        open_id: User's open_id from Lark authentication
+    
+    Returns:
+        Dict with 'allowed' boolean and 'reason' message
+    """
+    from app.services.lark_service import get_tenant_access_token
+    
+    tenant_token = get_tenant_access_token()
+    if not tenant_token:
+        logger.warning("Cannot validate HR access: No tenant access token")
+        # Allow access if we can't verify (graceful fallback)
+        return {"allowed": True, "reason": "Unable to verify organization (fallback allowed)"}
+    
+    # Get user's department info
+    dept_info = get_user_department_info(open_id)
+    
+    if not dept_info.get("success"):
+        logger.warning(f"Cannot validate HR access: {dept_info.get('error')}")
+        # Allow access if we can't verify
+        return {"allowed": True, "reason": "Unable to verify organization (fallback allowed)"}
+    
+    department_ids = dept_info.get("department_ids", [])
+    
+    if not department_ids:
+        logger.warning("User has no department assigned")
+        return {"allowed": False, "reason": "You are not assigned to any department"}
+    
+    # Check each department the user belongs to
+    for dept_id in department_ids:
+        # Get full department path from this department to root
+        dept_path = get_department_path(dept_id, tenant_token)
+        
+        logger.info(f"Checking department path: {dept_path}")
+        
+        # Check if "People Support" is in the path
+        if "People Support" in dept_path:
+            logger.info(f"HR Portal access granted: User in People Support department")
+            return {"allowed": True, "reason": "Access granted: People Support"}
+    
+    # User is not in the required organization hierarchy
+    logger.warning(f"HR Portal access denied: User not in People Support department")
+    return {
+        "allowed": False, 
+        "reason": "Access denied. HR Portal access is restricted to People Support department members only."
+    }
 
 
 # ============================================

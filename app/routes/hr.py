@@ -34,6 +34,7 @@ from app.services.cloudinary_service import upload_bytes_to_cloudinary
 from app.services.lark_auth_service import (
     get_authorization_url,
     complete_oauth_flow,
+    validate_hr_portal_access,
     LARK_APP_ID
 )
 
@@ -179,6 +180,7 @@ def lark_callback(
     """
     Handle Lark OAuth callback.
     Exchanges authorization code for tokens and creates session.
+    Validates organization access (only People Support department allowed).
     """
     # Handle authorization denial
     if error:
@@ -219,7 +221,20 @@ def lark_callback(
     tokens = result.get("tokens", {})
     
     user_name = user.get("name") or user.get("email") or user.get("user_id")
+    open_id = user.get("open_id")
     logger.info(f"Lark OAuth successful for user: {user_name}")
+    
+    # Validate organization access for HR Portal
+    # Only users in People Support department hierarchy can access
+    if open_id:
+        access_result = validate_hr_portal_access(open_id)
+        if not access_result.get("allowed"):
+            logger.warning(f"HR Portal access denied for user {user_name}: {access_result.get('reason')}")
+            return templates.TemplateResponse("hr_login.html", {
+                "request": request,
+                "error": access_result.get("reason", "Access denied. You are not authorized to access the HR Portal.")
+            })
+        logger.info(f"HR Portal access granted for user {user_name}: {access_result.get('reason')}")
     
     # Create session with Lark data
     session_id = create_session(
