@@ -43,9 +43,12 @@ LARK_APP_SECRET = os.getenv('LARK_APP_SECRET', 'zaduPnvOLTxcb7W8XHYIaggtYgzOUOI6
 # Redirect URI - will be set based on environment
 # Must be registered in Lark Developer Console -> Security Settings -> Redirect URLs
 IS_VERCEL = os.getenv("VERCEL", "0") == "1" or os.getenv("VERCEL_ENV") is not None
-DEFAULT_REDIRECT_URI = os.getenv(
-    'LARK_REDIRECT_URI',
-    'http://localhost:8000/hr/lark/callback' if not IS_VERCEL else None
+# CRITICAL: Strip whitespace from env var to remove trailing newlines
+# (copy/paste in Vercel dashboard can introduce \n causing OAuth error 20029)
+_raw_redirect_uri = os.getenv('LARK_REDIRECT_URI')
+DEFAULT_REDIRECT_URI = (
+    _raw_redirect_uri.strip() if _raw_redirect_uri 
+    else ('http://localhost:8000/hr/lark/callback' if not IS_VERCEL else None)
 )
 
 # Scopes to request (offline_access for refresh tokens)

@@ -67,7 +67,10 @@ def lark_login(request: Request):
     env_redirect_uri = os.environ.get('LARK_EMPLOYEE_REDIRECT_URI')
     
     if env_redirect_uri:
-        redirect_uri = env_redirect_uri
+        # CRITICAL FIX: Strip whitespace to remove trailing newlines from env vars
+        # Vercel dashboard copy/paste can introduce \n which encodes as %0A in URLs
+        # causing Lark OAuth error 20029 (redirect_uri mismatch)
+        redirect_uri = env_redirect_uri.strip()
         logger.info(f"Using LARK_EMPLOYEE_REDIRECT_URI from environment: {redirect_uri}")
     else:
         # Build redirect URI based on current request (local development)
