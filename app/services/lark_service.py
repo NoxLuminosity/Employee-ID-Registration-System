@@ -249,7 +249,21 @@ def append_employee_submission(
     if date_last_modified is None:
         date_last_modified = datetime.now().isoformat()
     
+    # FIX for AttachFieldConvFail:
+    # Bitable attachment-type fields CANNOT receive empty strings ("").
+    # Sending "" to an attachment field causes Lark to attempt conversion, which fails.
+    # Solution: Only include text-type fields. Omit attachment fields entirely.
+    #
+    # Known attachment-type fields in this Bitable (must be OMITTED if empty):
+    # - photo_preview (attachment)
+    # - new_photo (attachment)  
+    # - signature_preview (attachment)
+    # - id_generated (attachment or checkbox)
+    #
+    # These fields should be managed through Lark Bitable UI, not via API.
+    
     # Field names must match your Lark Bitable columns EXACTLY
+    # Only include TEXT-type fields that accept string values
     fields = {
         "employee_name": employee_name,
         "first_name": first_name or "",
@@ -261,16 +275,18 @@ def append_employee_submission(
         "department": department or "",  # Deprecated but kept for compatibility
         "email": email,
         "personal number": personal_number,
-        "photo_preview": "",  # Empty - not backend-managed
-        "photo_url": photo_url or "",
-        "ai_headshot_url": ai_headshot_url or "",  # AI-generated professional headshot
-        "new_photo": "",  # Empty - not backend-managed
-        "signature_preview": "",  # Empty - not backend-managed
-        "signature": signature_url or "",
+        # NOTE: photo_preview OMITTED - it's an attachment field, not text
+        "photo_url": photo_url or "",  # Text field containing Cloudinary URL
+        "ai_headshot_url": ai_headshot_url or "",  # Text field containing AI headshot URL
+        # NOTE: new_photo OMITTED - it's an attachment field, not text
+        # NOTE: signature_preview OMITTED - it's an attachment field, not text
+        "signature": signature_url or "",  # Text field containing signature URL
         "status": status,
         "date last modified": date_last_modified,
-        "id_generated": "",  # Empty - not backend-managed
+        # NOTE: id_generated OMITTED - may be attachment or checkbox field
         "render_url": render_url or ""
     }
+    
+    logger.debug(f"Bitable payload fields: {list(fields.keys())}")
     
     return append_record_to_bitable(app_token, table_id, fields)
