@@ -15,8 +15,11 @@ const dashboardState = {
 };
 
 // Cache settings
-const CACHE_KEY = 'dashboardEmployeeCache';
-const CACHE_DURATION_MS = 30000; // 30 seconds - short cache to balance freshness vs performance
+// VERCEL FIX: Increased cache duration to prevent data loss during cold starts
+// Use shared cache key between dashboard and gallery for consistency
+const CACHE_KEY = 'hrEmployeeDataCache';  // Shared with gallery.js
+const CACHE_DURATION_MS = 300000; // 5 minutes - longer cache to survive Vercel cold starts
+const CACHE_MAX_AGE_MS = 3600000; // 1 hour - maximum age before cache is completely invalid
 
 // Load cached employee data from sessionStorage
 function loadCachedData() {
@@ -25,8 +28,17 @@ function loadCachedData() {
     if (cached) {
       const { employees, timestamp } = JSON.parse(cached);
       const age = Date.now() - timestamp;
+      
+      // Use cache if within normal duration
       if (age < CACHE_DURATION_MS && employees && employees.length > 0) {
         console.log('Dashboard: Using cached data, age:', Math.round(age/1000), 'seconds');
+        return employees;
+      }
+      
+      // VERCEL FIX: For stale but not expired cache, still return it for immediate display
+      // Background fetch will update it
+      if (age < CACHE_MAX_AGE_MS && employees && employees.length > 0) {
+        console.log('Dashboard: Using stale cached data for immediate display, age:', Math.round(age/1000), 'seconds');
         return employees;
       }
     }
@@ -147,7 +159,9 @@ function initEventListeners() {
 // ============================================
 // Data Fetching
 // ============================================
-async function fetchEmployeeData(forceRefresh = false) {
+async function fetchEmployeeData(forceRefresh = false, retryCount = 0) {
+  const MAX_RETRIES = 2;  // VERCEL FIX: Retry on cold start timeouts
+  
   // VERCEL FIX: Try to use cached data first to prevent data loss on navigation
   if (!forceRefresh) {
     const cachedData = loadCachedData();
@@ -166,12 +180,13 @@ async function fetchEmployeeData(forceRefresh = false) {
   
   showLoading(true);
 
-  // VERCEL FIX: Add timeout to prevent infinite loading on serverless cold starts
+  // VERCEL FIX: Longer timeout for cold starts, shorter for retries
+  const timeoutMs = retryCount === 0 ? 20000 : 15000;  // 20s first attempt, 15s retries
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     console.log('fetchEmployeeData: Request timeout - aborting');
     controller.abort();
-  }, 15000); // 15 second timeout
+  }, timeoutMs);
 
   try {
     // VERCEL FIX: Include credentials to ensure JWT cookie is sent with request
@@ -210,6 +225,15 @@ async function fetchEmployeeData(forceRefresh = false) {
   } catch (error) {
     clearTimeout(timeoutId);
     console.error('Error fetching employee data:', error);
+    
+    // VERCEL FIX: Retry on timeout (cold start recovery)
+    if (error.name === 'AbortError' && retryCount < MAX_RETRIES) {
+      console.log('fetchEmployeeData: Timeout, retrying... (attempt', retryCount + 2, ')');
+      showToast('Loading... please wait (server warming up)', 'info');
+      // Small delay before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return fetchEmployeeData(forceRefresh, retryCount + 1);
+    }
     
     // VERCEL FIX: Handle abort/timeout gracefully
     if (error.name === 'AbortError') {

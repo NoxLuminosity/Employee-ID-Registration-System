@@ -15,9 +15,11 @@ const galleryState = {
   lastFetchTime: null
 };
 
-// Cache settings (shared cache key with dashboard for consistency)
-const GALLERY_CACHE_KEY = 'galleryEmployeeCache';
-const GALLERY_CACHE_DURATION_MS = 30000; // 30 seconds
+// Cache settings - MUST match dashboard.js for shared cache
+// VERCEL FIX: Use shared cache key with dashboard so both pages see the same data
+const GALLERY_CACHE_KEY = 'hrEmployeeDataCache';  // Shared with dashboard.js
+const GALLERY_CACHE_DURATION_MS = 300000; // 5 minutes - matches dashboard
+const GALLERY_CACHE_MAX_AGE_MS = 3600000; // 1 hour - matches dashboard
 
 // Load cached employee data from sessionStorage
 function loadGalleryCachedData() {
@@ -26,8 +28,16 @@ function loadGalleryCachedData() {
     if (cached) {
       const { employees, timestamp } = JSON.parse(cached);
       const age = Date.now() - timestamp;
+      
+      // Use cache if within normal duration
       if (age < GALLERY_CACHE_DURATION_MS && employees && employees.length > 0) {
         console.log('Gallery: Using cached data, age:', Math.round(age/1000), 'seconds');
+        return employees;
+      }
+      
+      // VERCEL FIX: For stale but not expired cache, still return it for immediate display
+      if (age < GALLERY_CACHE_MAX_AGE_MS && employees && employees.length > 0) {
+        console.log('Gallery: Using stale cached data for immediate display, age:', Math.round(age/1000), 'seconds');
         return employees;
       }
     }
@@ -124,8 +134,10 @@ function initEventListeners() {
 // ============================================
 // Data Fetching
 // ============================================
-async function fetchGalleryData(forceRefresh = false) {
-  console.log('fetchGalleryData: Starting data fetch...');
+async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
+  const MAX_RETRIES = 2;  // VERCEL FIX: Retry on cold start timeouts
+  
+  console.log('fetchGalleryData: Starting data fetch... (attempt', retryCount + 1, ')');
   console.log('fetchGalleryData: Current URL:', window.location.href);
   
   // VERCEL FIX: Try to use cached data first to prevent data loss on navigation
@@ -155,12 +167,13 @@ async function fetchGalleryData(forceRefresh = false) {
   
   showLoading(true);
 
-  // VERCEL FIX: Add timeout to prevent infinite loading on serverless cold starts
+  // VERCEL FIX: Longer timeout for cold starts, shorter for retries
+  const timeoutMs = retryCount === 0 ? 20000 : 15000;  // 20s first attempt, 15s retries
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     console.log('fetchGalleryData: Request timeout - aborting');
     controller.abort();
-  }, 15000); // 15 second timeout
+  }, timeoutMs);
 
   try {
     // VERCEL FIX: Include credentials to ensure JWT cookie is sent with request
@@ -231,6 +244,15 @@ async function fetchGalleryData(forceRefresh = false) {
   } catch (error) {
     clearTimeout(timeoutId);
     console.error('fetchGalleryData: Error occurred:', error);
+    
+    // VERCEL FIX: Retry on timeout (cold start recovery)
+    if (error.name === 'AbortError' && retryCount < MAX_RETRIES) {
+      console.log('fetchGalleryData: Timeout, retrying... (attempt', retryCount + 2, ')');
+      showToast('Loading... please wait (server warming up)', 'info');
+      // Small delay before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return fetchGalleryData(forceRefresh, retryCount + 1);
+    }
     
     // VERCEL FIX: Handle abort/timeout gracefully
     if (error.name === 'AbortError') {

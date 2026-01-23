@@ -43,6 +43,33 @@ CREATE INDEX IF NOT EXISTS idx_employees_date ON employees(date_last_modified DE
 -- CREATE POLICY "Allow all operations" ON employees FOR ALL USING (true);
 
 -- ============================================
+-- OAuth State Storage (Required for Vercel Serverless)
+-- ============================================
+-- This table stores OAuth PKCE state for the Lark SSO flow.
+-- In serverless environments, in-memory storage doesn't work
+-- because each request may hit a different instance.
+
+CREATE TABLE IF NOT EXISTS oauth_states (
+    state TEXT PRIMARY KEY,
+    code_verifier TEXT NOT NULL,
+    redirect_uri TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '10 minutes')
+);
+
+-- Index for cleanup of expired states
+CREATE INDEX IF NOT EXISTS idx_oauth_states_expires ON oauth_states(expires_at);
+
+-- Auto-cleanup function for expired OAuth states
+CREATE OR REPLACE FUNCTION cleanup_expired_oauth_states()
+RETURNS void AS $$
+BEGIN
+    DELETE FROM oauth_states WHERE expires_at < NOW();
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================
 -- Verification: Run after creating table
 -- ============================================
 -- SELECT * FROM employees LIMIT 1;
+-- SELECT * FROM oauth_states LIMIT 1;

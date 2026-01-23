@@ -12,6 +12,7 @@ Security Features:
 - PKCE (Proof Key for Code Exchange) with S256 method
 - State parameter for CSRF protection
 - Secure token handling
+- Supabase-backed state storage for Vercel serverless compatibility
 
 Lark API Endpoints:
 - Authorization: https://accounts.larksuite.com/open-apis/authen/v1/authorize
@@ -67,14 +68,86 @@ HR_ALLOWED_DEPARTMENTS = [
     "S.P. Madrid & Associates"
 ]
 
-# In-memory storage for OAuth state (short-lived, used during OAuth flow)
-# In production with multiple serverless instances, consider using Redis or database
+# In-memory storage for OAuth state (fallback for local development)
+# In production with Vercel, we use Supabase for state persistence
 _oauth_states: Dict[str, Dict[str, Any]] = {}
 _STATE_EXPIRY_SECONDS = 600  # 10 minutes
 
 
+# ============================================
+# Supabase OAuth State Storage (Vercel Fix)
+# ============================================
+def _get_supabase_client():
+    """Get Supabase client if available"""
+    try:
+        from app.database import supabase_client, USE_SUPABASE
+        if USE_SUPABASE and supabase_client:
+            return supabase_client
+    except Exception as e:
+        logger.debug(f"Supabase client not available: {e}")
+    return None
+
+
+def _store_oauth_state_supabase(state: str, code_verifier: str, redirect_uri: str) -> bool:
+    """Store OAuth state in Supabase for serverless persistence"""
+    client = _get_supabase_client()
+    if not client:
+        return False
+    
+    try:
+        # Delete any existing state with same key (shouldn't happen but be safe)
+        client.table("oauth_states").delete().eq("state", state).execute()
+        
+        # Insert new state
+        client.table("oauth_states").insert({
+            "state": state,
+            "code_verifier": code_verifier,
+            "redirect_uri": redirect_uri
+        }).execute()
+        
+        logger.info(f"OAuth state stored in Supabase: {state[:10]}...")
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to store OAuth state in Supabase: {e}")
+        return False
+
+
+def _retrieve_oauth_state_supabase(state: str) -> Optional[Dict[str, Any]]:
+    """Retrieve OAuth state from Supabase"""
+    client = _get_supabase_client()
+    if not client:
+        return None
+    
+    try:
+        # First cleanup expired states
+        try:
+            client.rpc("cleanup_expired_oauth_states").execute()
+        except:
+            pass  # Function might not exist, that's ok
+        
+        # Retrieve state
+        result = client.table("oauth_states").select("*").eq("state", state).execute()
+        
+        if result.data and len(result.data) > 0:
+            state_data = result.data[0]
+            
+            # Delete state after retrieval (single-use)
+            client.table("oauth_states").delete().eq("state", state).execute()
+            
+            logger.info(f"OAuth state retrieved from Supabase: {state[:10]}...")
+            return {
+                "code_verifier": state_data.get("code_verifier"),
+                "redirect_uri": state_data.get("redirect_uri"),
+                "created_at": time.time()  # Approximate for compatibility
+            }
+    except Exception as e:
+        logger.warning(f"Failed to retrieve OAuth state from Supabase: {e}")
+    
+    return None
+
+
 def _cleanup_expired_states():
-    """Remove expired OAuth states from memory"""
+    """Remove expired OAuth states from memory (local dev only)"""
     current_time = time.time()
     expired_keys = [
         key for key, value in _oauth_states.items()
@@ -139,6 +212,10 @@ def get_authorization_url(redirect_uri: str = None) -> Tuple[str, str]:
     """
     Generate Lark OAuth authorization URL with PKCE and state.
     
+    VERCEL FIX: Uses Supabase to persist OAuth state across serverless invocations.
+    In-memory storage only works in local development where the same process handles
+    both the authorization request and callback.
+    
     Args:
         redirect_uri: OAuth callback URL (uses default if not provided)
     
@@ -156,12 +233,18 @@ def get_authorization_url(redirect_uri: str = None) -> Tuple[str, str]:
     # Generate PKCE parameters
     code_verifier, code_challenge = generate_pkce()
     
-    # Store state and code_verifier for callback verification
-    _oauth_states[state] = {
-        'code_verifier': code_verifier,
-        'redirect_uri': redirect_uri,
-        'created_at': time.time()
-    }
+    # VERCEL FIX: Store state in Supabase for persistence across serverless instances
+    # Fall back to in-memory storage for local development
+    state_stored_in_db = _store_oauth_state_supabase(state, code_verifier, redirect_uri)
+    
+    if not state_stored_in_db:
+        # Fallback to in-memory (works for local development)
+        _oauth_states[state] = {
+            'code_verifier': code_verifier,
+            'redirect_uri': redirect_uri,
+            'created_at': time.time()
+        }
+        logger.info(f"OAuth state stored in memory (local dev): {state[:10]}...")
     
     # Build authorization URL
     params = {
@@ -174,7 +257,7 @@ def get_authorization_url(redirect_uri: str = None) -> Tuple[str, str]:
     }
     
     auth_url = f"{AUTHORIZE_URL}?{urlencode(params, quote_via=quote)}"
-    logger.info(f"Generated Lark authorization URL with state: {state[:10]}...")
+    logger.info(f"Generated Lark authorization URL with state: {state[:10]}..., redirect_uri: {redirect_uri}")
     
     return auth_url, state
 
@@ -183,16 +266,29 @@ def validate_state(state: str) -> Optional[Dict[str, Any]]:
     """
     Validate OAuth state and return stored data.
     
+    VERCEL FIX: First tries to retrieve state from Supabase (for serverless),
+    then falls back to in-memory storage (for local development).
+    
     Args:
         state: State parameter from callback
     
     Returns:
         Stored OAuth state data or None if invalid/expired
     """
+    if not state:
+        logger.warning("OAuth state validation failed: state is empty")
+        return None
+    
+    # VERCEL FIX: Try Supabase first (for serverless persistence)
+    state_data = _retrieve_oauth_state_supabase(state)
+    if state_data:
+        return state_data
+    
+    # Fallback to in-memory storage (for local development)
     _cleanup_expired_states()
     
     if state not in _oauth_states:
-        logger.warning(f"Invalid OAuth state: {state[:10] if state else 'None'}...")
+        logger.warning(f"Invalid OAuth state (not in memory or DB): {state[:10]}...")
         return None
     
     state_data = _oauth_states.pop(state)  # Remove state after use (single-use)

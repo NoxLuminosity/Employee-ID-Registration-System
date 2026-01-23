@@ -57,25 +57,33 @@ def lark_login(request: Request):
     """
     Initiate Lark OAuth login flow for employees.
     Redirects user to Lark authorization page.
+    
+    VERCEL FIX: On Vercel, set LARK_EMPLOYEE_REDIRECT_URI environment variable to:
+    https://your-vercel-domain.vercel.app/auth/lark/callback
+    
+    This URL must be registered in Lark Developer Console -> Security Settings -> Redirect URLs
     """
-    # Build redirect URI based on current request
-    scheme = request.url.scheme
-    host = request.headers.get('host', 'localhost:8000')
-    
-    # Normalize 127.0.0.1 to localhost for Lark compatibility
-    if '127.0.0.1' in host:
-        host = host.replace('127.0.0.1', 'localhost')
-    
-    # Use HTTPS in production (Vercel)
-    if IS_VERCEL or os.environ.get('VERCEL_ENV') == 'production':
-        scheme = 'https'
-    
-    redirect_uri = f"{scheme}://{host}/auth/lark/callback"
-    
-    # Override with environment variable if set
+    # VERCEL FIX: Check for explicit redirect URI first (required for Vercel)
     env_redirect_uri = os.environ.get('LARK_EMPLOYEE_REDIRECT_URI')
+    
     if env_redirect_uri:
         redirect_uri = env_redirect_uri
+        logger.info(f"Using LARK_EMPLOYEE_REDIRECT_URI from environment: {redirect_uri}")
+    else:
+        # Build redirect URI based on current request (local development)
+        scheme = request.url.scheme
+        host = request.headers.get('host', 'localhost:8000')
+        
+        # Normalize 127.0.0.1 to localhost for Lark compatibility
+        if '127.0.0.1' in host:
+            host = host.replace('127.0.0.1', 'localhost')
+        
+        # Use HTTPS in production (Vercel)
+        if IS_VERCEL or os.environ.get('VERCEL_ENV') == 'production':
+            scheme = 'https'
+        
+        redirect_uri = f"{scheme}://{host}/auth/lark/callback"
+        logger.info(f"Built redirect_uri dynamically: {redirect_uri}")
     
     logger.info(f"Initiating Employee Lark OAuth with redirect_uri: {redirect_uri}")
     
