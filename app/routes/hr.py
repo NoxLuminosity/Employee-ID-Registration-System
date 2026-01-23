@@ -57,7 +57,8 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 logger = logging.getLogger(__name__)
 
 # Check if running on Vercel (serverless) or locally
-IS_VERCEL = os.environ.get("VERCEL", False)
+# VERCEL env var is "1" when running on Vercel
+IS_VERCEL = os.environ.get("VERCEL", "0") == "1" or os.environ.get("VERCEL_ENV") is not None
 
 
 # ============================================
@@ -138,30 +139,37 @@ def hr_logout(response: Response, hr_session: str = Cookie(None)):
 @router.get("/lark/login")
 def lark_login(request: Request):
     """
-    Initiate Lark OAuth login flow.
+    Initiate Lark OAuth login flow for HR Portal.
     Redirects user to Lark authorization page.
+    
+    IMPORTANT: On Vercel, set LARK_HR_REDIRECT_URI environment variable to:
+    https://your-vercel-domain.vercel.app/hr/lark/callback
+    
+    This URL must be registered in Lark Developer Console -> Security Settings -> Redirect URLs
     """
-    # Build redirect URI based on current request
-    # This allows flexibility between local dev and production
-    scheme = request.url.scheme
-    host = request.headers.get('host', 'localhost:8000')
+    # Check for explicit HR redirect URI first (recommended for Vercel)
+    env_redirect_uri = os.environ.get('LARK_HR_REDIRECT_URI')
     
-    # Normalize 127.0.0.1 to localhost for Lark compatibility
-    if '127.0.0.1' in host:
-        host = host.replace('127.0.0.1', 'localhost')
-    
-    # Use HTTPS in production (Vercel)
-    if IS_VERCEL or os.environ.get('VERCEL_ENV') == 'production':
-        scheme = 'https'
-    
-    redirect_uri = f"{scheme}://{host}/hr/lark/callback"
-    
-    # Override with environment variable if set
-    env_redirect_uri = os.environ.get('LARK_REDIRECT_URI')
     if env_redirect_uri:
         redirect_uri = env_redirect_uri
+        logger.info(f"Using LARK_HR_REDIRECT_URI from environment: {redirect_uri}")
+    else:
+        # Build redirect URI dynamically from request
+        scheme = request.url.scheme
+        host = request.headers.get('host', 'localhost:8000')
+        
+        # Normalize 127.0.0.1 to localhost for Lark compatibility
+        if '127.0.0.1' in host:
+            host = host.replace('127.0.0.1', 'localhost')
+        
+        # Use HTTPS in production (Vercel)
+        if IS_VERCEL:
+            scheme = 'https'
+        
+        redirect_uri = f"{scheme}://{host}/hr/lark/callback"
+        logger.info(f"Built redirect_uri dynamically: {redirect_uri}")
     
-    logger.info(f"Initiating Lark OAuth with redirect_uri: {redirect_uri}")
+    logger.info(f"Initiating HR Lark OAuth with redirect_uri: {redirect_uri}")
     
     # Get authorization URL
     auth_url, state = get_authorization_url(redirect_uri)
@@ -221,13 +229,14 @@ def lark_callback(
     tokens = result.get("tokens", {})
     
     user_name = user.get("name") or user.get("email") or user.get("user_id")
+    user_email = user.get("email")
     open_id = user.get("open_id")
     logger.info(f"Lark OAuth successful for user: {user_name}")
     
     # Validate organization access for HR Portal
-    # Only users in People Support department hierarchy can access
+    # Uses Lark Contact API (department hierarchy) and Bitable API (employee records)
     if open_id:
-        access_result = validate_hr_portal_access(open_id)
+        access_result = validate_hr_portal_access(open_id, user_email=user_email)
         if not access_result.get("allowed"):
             logger.warning(f"HR Portal access denied for user {user_name}: {access_result.get('reason')}")
             return templates.TemplateResponse("hr_login.html", {

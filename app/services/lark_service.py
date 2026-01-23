@@ -128,6 +128,91 @@ def append_record_to_bitable(app_token: str, table_id: str, fields: Dict[str, An
         return False
 
 
+def get_bitable_records(app_token: str = None, table_id: str = None, filter_formula: str = None) -> list:
+    """
+    Get records from Lark Bitable table.
+    
+    Args:
+        app_token: Bitable app token (uses default if not provided)
+        table_id: Table ID (uses default if not provided)
+        filter_formula: Optional filter formula for querying specific records
+    
+    Returns:
+        List of records or empty list on failure
+    """
+    token = get_tenant_access_token()
+    if not token:
+        return []
+    
+    # Use defaults if not provided
+    app_token = app_token or LARK_BITABLE_ID
+    table_id = table_id or LARK_TABLE_ID
+    
+    if not app_token or not table_id:
+        logger.warning("Bitable credentials not configured")
+        return []
+    
+    try:
+        url = f"{LARK_BITABLE_BASE_URL}/{app_token}/tables/{table_id}/records"
+        
+        # Add filter if provided
+        if filter_formula:
+            from urllib.parse import quote
+            url += f"?filter={quote(filter_formula)}"
+        
+        response = _make_request(url, method="GET", 
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.get("code") != 0:
+            logger.error(f"Lark Bitable read error: {response.get('msg')}")
+            return []
+        
+        items = response.get("data", {}).get("items", [])
+        logger.info(f"Retrieved {len(items)} records from Bitable")
+        return items
+        
+    except Exception as e:
+        logger.error(f"Failed to read from Lark Bitable: {str(e)}")
+        return []
+
+
+def check_user_in_bitable(email: str = None, employee_no: str = None) -> Dict[str, Any]:
+    """
+    Check if a user exists in the Lark Bitable employee records.
+    Used for validating HR Portal access.
+    
+    Args:
+        email: User's email address
+        employee_no: User's employee number
+    
+    Returns:
+        Dict with 'found' boolean and 'record' data if found
+    """
+    if not email and not employee_no:
+        return {"found": False, "error": "No email or employee_no provided"}
+    
+    # Get all records and search (Bitable filter syntax can be limited)
+    records = get_bitable_records()
+    
+    for record in records:
+        fields = record.get("fields", {})
+        record_email = fields.get("email", "").lower().strip()
+        record_emp_no = fields.get("id_number", "").strip()
+        
+        # Match by email or employee number
+        if email and record_email == email.lower().strip():
+            logger.info(f"User found in Bitable by email: {email}")
+            return {"found": True, "record": fields}
+        
+        if employee_no and record_emp_no == employee_no.strip():
+            logger.info(f"User found in Bitable by employee_no: {employee_no}")
+            return {"found": True, "record": fields}
+    
+    logger.info(f"User not found in Bitable (email={email}, employee_no={employee_no})")
+    return {"found": False}
+
+
 def append_employee_submission(
     employee_name: str,
     id_nickname: str,

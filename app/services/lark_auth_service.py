@@ -487,20 +487,25 @@ def get_department_path(department_id: str, tenant_token: str) -> list:
     return path
 
 
-def validate_hr_portal_access(open_id: str) -> Dict[str, Any]:
+def validate_hr_portal_access(open_id: str, user_email: str = None) -> Dict[str, Any]:
     """
     Validate if a user has access to the HR Portal based on their organization.
+    
+    Validation is done using:
+    1. Lark Contact API - Check department hierarchy (People Support)
+    2. Lark Bitable API - Check if user exists in employee records (LARK_BITABLE_ID/LARK_TABLE_ID)
     
     The user must belong to the following organization hierarchy:
     S.P. Madrid & Associates > Solutions Management > People Development > People Support
     
     Args:
         open_id: User's open_id from Lark authentication
+        user_email: User's email for Bitable lookup
     
     Returns:
         Dict with 'allowed' boolean and 'reason' message
     """
-    from app.services.lark_service import get_tenant_access_token
+    from app.services.lark_service import get_tenant_access_token, check_user_in_bitable
     
     tenant_token = get_tenant_access_token()
     if not tenant_token:
@@ -508,34 +513,37 @@ def validate_hr_portal_access(open_id: str) -> Dict[str, Any]:
         # Allow access if we can't verify (graceful fallback)
         return {"allowed": True, "reason": "Unable to verify organization (fallback allowed)"}
     
-    # Get user's department info
+    # First, try to validate via department hierarchy (Contact API)
     dept_info = get_user_department_info(open_id)
     
-    if not dept_info.get("success"):
-        logger.warning(f"Cannot validate HR access: {dept_info.get('error')}")
-        # Allow access if we can't verify
-        return {"allowed": True, "reason": "Unable to verify organization (fallback allowed)"}
-    
-    department_ids = dept_info.get("department_ids", [])
-    
-    if not department_ids:
-        logger.warning("User has no department assigned")
-        return {"allowed": False, "reason": "You are not assigned to any department"}
-    
-    # Check each department the user belongs to
-    for dept_id in department_ids:
-        # Get full department path from this department to root
-        dept_path = get_department_path(dept_id, tenant_token)
+    if dept_info.get("success"):
+        department_ids = dept_info.get("department_ids", [])
         
-        logger.info(f"Checking department path: {dept_path}")
-        
-        # Check if "People Support" is in the path
-        if "People Support" in dept_path:
-            logger.info(f"HR Portal access granted: User in People Support department")
-            return {"allowed": True, "reason": "Access granted: People Support"}
+        # Check each department the user belongs to
+        for dept_id in department_ids:
+            # Get full department path from this department to root
+            dept_path = get_department_path(dept_id, tenant_token)
+            
+            logger.info(f"Checking department path: {dept_path}")
+            
+            # Check if "People Support" is in the path
+            if "People Support" in dept_path:
+                logger.info(f"HR Portal access granted: User in People Support department")
+                return {"allowed": True, "reason": "Access granted: People Support"}
     
-    # User is not in the required organization hierarchy
-    logger.warning(f"HR Portal access denied: User not in People Support department")
+    # If Contact API didn't grant access, check Bitable records as secondary validation
+    # This uses the mandated LARK_BITABLE_ID and LARK_TABLE_ID
+    if user_email:
+        bitable_result = check_user_in_bitable(email=user_email)
+        if bitable_result.get("found"):
+            record = bitable_result.get("record", {})
+            position = record.get("position", "")
+            # Allow HR staff found in Bitable
+            logger.info(f"HR Portal access granted: User found in Bitable (position: {position})")
+            return {"allowed": True, "reason": f"Access granted: Found in employee records"}
+    
+    # User is not in the required organization hierarchy and not in Bitable
+    logger.warning(f"HR Portal access denied: User not in People Support department or employee records")
     return {
         "allowed": False, 
         "reason": "Access denied. HR Portal access is restricted to People Support department members only."
