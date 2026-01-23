@@ -5,13 +5,17 @@ Handles appending employee submissions to Lark Bitable (spreadsheet-like databas
 Authentication: Uses LARK_APP_ID and LARK_APP_SECRET environment variables.
 This is production-safe for Vercel serverless functions.
 
-Note: Image uploads are handled by Cloudinary (see cloudinary_service.py).
+Dual Upload Strategy:
+- Files are uploaded to Cloudinary (primary storage, URLs stored in local DB)
+- Files are ALSO uploaded to Lark Drive to get file_tokens for Bitable attachments
+- Bitable attachment fields receive [{"file_token": "xxx"}] format
 """
 import os
 import json
 import logging
 import time
-from typing import Optional, Dict, Any, List
+import uuid
+from typing import Optional, Dict, Any, List, Tuple
 import urllib.request
 import urllib.error
 
@@ -28,11 +32,16 @@ LARK_TABLE_ID = os.environ.get('LARK_TABLE_ID', 'tbl3Jm6881dJMF6E')
 LARK_TOKEN_URL = "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal"
 LARK_BITABLE_BASE_URL = "https://open.larksuite.com/open-apis/bitable/v1/apps"
 LARK_BITABLE_RECORD_URL = f"{LARK_BITABLE_BASE_URL}/{{app_token}}/tables/{{table_id}}/records"
+LARK_DRIVE_UPLOAD_URL = "https://open.larksuite.com/open-apis/drive/v1/files/upload_all"
 
 # Cache for access token
 _cached_token: Optional[str] = None
 _token_expiry: float = 0
 
+
+# ============================================
+# HTTP Request Helpers
+# ============================================
 
 def _make_request(url: str, method: str = "GET", headers: Dict = None, data: Dict = None) -> Dict[str, Any]:
     """Make HTTP request to Lark API using urllib (no external dependencies)."""
@@ -59,6 +68,52 @@ def _make_request(url: str, method: str = "GET", headers: Dict = None, data: Dic
             return {"code": e.code, "error": error_body}
     except Exception as e:
         logger.error(f"Lark API request error: {str(e)}")
+        return {"code": -1, "error": str(e)}
+
+
+def _make_multipart_request(url: str, headers: Dict, fields: Dict[str, str], file_field: str, file_bytes: bytes, filename: str) -> Dict[str, Any]:
+    """
+    Make a multipart/form-data request for file uploads.
+    Uses urllib to avoid external dependencies.
+    """
+    boundary = f"----WebKitFormBoundary{uuid.uuid4().hex[:16]}"
+    
+    # Build multipart body
+    body_parts = []
+    
+    # Add text fields
+    for key, value in fields.items():
+        body_parts.append(f'--{boundary}\r\n'.encode('utf-8'))
+        body_parts.append(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode('utf-8'))
+        body_parts.append(f'{value}\r\n'.encode('utf-8'))
+    
+    # Add file field
+    body_parts.append(f'--{boundary}\r\n'.encode('utf-8'))
+    body_parts.append(f'Content-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'.encode('utf-8'))
+    body_parts.append(f'Content-Type: application/octet-stream\r\n\r\n'.encode('utf-8'))
+    body_parts.append(file_bytes)
+    body_parts.append(f'\r\n--{boundary}--\r\n'.encode('utf-8'))
+    
+    body = b''.join(body_parts)
+    
+    # Set headers
+    headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+    headers["Content-Length"] = str(len(body))
+    
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    
+    try:
+        with urllib.request.urlopen(req, timeout=60) as response:
+            return json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8') if e.fp else str(e)
+        logger.error(f"Lark Drive upload HTTP error {e.code}: {error_body}")
+        try:
+            return json.loads(error_body)
+        except:
+            return {"code": e.code, "error": error_body}
+    except Exception as e:
+        logger.error(f"Lark Drive upload error: {str(e)}")
         return {"code": -1, "error": str(e)}
 
 
@@ -99,6 +154,160 @@ def get_tenant_access_token() -> Optional[str]:
     except Exception as e:
         logger.error(f"Failed to get Lark access token: {str(e)}")
         return None
+
+
+# ============================================
+# Lark Drive File Upload (for Bitable Attachments)
+# ============================================
+
+def download_file_from_url(url: str, timeout: int = 30) -> Optional[bytes]:
+    """
+    Download file bytes from a URL (e.g., Cloudinary URL).
+    
+    Args:
+        url: The URL to download from
+        timeout: Request timeout in seconds
+    
+    Returns:
+        File bytes or None on failure
+    """
+    if not url:
+        return None
+    
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; LarkBot/1.0)"
+        })
+        
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            file_bytes = response.read()
+            logger.debug(f"Downloaded {len(file_bytes)} bytes from {url[:50]}...")
+            return file_bytes
+            
+    except urllib.error.HTTPError as e:
+        logger.error(f"HTTP error downloading file from {url[:50]}...: {e.code}")
+        return None
+    except Exception as e:
+        logger.error(f"Error downloading file from {url[:50]}...: {str(e)}")
+        return None
+
+
+def upload_file_to_lark_drive(file_bytes: bytes, filename: str, parent_type: str = "bitable_file") -> Optional[str]:
+    """
+    Upload file to Lark Drive and get file_token for Bitable attachments.
+    
+    Uses the upload_all API for small files (< 20MB).
+    API: POST /open-apis/drive/v1/files/upload_all
+    
+    Args:
+        file_bytes: The file content as bytes
+        filename: Filename for the uploaded file
+        parent_type: Parent type, use "bitable_file" for Bitable attachments
+    
+    Returns:
+        file_token string or None on failure
+    """
+    if not file_bytes:
+        logger.warning("No file bytes provided for Lark Drive upload")
+        return None
+    
+    token = get_tenant_access_token()
+    if not token:
+        logger.error("Cannot upload to Lark Drive: no access token")
+        return None
+    
+    try:
+        # File size check (upload_all supports up to 20MB)
+        file_size = len(file_bytes)
+        if file_size > 20 * 1024 * 1024:
+            logger.error(f"File too large for upload_all API: {file_size} bytes (max 20MB)")
+            return None
+        
+        logger.info(f"Uploading {filename} ({file_size} bytes) to Lark Drive...")
+        
+        # Prepare multipart form data
+        headers = {
+            "Authorization": f"Bearer {token}"
+        }
+        
+        fields = {
+            "file_name": filename,
+            "parent_type": parent_type,
+            "size": str(file_size)
+        }
+        
+        response = _make_multipart_request(
+            url=LARK_DRIVE_UPLOAD_URL,
+            headers=headers,
+            fields=fields,
+            file_field="file",
+            file_bytes=file_bytes,
+            filename=filename
+        )
+        
+        if response.get("code") != 0:
+            logger.error(f"Lark Drive upload failed: {response.get('msg')}")
+            return None
+        
+        file_token = response.get("data", {}).get("file_token")
+        
+        if file_token:
+            logger.info(f"Lark Drive upload successful: file_token={file_token[:20]}...")
+            return file_token
+        else:
+            logger.error("Lark Drive upload response missing file_token")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Failed to upload to Lark Drive: {str(e)}")
+        return None
+
+
+def upload_url_to_lark_drive(url: str, filename: str) -> Optional[str]:
+    """
+    Download file from URL and upload to Lark Drive.
+    Combines download_file_from_url and upload_file_to_lark_drive.
+    
+    Args:
+        url: Source URL (e.g., Cloudinary URL)
+        filename: Filename for the Lark Drive file
+    
+    Returns:
+        file_token string or None on failure
+    """
+    if not url:
+        return None
+    
+    # Download from source URL
+    file_bytes = download_file_from_url(url)
+    if not file_bytes:
+        return None
+    
+    # Upload to Lark Drive
+    return upload_file_to_lark_drive(file_bytes, filename)
+
+
+def build_attachment_field(file_token: Optional[str]) -> Optional[List[Dict[str, str]]]:
+    """
+    Build a Bitable attachment field value from a file_token.
+    
+    Bitable attachment fields require format: [{"file_token": "xxx"}]
+    
+    Args:
+        file_token: Lark Drive file token
+    
+    Returns:
+        Attachment field value or None (to omit field)
+    """
+    if not file_token:
+        return None
+    
+    return [{"file_token": file_token}]
+
+
+# ============================================
+# Bitable Operations
+# ============================================
 
 
 def append_record_to_bitable(app_token: str, table_id: str, fields: Dict[str, Any]) -> bool:
@@ -233,8 +442,18 @@ def append_employee_submission(
     middle_initial: Optional[str] = None,
     last_name: Optional[str] = None
 ) -> bool:
-    """Append employee submission to Lark Bitable."""
-    # Use configured Bitable credentials (fall back to env vars for backwards compatibility)
+    """
+    Append employee submission to Lark Bitable.
+    
+    DUAL UPLOAD STRATEGY:
+    - Cloudinary URLs are stored in local database (unchanged)
+    - Files are downloaded from Cloudinary and uploaded to Lark Drive
+    - Lark Drive file_tokens are used for Bitable attachment fields
+    
+    Attachment fields receive: [{"file_token": "xxx"}]
+    Text fields receive: plain strings
+    """
+    # Use configured Bitable credentials
     app_token = LARK_BITABLE_ID or os.environ.get('LARK_BITABLE_APP_TOKEN')
     table_id = LARK_TABLE_ID or os.environ.get('LARK_BITABLE_TABLE_ID')
     
@@ -249,21 +468,9 @@ def append_employee_submission(
     if date_last_modified is None:
         date_last_modified = datetime.now().isoformat()
     
-    # FIX for AttachFieldConvFail:
-    # Bitable attachment-type fields CANNOT receive empty strings ("").
-    # Sending "" to an attachment field causes Lark to attempt conversion, which fails.
-    # Solution: Only include text-type fields. Omit attachment fields entirely.
-    #
-    # Known attachment-type fields in this Bitable (must be OMITTED if empty):
-    # - photo_preview (attachment)
-    # - new_photo (attachment)  
-    # - signature_preview (attachment)
-    # - id_generated (attachment or checkbox)
-    #
-    # These fields should be managed through Lark Bitable UI, not via API.
-    
-    # Field names must match your Lark Bitable columns EXACTLY
-    # Only include TEXT-type fields that accept string values
+    # =========================================
+    # Step 1: Build TEXT fields (always included)
+    # =========================================
     fields = {
         "employee_name": employee_name,
         "first_name": first_name or "",
@@ -272,21 +479,63 @@ def append_employee_submission(
         "id_nickname": id_nickname or "",
         "id_number": id_number,
         "position": position,
-        "department": department or "",  # Deprecated but kept for compatibility
+        "department": department or "",
         "email": email,
         "personal number": personal_number,
-        # NOTE: photo_preview OMITTED - it's an attachment field, not text
-        "photo_url": photo_url or "",  # Text field containing Cloudinary URL
-        "ai_headshot_url": ai_headshot_url or "",  # Text field containing AI headshot URL
-        # NOTE: new_photo OMITTED - it's an attachment field, not text
-        # NOTE: signature_preview OMITTED - it's an attachment field, not text
-        "signature": signature_url or "",  # Text field containing signature URL
         "status": status,
         "date last modified": date_last_modified,
-        # NOTE: id_generated OMITTED - may be attachment or checkbox field
-        "render_url": render_url or ""
     }
     
-    logger.debug(f"Bitable payload fields: {list(fields.keys())}")
+    # =========================================
+    # Step 2: Upload files to Lark Drive and build ATTACHMENT fields
+    # Only add attachment fields if upload succeeds (file_token obtained)
+    # =========================================
+    
+    # Safe ID for filenames
+    safe_id = id_number.replace(' ', '_').replace('/', '-').replace('\\', '-') if id_number else 'unknown'
+    
+    # Photo attachment (original uploaded photo)
+    if photo_url:
+        logger.info(f"Uploading photo to Lark Drive for {safe_id}...")
+        photo_token = upload_url_to_lark_drive(photo_url, f"{safe_id}_photo.jpg")
+        photo_attachment = build_attachment_field(photo_token)
+        if photo_attachment:
+            fields["photo_preview"] = photo_attachment
+            logger.info(f"Photo attachment added for {safe_id}")
+    
+    # AI Headshot attachment
+    if ai_headshot_url:
+        logger.info(f"Uploading AI headshot to Lark Drive for {safe_id}...")
+        ai_token = upload_url_to_lark_drive(ai_headshot_url, f"{safe_id}_ai_headshot.jpg")
+        ai_attachment = build_attachment_field(ai_token)
+        if ai_attachment:
+            fields["new_photo"] = ai_attachment
+            logger.info(f"AI headshot attachment added for {safe_id}")
+    
+    # Signature attachment
+    if signature_url:
+        logger.info(f"Uploading signature to Lark Drive for {safe_id}...")
+        sig_token = upload_url_to_lark_drive(signature_url, f"{safe_id}_signature.png")
+        sig_attachment = build_attachment_field(sig_token)
+        if sig_attachment:
+            fields["signature_preview"] = sig_attachment
+            logger.info(f"Signature attachment added for {safe_id}")
+    
+    # Render URL attachment (if provided)
+    if render_url:
+        logger.info(f"Uploading render to Lark Drive for {safe_id}...")
+        render_token = upload_url_to_lark_drive(render_url, f"{safe_id}_render.png")
+        render_attachment = build_attachment_field(render_token)
+        if render_attachment:
+            fields["render_url"] = render_attachment
+            logger.info(f"Render attachment added for {safe_id}")
+    
+    # =========================================
+    # Step 3: Log final payload and append to Bitable
+    # =========================================
+    text_fields = [k for k, v in fields.items() if not isinstance(v, list)]
+    attachment_fields = [k for k, v in fields.items() if isinstance(v, list)]
+    logger.info(f"Bitable payload - Text fields: {text_fields}")
+    logger.info(f"Bitable payload - Attachment fields: {attachment_fields}")
     
     return append_record_to_bitable(app_token, table_id, fields)
