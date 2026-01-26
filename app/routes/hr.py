@@ -402,14 +402,25 @@ def api_debug(hr_session: str = Cookie(None)):
 
 
 @router.get("/api/employees")
-def api_get_employees(hr_session: str = Cookie(None)):
-    """Get all employees for the dashboard - Protected by org access"""
-    logger.info(f"API /api/employees called, hr_session present: {hr_session is not None}")
-    logger.info(f"USE_SUPABASE: {USE_SUPABASE}, IS_VERCEL: {IS_VERCEL}")
+def api_get_employees(request: Request, hr_session: str = Cookie(None)):
+    """Get all employees for the dashboard - Protected by org access
+    
+    VERCEL FIX: Enhanced logging to debug cookie/session issues in serverless
+    """
+    logger.info(f"=== API /hr/api/employees ===")
+    logger.info(f"Cookie value received: {hr_session[:20] if hr_session else 'None'}...")
+    logger.info(f"Request headers: Authorization={request.headers.get('authorization', 'None')}")
+    logger.info(f"Environment: USE_SUPABASE={USE_SUPABASE}, IS_VERCEL={IS_VERCEL}")
+    logger.info(f"Client: {request.client.host if request.client else 'Unknown'}")
     
     session = get_session(hr_session)
+    logger.info(f"Session retrieved: {session is not None}")
+    if session:
+        logger.info(f"Session username: {session.get('username')}, auth_type: {session.get('auth_type')}")
+    
     if not session:
         logger.warning("API /api/employees: Unauthorized - no valid session")
+        logger.warning(f"Failed to deserialize session from token (first 20 chars): {hr_session[:20] if hr_session else 'token is None'}")
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     
     # Verify org access on each request

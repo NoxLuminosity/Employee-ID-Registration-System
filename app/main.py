@@ -52,9 +52,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         
         # Content Security Policy - strict enforcement
         # Blocks inline scripts (except for legitimate uses), restricts frame sources
+        # VERCEL FIX: Added cdnjs.cloudflare.com for jsPDF and html2canvas libraries
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https: blob:; "
