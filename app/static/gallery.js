@@ -877,27 +877,28 @@ async function downloadIDPdf(emp) {
     tempContainer.style.background = '#ffffff';
     document.body.appendChild(tempContainer);
     
-    // Calculate scale to fit 420px design into target render width
-    const designWidth = 420;
-    const designHeight = 620;
-    const scaleToFit = PDF_CONFIG.RENDER_WIDTH_PX / designWidth;
+    // Use actual ID card dimensions (512×800) - matches preview exactly
+    const designWidth = PDF_CONFIG.PREVIEW_WIDTH_PX;   // 512px
+    const designHeight = PDF_CONFIG.PREVIEW_HEIGHT_PX; // 800px
+    const scaleToFit = PDF_CONFIG.CANVAS_SCALE;        // ~3.125 for 300 DPI
     
-    // Render front side at scaled size for 300 DPI output
+    // Render front side at actual size for 300 DPI output
     tempContainer.innerHTML = `
-      <div class="pdf-id-card-wrapper" style="width: ${PDF_CONFIG.RENDER_WIDTH_PX}px; padding: 0; background: white; display: inline-block; transform-origin: top left;">
+      <div class="pdf-id-card-wrapper" style="width: ${designWidth}px; padding: 0; margin: 0; background: white; display: inline-block;">
         ${generateIDCardHtml(emp)}
       </div>
     `;
 
-    // Scale the card to match target render dimensions
+    // Ensure the card renders at exact 512×800 dimensions - NO scaling transforms
     const frontCardEl = tempContainer.querySelector('.id-card');
     frontCardEl.style.width = `${designWidth}px`;
+    frontCardEl.style.height = `${designHeight}px`;
+    frontCardEl.style.minWidth = `${designWidth}px`;
     frontCardEl.style.minHeight = `${designHeight}px`;
-    frontCardEl.style.height = 'auto';
-    frontCardEl.style.transform = `scale(${scaleToFit})`;
+    frontCardEl.style.transform = 'none';  // Remove any CSS transforms
     frontCardEl.style.transformOrigin = 'top left';
     frontCardEl.style.margin = '0';
-    frontCardEl.style.overflow = 'visible';
+    frontCardEl.style.overflow = 'hidden';
 
     // Wait for images to fully load
     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -912,14 +913,13 @@ async function downloadIDPdf(emp) {
       });
     }));
     
-    // Calculate scaled height based on aspect ratio
-    const actualDesignHeight = Math.max(designHeight, frontCardEl.scrollHeight, frontCardEl.offsetHeight);
-    const scaledHeight = Math.round(actualDesignHeight * scaleToFit);
-    console.log('PDF Front - Design height:', actualDesignHeight, 'Scaled height:', scaledHeight);
+    // Use fixed height for consistent output
+    const actualDesignHeight = designHeight;  // Always 800px
+    console.log('PDF Front - Design dimensions:', designWidth, '×', actualDesignHeight);
     
-    // Capture front side at high resolution for print quality
+    // Capture front side at high resolution for print quality (300 DPI)
     const frontCanvas = await html2canvas(frontCardEl, {
-      scale: scaleToFit,  // Scale to achieve 300 DPI equivalent
+      scale: scaleToFit,  // Scale up for 300 DPI print quality
       useCORS: true,
       // Avoid tainted-canvas export failures (SecurityError on toDataURL)
       allowTaint: false,
@@ -931,21 +931,22 @@ async function downloadIDPdf(emp) {
       logging: false
     });
 
-    // Render back side with same scaling approach
+    // Render back side with same exact dimensions
     tempContainer.innerHTML = `
-      <div class="pdf-id-card-wrapper" style="width: ${PDF_CONFIG.RENDER_WIDTH_PX}px; padding: 0; background: white; display: inline-block; transform-origin: top left;">
+      <div class="pdf-id-card-wrapper" style="width: ${designWidth}px; padding: 0; margin: 0; background: white; display: inline-block;">
         ${generateIDCardBackHtml(emp)}
       </div>
     `;
     
     const backCardEl = tempContainer.querySelector('.id-card');
     backCardEl.style.width = `${designWidth}px`;
+    backCardEl.style.height = `${designHeight}px`;
+    backCardEl.style.minWidth = `${designWidth}px`;
     backCardEl.style.minHeight = `${designHeight}px`;
-    backCardEl.style.height = 'auto';
-    backCardEl.style.transform = `scale(${scaleToFit})`;
+    backCardEl.style.transform = 'none';  // Remove any CSS transforms
     backCardEl.style.transformOrigin = 'top left';
     backCardEl.style.margin = '0';
-    backCardEl.style.overflow = 'visible';
+    backCardEl.style.overflow = 'hidden';
     
     // Wait for back side images
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -959,12 +960,11 @@ async function downloadIDPdf(emp) {
       });
     }));
     
-    // Get back side height and scale it
-    const actualBackHeight = Math.max(designHeight, backCardEl.scrollHeight, backCardEl.offsetHeight);
-    const scaledBackHeight = Math.round(actualBackHeight * scaleToFit);
-    console.log('PDF Back - Design height:', actualBackHeight, 'Scaled height:', scaledBackHeight);
+    // Use fixed height for back card
+    const actualBackHeight = designHeight;  // Always 800px
+    console.log('PDF Back - Design dimensions:', designWidth, '×', actualBackHeight);
     
-    // Capture back side at high resolution
+    // Capture back side at high resolution (300 DPI)
     const backCanvas = await html2canvas(backCardEl, {
       scale: scaleToFit,
       useCORS: true,
@@ -1042,10 +1042,10 @@ async function downloadAllPdfs() {
   `;
 
   try {
-    // Design dimensions and scaling
-    const designWidth = 420;
-    const designHeight = 620;
-    const scaleToFit = PDF_CONFIG.RENDER_WIDTH_PX / designWidth;
+    // Use actual ID card dimensions (512×800) - matches preview exactly
+    const designWidth = PDF_CONFIG.PREVIEW_WIDTH_PX;   // 512px
+    const designHeight = PDF_CONFIG.PREVIEW_HEIGHT_PX; // 800px
+    const scaleToFit = PDF_CONFIG.CANVAS_SCALE;        // ~3.125 for 300 DPI
     
     // Create a temporary container
     const tempContainer = document.createElement('div');
@@ -1061,20 +1061,22 @@ async function downloadAllPdfs() {
     for (let i = 0; i < employees.length; i++) {
       const emp = employees[i];
       
-      // Render front side with scaling for 300 DPI
+      // Render front side at actual 512×800 dimensions
       tempContainer.innerHTML = `
-        <div class="pdf-id-card-wrapper" style="width: ${PDF_CONFIG.RENDER_WIDTH_PX}px; padding: 0; background: white; display: inline-block;">
+        <div class="pdf-id-card-wrapper" style="width: ${designWidth}px; padding: 0; margin: 0; background: white; display: inline-block;">
           ${generateIDCardHtml(emp)}
         </div>
       `;
       
       const frontCardEl = tempContainer.querySelector('.id-card');
       frontCardEl.style.width = `${designWidth}px`;
+      frontCardEl.style.height = `${designHeight}px`;
+      frontCardEl.style.minWidth = `${designWidth}px`;
       frontCardEl.style.minHeight = `${designHeight}px`;
-      frontCardEl.style.height = 'auto';
-      frontCardEl.style.transform = `scale(${scaleToFit})`;
+      frontCardEl.style.transform = 'none';  // No transform - actual size
       frontCardEl.style.transformOrigin = 'top left';
-      frontCardEl.style.overflow = 'visible';
+      frontCardEl.style.margin = '0';
+      frontCardEl.style.overflow = 'hidden';
       
       await new Promise(resolve => setTimeout(resolve, 800));
       
@@ -1087,8 +1089,8 @@ async function downloadAllPdfs() {
         });
       }));
       
-      // Get actual height
-      const frontHeight = Math.max(designHeight, frontCardEl.scrollHeight, frontCardEl.offsetHeight);
+      // Use fixed 800px height
+      const frontHeight = designHeight;
       
       const frontCanvas = await html2canvas(frontCardEl, {
         scale: scaleToFit,
@@ -1099,20 +1101,22 @@ async function downloadAllPdfs() {
         height: frontHeight
       });
       
-      // Render back side with same scaling
+      // Render back side at actual 512×800 dimensions
       tempContainer.innerHTML = `
-        <div class="pdf-id-card-wrapper" style="width: ${PDF_CONFIG.RENDER_WIDTH_PX}px; padding: 0; background: white; display: inline-block;">
+        <div class="pdf-id-card-wrapper" style="width: ${designWidth}px; padding: 0; margin: 0; background: white; display: inline-block;">
           ${generateIDCardBackHtml(emp)}
         </div>
       `;
       
       const backCardEl = tempContainer.querySelector('.id-card');
       backCardEl.style.width = `${designWidth}px`;
+      backCardEl.style.height = `${designHeight}px`;
+      backCardEl.style.minWidth = `${designWidth}px`;
       backCardEl.style.minHeight = `${designHeight}px`;
-      backCardEl.style.height = 'auto';
-      backCardEl.style.transform = `scale(${scaleToFit})`;
+      backCardEl.style.transform = 'none';  // No transform - actual size
       backCardEl.style.transformOrigin = 'top left';
-      backCardEl.style.overflow = 'visible';
+      backCardEl.style.margin = '0';
+      backCardEl.style.overflow = 'hidden';
       
       await new Promise(resolve => setTimeout(resolve, 500));
       
@@ -1125,8 +1129,8 @@ async function downloadAllPdfs() {
         });
       }));
       
-      // Get actual height
-      const backHeight = Math.max(designHeight, backCardEl.scrollHeight, backCardEl.offsetHeight);
+      // Use fixed 800px height
+      const backHeight = designHeight;
       
       const backCanvas = await html2canvas(backCardEl, {
         scale: scaleToFit,

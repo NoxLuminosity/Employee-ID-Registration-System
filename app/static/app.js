@@ -311,6 +311,7 @@ async function generateAIHeadshot(imageBase64) {
       headers: {
         'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({ image: imageBase64 }),
       signal: state.aiGenerationController.signal
     });
@@ -353,8 +354,7 @@ async function generateAIHeadshot(imageBase64) {
         console.log('AI Actions button shown - Remove Background available');
       }
       
-      // Update button text based on transparency state
-      updateRemoveBgButtonState(isTransparent);
+      // Note: updateRemoveBgButtonState removed since background removal is disabled on Employee side
       
       // Store transparency state for ID card preview
       elements.aiPreviewImg.dataset.transparent = isTransparent ? 'true' : 'false';
@@ -422,8 +422,23 @@ async function regenerateAIImage() {
     return;
   }
   
-  // Re-trigger AI generation with the uploaded photo
-  await generateAIHeadshot(photoInput.files[0]);
+  // Convert file to base64 before regeneration
+  const file = photoInput.files[0];
+  const reader = new FileReader();
+  
+  reader.onload = async (event) => {
+    const imageData = event.target.result;
+    
+    // Reset AI preview state (show loading spinner)
+    elements.aiPreviewImg.style.display = 'none';
+    elements.aiError.style.display = 'none';
+    elements.aiLoading.style.display = 'flex';
+    
+    // Re-trigger AI generation with the base64 data
+    await generateAIHeadshot(imageData);
+  };
+  
+  reader.readAsDataURL(file);
 }
 
 // Make regenerateAIImage globally accessible for inline onclick

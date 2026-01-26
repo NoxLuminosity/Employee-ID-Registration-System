@@ -70,6 +70,7 @@
           Streamlined identity registration for employees and HR teams.
           Simple, secure, and efficient.
         </p>
+        {% if authenticated %}
         <a href="#roles" class="hero-cta" id="getStartedBtn">
           <span>Get Started</span>
           <svg viewBox="0 0 20 20" fill="none">
@@ -77,6 +78,15 @@
               stroke-linejoin="round" />
           </svg>
         </a>
+        {% else %}
+        <a href="/auth/lark/login" class="hero-cta" id="getStartedBtn">
+          <span>Get Started</span>
+          <svg viewBox="0 0 20 20" fill="none">
+            <path d="M4 10h12M12 6l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+        </a>
+        {% endif %}
       </div>
 
       <!-- Floating ID Card Animation -->
@@ -158,7 +168,8 @@
   </section>
   {% endif %}
 
-  <!-- Role Selection Section - NOW FIRST -->
+  <!-- Role Selection Section - Only visible when authenticated -->
+  {% if authenticated %}
   <section class="roles-section" id="roles">
     <div class="section-container">
       <div class="roles-header scroll-reveal">
@@ -298,8 +309,9 @@
       </div>
     </div>
   </section>
+  {% endif %}
 
-  <!-- Flow Section - How It Works - NOW SECOND -->
+  <!-- Flow Section - How It Works -->
   <section class="flow-section" id="flowSection">
     <div class="section-container">
       <div class="flow-header scroll-reveal">

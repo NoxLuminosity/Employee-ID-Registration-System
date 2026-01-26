@@ -46,8 +46,8 @@ def employee_login_page(request: Request, employee_session: str = Cookie(None)):
     # Check if already logged in
     session = get_session(employee_session)
     if session and session.get("auth_type") == "lark":
-        # Redirect to Landing Page, not directly to Employee Form
-        return RedirectResponse(url="/", status_code=302)
+        # Redirect to Choose Your Path section
+        return RedirectResponse(url="/#roles", status_code=302)
     
     return templates.TemplateResponse("lark_login.html", {"request": request})
 
@@ -166,8 +166,8 @@ def lark_callback(
     )
     
     # Create redirect response with session cookie
-    # Redirect to Landing Page (not directly to Employee Form)
-    response = RedirectResponse(url="/", status_code=302)
+    # Redirect to Choose Your Path section (/#roles) after successful login
+    response = RedirectResponse(url="/#roles", status_code=302)
     
     is_production = IS_VERCEL or os.environ.get('VERCEL_ENV') == 'production'
     response.set_cookie(

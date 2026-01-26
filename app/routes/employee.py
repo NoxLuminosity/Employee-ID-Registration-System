@@ -81,6 +81,14 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
         JSON with generated_image (Cloudinary URL of transparent PNG) on success
         JSON with error message on failure
     """
+    # Verify employee authentication
+    if not verify_employee_auth(employee_session):
+        logger.warning("Unauthorized headshot generation attempt - no valid session")
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "error": "Authentication required. Please log in again."}
+        )
+    
     try:
         logger.info("Received headshot generation request")
         
@@ -175,10 +183,20 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
                 )
             
     except Exception as e:
-        logger.error(f"Error in generate-headshot endpoint: {str(e)}\n{traceback.format_exc()}")
+        error_msg = str(e)
+        logger.error(f"Error in generate-headshot endpoint: {error_msg}\n{traceback.format_exc()}")
+        # Provide more user-friendly error messages
+        if "API key" in error_msg.lower() or "unauthorized" in error_msg.lower():
+            user_error = "AI service configuration error. Please contact support."
+        elif "timeout" in error_msg.lower():
+            user_error = "AI service is taking too long. Please try again."
+        elif "connection" in error_msg.lower():
+            user_error = "Unable to connect to AI service. Please try again."
+        else:
+            user_error = f"Failed to generate headshot: {error_msg}"
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": str(e)}
+            content={"success": False, "error": user_error}
         )
 
 
@@ -202,6 +220,14 @@ async def api_remove_background(request: RemoveBackgroundRequest, employee_sessi
         JSON with processed_image (Cloudinary URL with transparency) on success
         JSON with error message on failure
     """
+    # Verify employee authentication
+    if not verify_employee_auth(employee_session):
+        logger.warning("Unauthorized background removal attempt - no valid session")
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "error": "Authentication required. Please log in again."}
+        )
+    
     try:
         logger.info(f"Received background removal request (is_url: {request.is_url})")
         

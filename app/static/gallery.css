@@ -367,19 +367,27 @@
 
 .id-card-image-wrapper {
   cursor: pointer;
-  padding: var(--spacing-lg);
+  padding: 0;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
+  height: 360px;
+  width: 100%;
+  position: relative;
 }
 
-/* Scale down the full ID card to fit in gallery */
+/* Scale down the full ID card to fit in gallery - fixed dimensions prevent compression */
 .id-card-image-wrapper .id-card.gallery-id-card {
-  transform: scale(0.48);
-  transform-origin: top center;
-  margin-bottom: -280px;
+  transform: scale(0.44);
+  transform-origin: center center;
+  margin: 0;
+  width: 512px !important;
+  height: 800px;
+  min-width: 512px;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .id-gallery-card-footer {
@@ -454,19 +462,24 @@
 .id-preview-wrapper {
   display: flex;
   justify-content: center;
+  align-items: flex-start;
   padding: var(--spacing-lg);
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-radius: var(--radius-md);
   margin-bottom: var(--spacing-lg);
   overflow: hidden;
-  min-height: 500px;  /* Accommodate 800px card at ~0.6 scale */
+  min-height: 480px;  /* Accommodate 800px card at ~0.58 scale */
 }
 
-/* Full ID card in preview modal - 512×800 at 97% base, scaled down to fit */
+/* Full ID card in preview modal - 512×800 with consistent sizing */
 .id-preview-wrapper .id-card {
-  transform: scale(0.58);  /* 97% × 0.6 = ~0.58 to fit modal */
+  transform: scale(0.58);
   transform-origin: top center;
   margin-bottom: -336px;  /* 800 * (1 - 0.58) */
+  width: 512px !important;
+  height: 800px;
+  min-width: 512px;
+  flex-shrink: 0;
 }
 
 .id-preview-details {
@@ -505,16 +518,22 @@
   font-weight: 500;
 }
 
-/* PDF Card Wrapper (for html2canvas) */
+/* PDF Card Wrapper (for html2canvas) - maintains exact 512×800 dimensions */
 .pdf-id-card-wrapper {
-  padding: 10px;
+  padding: 0;
+  margin: 0;
   background: white;
+  display: inline-block;
 }
 
-/* Full ID card for PDF rendering - use actual size */
+/* Full ID card for PDF rendering - use actual size without transforms */
 .pdf-id-card-wrapper .id-card {
   transform: none !important;
-  margin-bottom: 0 !important;
+  margin: 0 !important;
+  width: 512px !important;
+  height: 800px !important;
+  min-width: 512px !important;
+  flex-shrink: 0;
 }
 
 /* ============================================
@@ -744,42 +763,56 @@
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    min-height: 420px;
+    min-height: 400px;
   }
   
   /* Scale 512×800 to fit tablet screens */
   .id-preview-wrapper .id-card,
   .id-preview-wrapper .id-card-back,
   .id-preview-wrapper .gallery-id-card-back {
-    transform: scale(0.48);  /* 97% × 0.5 */
+    transform: scale(0.48);
     transform-origin: top center;
     margin-bottom: -416px;  /* 800 × (1 - 0.48) */
+    width: 512px !important;
+    height: 800px;
+    min-width: 512px;
   }
   
-  /* Gallery card scaling */
+  /* Gallery card scaling - tablet */
   .id-card-image-wrapper .id-card.gallery-id-card {
-    transform: scale(0.32);
-    margin-bottom: -544px;  /* 800 × (1 - 0.32) */
+    transform: scale(0.38);
+    transform-origin: center center;
+    margin: 0;
+    width: 512px !important;
+    height: 800px;
+    min-width: 512px;
   }
 }
 
 /* Extra small screens for gallery */
 @media (max-width: 480px) {
   .id-preview-wrapper {
-    min-height: 350px;
+    min-height: 320px;
   }
   
   /* Scale 512×800 to fit mobile screens */
   .id-preview-wrapper .id-card,
   .id-preview-wrapper .id-card-back,
   .id-preview-wrapper .gallery-id-card-back {
-    transform: scale(0.38);  /* 97% × 0.4 */
+    transform: scale(0.38);
     transform-origin: top center;
     margin-bottom: -496px;  /* 800 × (1 - 0.38) */
+    width: 512px !important;
+    height: 800px;
+    min-width: 512px;
   }
   
   .id-card-image-wrapper .id-card.gallery-id-card {
-    transform: scale(0.26);
-    margin-bottom: -592px;  /* 800 × (1 - 0.26) */
+    transform: scale(0.30);
+    transform-origin: center center;
+    margin: 0;
+    width: 512px !important;
+    height: 800px;
+    min-width: 512px;
   }
 }
