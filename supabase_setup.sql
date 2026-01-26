@@ -7,6 +7,9 @@
 CREATE TABLE IF NOT EXISTS employees (
     id BIGSERIAL PRIMARY KEY,
     employee_name TEXT NOT NULL,
+    first_name TEXT,
+    middle_initial TEXT,
+    last_name TEXT,
     id_nickname TEXT,
     id_number TEXT NOT NULL,
     position TEXT NOT NULL,
@@ -28,6 +31,17 @@ CREATE TABLE IF NOT EXISTS employees (
     emergency_contact TEXT,
     emergency_address TEXT
 );
+
+-- ============================================
+-- Schema migrations (safe for existing tables)
+-- ============================================
+-- The application inserts these columns when running on Vercel/Supabase.
+-- If your table was created before these fields existed, inserts will fail with:
+--   PGRST204: Could not find the '<column>' column of 'employees' in the schema cache
+
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_name TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS middle_initial TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS last_name TEXT;
 
 -- Create index for faster status queries
 CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status);
@@ -67,6 +81,11 @@ BEGIN
     DELETE FROM oauth_states WHERE expires_at < NOW();
 END;
 $$ LANGUAGE plpgsql;
+
+-- Ask PostgREST (Supabase API layer) to reload its schema cache.
+-- This helps the API see newly-added columns immediately.
+-- If you don't have permissions for NOTIFY, you can remove this and wait a minute.
+NOTIFY pgrst, 'reload schema';
 
 -- ============================================
 -- Verification: Run after creating table

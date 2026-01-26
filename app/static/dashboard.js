@@ -664,40 +664,12 @@ async function downloadID(id) {
   const emp = dashboardState.employees.find(e => e.id === id);
   if (!emp) return;
 
-  showToast('Generating ID card PDF...', 'success');
-
-  try {
-    // Call the download endpoint
-    const response = await fetch(`/hr/api/employees/${id}/download-id`, {
-      credentials: 'include'
-    });
-    
-    if (response.ok) {
-      // If we get a blob, download it
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
-      
-      // Mark as completed if approved
-      if (emp.status === 'Approved') {
-        await markAsCompleted(id);
-      }
-      
-      showToast('ID card downloaded successfully', 'success');
-    } else {
-      const data = await response.json();
-      throw new Error(data.error || 'Download failed');
-    }
-  } catch (error) {
-    console.error('Error downloading ID:', error);
-    showToast('ID template is being finalized. Download will be available soon.', 'error');
-  }
+  // NOTE:
+  // The server endpoint /hr/api/employees/{id}/download-id is intentionally a placeholder (501).
+  // The working PDF generation is client-side on the Gallery page using jsPDF + html2canvas.
+  // Redirect to gallery and auto-trigger download there.
+  showToast('Opening gallery to generate PDF...', 'success');
+  window.location.href = `/hr/gallery?download=${encodeURIComponent(id)}`;
 }
 
 async function markAsCompleted(id) {

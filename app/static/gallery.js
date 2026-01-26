@@ -12,8 +12,53 @@ const galleryState = {
   filteredEmployees: [],
   isLoading: true,
   currentEmployee: null,
-  lastFetchTime: null
+  lastFetchTime: null,
+  autoDownloadId: null,
+  autoDownloadAttempted: false
 };
+
+// If navigated from Dashboard "Download ID", auto-trigger a download once data loads.
+try {
+  const params = new URLSearchParams(window.location.search);
+  const downloadParam = params.get('download');
+  if (downloadParam) {
+    const parsed = Number(downloadParam);
+    if (Number.isFinite(parsed)) {
+      galleryState.autoDownloadId = parsed;
+    }
+  }
+} catch (e) {
+  // no-op
+}
+
+function maybeAutoDownloadFromQuery() {
+  if (galleryState.autoDownloadAttempted) return;
+  if (!galleryState.autoDownloadId) return;
+  galleryState.autoDownloadAttempted = true;
+
+  // Ensure libraries exist
+  if (typeof window.html2canvas === 'undefined' || !window.jspdf) {
+    showToast('PDF tools not loaded. Please refresh and try again.', 'error');
+    return;
+  }
+
+  const emp = galleryState.employees.find(e => e.id === galleryState.autoDownloadId);
+  if (!emp) {
+    showToast('Employee not found in gallery yet.', 'error');
+    return;
+  }
+
+  // Remove the query param so refresh doesn't re-download
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('download');
+    window.history.replaceState({}, document.title, url.pathname + url.search);
+  } catch (e) {
+    // no-op
+  }
+
+  downloadIDPdf(emp);
+}
 
 // ============================================
 // PDF Export Configuration - ID Card Dimensions
@@ -188,6 +233,7 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
       galleryState.lastFetchTime = Date.now();
       updateStats();
       renderGallery();
+      maybeAutoDownloadFromQuery();
       showLoading(false);
       
       // Show/hide Download All button based on whether there are IDs
@@ -268,6 +314,7 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
       galleryState.filteredEmployees = [...galleryState.employees];
       updateStats();
       renderGallery();
+      maybeAutoDownloadFromQuery();
       
       // Show/hide Download All button based on whether there are IDs
       if (elements.downloadAllBtn) {
@@ -874,7 +921,8 @@ async function downloadIDPdf(emp) {
     const frontCanvas = await html2canvas(frontCardEl, {
       scale: scaleToFit,  // Scale to achieve 300 DPI equivalent
       useCORS: true,
-      allowTaint: true,
+      // Avoid tainted-canvas export failures (SecurityError on toDataURL)
+      allowTaint: false,
       backgroundColor: '#ffffff',
       width: designWidth,
       height: actualDesignHeight,
@@ -920,7 +968,7 @@ async function downloadIDPdf(emp) {
     const backCanvas = await html2canvas(backCardEl, {
       scale: scaleToFit,
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false,
       backgroundColor: '#ffffff',
       width: designWidth,
       height: actualBackHeight,
@@ -1045,7 +1093,7 @@ async function downloadAllPdfs() {
       const frontCanvas = await html2canvas(frontCardEl, {
         scale: scaleToFit,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
         width: designWidth,
         height: frontHeight
@@ -1083,7 +1131,7 @@ async function downloadAllPdfs() {
       const backCanvas = await html2canvas(backCardEl, {
         scale: scaleToFit,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
         width: designWidth,
         height: backHeight
