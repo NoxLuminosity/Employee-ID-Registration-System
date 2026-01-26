@@ -33,7 +33,11 @@
         <span class="logo-text">ID Registration</span>
       </a>
       <div class="nav-actions">
-        <a href="#roles" class="nav-link nav-link-primary">Choose Your Path</a>
+        {% if authenticated %}
+        <a href="/logout" class="nav-link nav-link-primary" id="logoutBtn">Logout</a>
+        {% else %}
+        <a href="/auth/login" class="nav-link nav-link-primary">Sign In</a>
+        {% endif %}
       </div>
     </div>
   </nav>
@@ -66,7 +70,7 @@
           Streamlined identity registration for employees and HR teams.
           Simple, secure, and efficient.
         </p>
-        <a href="#roles" class="hero-cta">
+        <a href="#roles" class="hero-cta" id="getStartedBtn">
           <span>Get Started</span>
           <svg viewBox="0 0 20 20" fill="none">
             <path d="M4 10h12M12 6l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -128,6 +132,31 @@
     </div>
 
   </section>
+
+  <!-- Authentication Section for Unauthenticated Users -->
+  {% if not authenticated %}
+  <section class="auth-prompt-section" id="authPrompt">
+    <div class="auth-prompt-container">
+      <div class="auth-prompt-card">
+        <div class="auth-icon">
+          <svg viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2"/>
+            <path d="M24 16v8M24 32v.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h2>Authentication Required</h2>
+        <p>Please sign in with your Lark account to access the Employee ID Registration System</p>
+        <a href="/auth/lark/login" class="auth-cta">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" fill="currentColor"/>
+            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Sign in with Lark</span>
+        </a>
+      </div>
+    </div>
+  </section>
+  {% endif %}
 
   <!-- Role Selection Section - NOW FIRST -->
   <section class="roles-section" id="roles">

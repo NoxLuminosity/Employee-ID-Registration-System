@@ -153,15 +153,27 @@ def check_employee_auth(employee_session: str) -> bool:
 # HTML Page Routes (define BEFORE static mount)
 # ============================================
 
-# Root landing page - redirects to Lark login
+# Root landing page - shows sign-in for unauthenticated users
 @app.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request, employee_session: str = Cookie(None)):
-    """Landing page - redirects to login if not authenticated"""
-    if check_employee_auth(employee_session):
-        # Authenticated - show landing page with access to apply
-        return templates.TemplateResponse("landing.html", {"request": request, "authenticated": True})
-    # Not authenticated - redirect to Lark login
-    return RedirectResponse(url="/auth/login", status_code=302)
+    """
+    Landing page - shows authentication prompt inline if not authenticated.
+    Authenticated users can access Choose Your Path section.
+    """
+    authenticated = check_employee_auth(employee_session)
+    return templates.TemplateResponse("landing.html", {
+        "request": request, 
+        "authenticated": authenticated
+    })
+
+
+# Logout route - clears session and returns to landing
+@app.get("/logout", response_class=RedirectResponse)
+async def logout():
+    """Logout user - clear session and redirect to landing page"""
+    response = RedirectResponse(url="/", status_code=302)
+    response.delete_cookie(key="employee_session")
+    return response
 
 
 # Apply route - protected, requires Lark authentication
@@ -170,7 +182,7 @@ async def apply_page(request: Request, employee_session: str = Cookie(None)):
     """Employee ID application form - requires Lark authentication"""
     if not check_employee_auth(employee_session):
         # Not authenticated - redirect to Lark login
-        return RedirectResponse(url="/auth/login", status_code=302)
+        return RedirectResponse(url="/auth/lark/login", status_code=302)
     
     # Get session data for prefilling
     session = get_session(employee_session)

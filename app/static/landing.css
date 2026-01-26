@@ -1701,6 +1701,103 @@ body {
 }
 
 /* ==========================================
+   AUTHENTICATION PROMPT SECTION
+   ========================================== */
+.auth-prompt-section {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4xl) var(--space-xl);
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-elevated) 100%);
+}
+
+.auth-prompt-container {
+  max-width: 500px;
+  width: 100%;
+}
+
+.auth-prompt-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: var(--space-3xl) var(--space-2xl);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  animation: slideInUp 0.6s var(--ease-smooth);
+}
+
+.auth-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto var(--space-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-orange-light), var(--color-green-light));
+  border-radius: var(--radius-lg);
+}
+
+.auth-icon svg {
+  width: 40px;
+  height: 40px;
+  color: var(--color-orange);
+}
+
+.auth-prompt-card h2 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+  color: var(--text-primary);
+}
+
+.auth-prompt-card p {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xl);
+  line-height: 1.6;
+}
+
+.auth-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl);
+  background: linear-gradient(135deg, var(--color-orange), var(--color-orange-dark));
+  color: white;
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: all var(--duration-normal) var(--ease-smooth);
+  box-shadow: var(--shadow-md);
+}
+
+.auth-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(249, 115, 22, 0.3);
+}
+
+.auth-cta:active {
+  transform: translateY(0);
+}
+
+.auth-cta svg {
+  width: 20px;
+  height: 20px;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==========================================
    FOOTER
    ========================================== */
 .main-footer {
