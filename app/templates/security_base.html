@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sensitive information - do not screenshot or record">
+    
+    <!-- Security: Disable pinch zoom (reduce attack surface on mobile) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    
+    <!-- Security: Prevent browser caching of sensitive pages -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    {% block head %}{% endblock %}
+    
+    <style>
+        /* ============================================
+           Screenshot Protection CSS
+           ============================================ */
+        
+        /* Prevent user text selection on sensitive elements */
+        .sensitive-data {
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        
+        /* Prevent copying sensitive information */
+        .no-copy {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        /* Prevent pointer interaction with sensitive data during recording detection */
+        .sensitive-data.recording-detected {
+            pointer-events: none;
+            opacity: 0.3;
+            filter: blur(8px);
+            background: rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Print prevention - hide all sensitive data when printing */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            
+            .sensitive-data {
+                display: none !important;
+            }
+            
+            body::before {
+                content: "Printing is not permitted for this document. Please contact HR for approved export.";
+                display: block;
+                text-align: center;
+                padding: 2rem;
+                font-weight: bold;
+                color: #dc3545;
+            }
+        }
+        
+        /* CSS-based watermarking using pseudo-elements */
+        .with-watermark::before {
+            content: attr(data-watermark);
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            font-size: 11px;
+            color: rgba(0, 0, 0, 0.15);
+            pointer-events: none;
+            z-index: 999;
+            white-space: nowrap;
+            text-align: right;
+            line-height: 1.4;
+            font-family: monospace;
+            user-select: none;
+        }
+        
+        /* Diagonal watermark background for entire page */
+        .with-diagonal-watermark {
+            position: relative;
+        }
+        
+        .with-diagonal-watermark::after {
+            content: "CONFIDENTIAL - DO NOT SCREENSHOT";
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 48px;
+            color: rgba(220, 53, 69, 0.08);
+            pointer-events: none;
+            z-index: 1;
+            width: 150%;
+            height: 150%;
+            text-align: center;
+            line-height: 1.5;
+            font-weight: bold;
+            font-family: Arial, sans-serif;
+            user-select: none;
+        }
+        
+        /* Overlay when screenshot attempt detected */
+        .screenshot-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+        
+        .screenshot-overlay.active {
+            display: flex;
+        }
+        
+        .screenshot-overlay .warning-box {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .screenshot-overlay .warning-box h2 {
+            color: #dc3545;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .screenshot-overlay .warning-box p {
+            color: #666;
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+        
+        .screenshot-overlay .warning-box button {
+            background: #2e7d32;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .screenshot-overlay .warning-box button:hover {
+            background: #1b5e20;
+        }
+    </style>
+</head>
+<body>
+    <!-- Screenshot warning overlay (shown when attempts detected) -->
+    <div class="screenshot-overlay" id="screenshotOverlay">
+        <div class="warning-box">
+            <h2>⚠️ Screenshot Detected</h2>
+            <p>This document contains confidential information. Screenshots and screen recordings are prohibited and logged for security purposes.</p>
+            <button onclick="document.getElementById('screenshotOverlay').classList.remove('active')">I understand</button>
+        </div>
+    </div>
+    
+    <!-- Main content block for child templates -->
+    {% block content %}{% endblock %}
+    
+    <!-- Screenshot Protection Script - Loaded on all pages -->
+    <script src="/static/screenshot_protection.js"></script>
+    
+    <script>
+        // ============================================
+        // Security Initialization
+        // ============================================
+        
+        // Initialize screenshot protection
+        if (typeof ScreenshotProtection !== 'undefined') {
+            ScreenshotProtection.init({
+                logToServer: true,
+                serverEndpoint: '/api/security/log-attempt',
+                blurOnDetection: true,
+                showWarningModal: true,
+                watermarkEnabled: true,
+                watermarkText: 'CONFIDENTIAL - Session: ' + (new Date().getTime().toString(36).toUpperCase()),
+            });
+        }
+        
+        // ============================================
+        // Disable Context Menu (Right-Click)
+        // ============================================
+        document.addEventListener('contextmenu', function(e) {
+            // Only disable on sensitive elements
+            if (e.target.closest('.sensitive-data, .no-copy, .id-card-preview')) {
+                e.preventDefault();
+                console.log('[Security] Context menu disabled on sensitive element');
+                return false;
+            }
+        }, true);
+        
+        // ============================================
+        // Disable Common Screenshot Shortcuts
+        // ============================================
+        document.addEventListener('keydown', function(e) {
+            // Windows/Linux: Print Screen
+            if (e.key === 'PrintScreen') {
+                e.preventDefault();
+                console.log('[Security] PrintScreen key intercepted');
+                document.getElementById('screenshotOverlay').classList.add('active');
+                logSecurityEvent('printscreen_attempted');
+                return false;
+            }
+            
+            // Windows/Linux: Ctrl+Shift+S (Screenshot tool)
+            if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+                e.preventDefault();
+                console.log('[Security] Ctrl+Shift+S intercepted');
+                document.getElementById('screenshotOverlay').classList.add('active');
+                logSecurityEvent('screenshot_shortcut_attempted');
+                return false;
+            }
+            
+            // Mac: Cmd+Shift+3 (Full screenshot)
+            if (e.metaKey && e.shiftKey && e.key === '3') {
+                e.preventDefault();
+                console.log('[Security] Cmd+Shift+3 intercepted');
+                document.getElementById('screenshotOverlay').classList.add('active');
+                logSecurityEvent('mac_fullscreen_attempted');
+                return false;
+            }
+            
+            // Mac: Cmd+Shift+4 (Region screenshot)
+            if (e.metaKey && e.shiftKey && e.key === '4') {
+                e.preventDefault();
+                console.log('[Security] Cmd+Shift+4 intercepted');
+                document.getElementById('screenshotOverlay').classList.add('active');
+                logSecurityEvent('mac_region_attempted');
+                return false;
+            }
+            
+            // Disable Ctrl+C, Ctrl+X, Ctrl+A on sensitive data
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'x' || e.key === 'a')) {
+                if (document.activeElement && document.activeElement.closest('.sensitive-data')) {
+                    e.preventDefault();
+                    console.log(`[Security] ${e.key.toUpperCase()} copy operation blocked`);
+                    logSecurityEvent('copy_attempt');
+                    return false;
+                }
+            }
+        }, true);
+        
+        // ============================================
+        // Recording Heuristics Detection
+        // ============================================
+        let visibilityChangeCount = 0;
+        let focusLossCount = 0;
+        let lastVisibilityChange = Date.now();
+        let lastFocusLoss = Date.now();
+        
+        // Detect rapid visibility changes (common during recording)
+        document.addEventListener('visibilitychange', function() {
+            const now = Date.now();
+            if (now - lastVisibilityChange < 1000) {
+                visibilityChangeCount++;
+                console.log(`[Security] Rapid visibility change detected (count: ${visibilityChangeCount})`);
+                
+                if (visibilityChangeCount > 3) {
+                    console.log('[Security] Possible screen recording detected');
+                    document.body.classList.add('recording-detected');
+                    logSecurityEvent('recording_heuristic_detected');
+                }
+            } else {
+                visibilityChangeCount = 0;
+            }
+            lastVisibilityChange = now;
+        });
+        
+        // Detect rapid focus loss (screen recording heuristic)
+        window.addEventListener('blur', function() {
+            const now = Date.now();
+            if (now - lastFocusLoss < 500) {
+                focusLossCount++;
+                console.log(`[Security] Rapid focus loss detected (count: ${focusLossCount})`);
+                
+                if (focusLossCount > 2) {
+                    console.log('[Security] Possible screen recording detected (focus loss)');
+                    document.body.classList.add('recording-detected');
+                    logSecurityEvent('recording_focus_loss');
+                }
+            } else {
+                focusLossCount = 0;
+            }
+            lastFocusLoss = now;
+        });
+        
+        window.addEventListener('focus', function() {
+            focusLossCount = 0;
+            document.body.classList.remove('recording-detected');
+        });
+        
+        // ============================================
+        // Disable Copy/Paste on Sensitive Elements
+        // ============================================
+        document.addEventListener('copy', function(e) {
+            if (e.target.closest('.sensitive-data')) {
+                e.preventDefault();
+                e.clipboardData.setData('text/plain', '[REDACTED - Sensitive Information]');
+                console.log('[Security] Copy operation blocked on sensitive data');
+                logSecurityEvent('copy_blocked');
+                return false;
+            }
+        });
+        
+        document.addEventListener('paste', function(e) {
+            if (e.target.closest('.no-paste')) {
+                e.preventDefault();
+                console.log('[Security] Paste operation blocked');
+                return false;
+            }
+        });
+        
+        // ============================================
+        // Disable Drag Selection on Sensitive Data
+        // ============================================
+        document.addEventListener('dragstart', function(e) {
+            if (e.target.closest('.sensitive-data')) {
+                e.preventDefault();
+                console.log('[Security] Drag operation blocked on sensitive data');
+                return false;
+            }
+        });
+        
+        document.addEventListener('selectstart', function(e) {
+            if (e.target.closest('.sensitive-data')) {
+                e.preventDefault();
+                console.log('[Security] Text selection blocked on sensitive data');
+                return false;
+            }
+        });
+        
+        // ============================================
+        // Security Event Logging
+        // ============================================
+        function logSecurityEvent(eventType) {
+            // Send to server for logging/audit trail
+            if (typeof fetch !== 'undefined') {
+                try {
+                    fetch('/api/security/log-attempt', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            event_type: eventType,
+                            timestamp: new Date().toISOString(),
+                            user_agent: navigator.userAgent,
+                            url: window.location.href,
+                        }),
+                        keepalive: true, // Ensure request completes even if page unloads
+                    }).catch(err => console.log('[Security] Event logging failed:', err));
+                } catch (err) {
+                    console.log('[Security] Event logging error:', err);
+                }
+            }
+        }
+        
+        // ============================================
+        // Disable Developer Tools Access Heuristics
+        // ============================================
+        (function() {
+            let devtoolsOpen = false;
+            
+            // Detect DevTools by console object properties
+            const detectDevTools = () => {
+                const threshold = 160;
+                if (window.outerWidth - window.innerWidth > threshold || 
+                    window.outerHeight - window.innerHeight > threshold) {
+                    if (!devtoolsOpen) {
+                        devtoolsOpen = true;
+                        console.log('[Security] Developer Tools opened - screen recording may be in progress');
+                        logSecurityEvent('devtools_detected');
+                    }
+                }
+            };
+            
+            window.addEventListener('resize', detectDevTools);
+            setInterval(detectDevTools, 500);
+        })();
+    </script>
+</body>
+</html>

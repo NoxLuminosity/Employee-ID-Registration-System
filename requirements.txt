@@ -1,0 +1,33 @@
+# FastAPI and Server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+aiofiles==23.2.1
+
+# Templates
+jinja2==3.1.2
+
+# Database
+supabase==2.10.0
+
+# Authentication
+bcrypt==4.1.2
+
+# HTTP Client
+httpx==0.26.0
+requests==2.31.0
+
+# Image Processing
+cloudinary==1.38.0
+Pillow==10.2.0
+
+# Google Sheets Integration
+gspread==6.0.0
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Vercel Deployment
+mangum==0.17.0

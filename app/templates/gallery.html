@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ID Gallery - ID Registration System</title>
+  <meta name="description" content="ID Gallery - View approved employee ID cards">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/gallery.css">
+</head>
+<body class="dashboard-body">
+  <div class="dashboard-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <a href="/" class="sidebar-logo">
+          <div class="logo-icon">
+            <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="40" height="40" rx="10" fill="#2e7d32"/>
+              <path d="M12 14h16v2H12zM12 19h10v2H12zM12 24h12v2H12zM26 18h4v10h-4z" fill="white"/>
+              <circle cx="28" cy="14" r="3" fill="white"/>
+            </svg>
+          </div>
+          <span>ID System</span>
+        </a>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/hr/dashboard" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="11" y="2" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="2" y="11" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="11" y="11" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+          Dashboard
+        </a>
+        <a href="/hr/gallery" class="nav-item active">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="3" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+            <circle cx="7" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M2 14l4-4 3 3 4-4 5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          ID Gallery
+        </a>
+        <a href="/" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 10l7-7 7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 8v9h10V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Home
+        </a>
+        <a href="/hr/logout" class="nav-item logout">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7 17H4a2 2 0 01-2-2V5a2 2 0 012-2h3M14 14l4-4-4-4M18 10H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Logout
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Header -->
+      <header class="content-header">
+        <div class="header-title">
+          <h1>ID Gallery</h1>
+          <p>View and download approved employee ID cards</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary" id="downloadAllBtn" style="display: none;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2v8M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 12v2h12v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Download All PDFs
+          </button>
+          <a href="/hr/dashboard" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 12l-4-4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Back to Dashboard
+          </a>
+        </div>
+      </header>
+
+      <!-- Gallery Stats -->
+      <section class="gallery-stats">
+        <div class="stat-item">
+          <span class="stat-value" id="totalApproved">-</span>
+          <span class="stat-label">Approved IDs</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="totalCompleted">-</span>
+          <span class="stat-label">Completed IDs</span>
+        </div>
+      </section>
+
+      <!-- Search -->
+      <section class="search-section">
+        <div class="search-bar">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/>
+            <path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <input type="text" id="searchInput" placeholder="Search by name or ID number...">
+        </div>
+        <div class="filter-group">
+          <select id="departmentFilter">
+            <option value="">All Departments</option>
+            <option value="HR">HR</option>
+            <option value="IT">IT</option>
+            <option value="Finance">Finance</option>
+            <option value="Operations">Operations</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Sales">Sales</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Loading State -->
+      <div class="loading-state" id="loadingState">
+        <div class="loading-spinner"></div>
+        <p>Loading ID gallery...</p>
+      </div>
+
+      <!-- ID Gallery Grid -->
+      <section class="gallery-section" id="gallerySection" style="display: none;">
+        <div class="gallery-grid" id="galleryGrid">
+          <!-- ID cards will be populated via JavaScript -->
+        </div>
+        <div class="empty-state" id="emptyState" style="display: none;">
+          <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="10" y="15" width="60" height="50" rx="4" stroke="#adb5bd" stroke-width="2"/>
+            <path d="M10 30h60" stroke="#adb5bd" stroke-width="2"/>
+            <circle cx="25" cy="45" r="8" stroke="#adb5bd" stroke-width="2"/>
+            <rect x="40" y="40" width="20" height="3" rx="1" fill="#adb5bd"/>
+            <rect x="40" y="47" width="15" height="3" rx="1" fill="#adb5bd"/>
+          </svg>
+          <h3>No Generated IDs Yet</h3>
+          <p>Generated ID cards from the Employee portal will appear here after approval.</p>
+          <a href="/hr/dashboard" class="btn btn-primary" style="margin-top: 1rem;">Go to Dashboard</a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ID Preview Modal -->
+  <div class="modal-overlay" id="previewModal">
+    <div class="modal-content id-preview-modal">
+      <div class="modal-header">
+        <h2>ID Card Preview</h2>
+        <button class="modal-close" id="closeModal">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- ID preview content -->
+      </div>
+      <div class="modal-footer" id="modalFooter">
+        <button class="btn btn-secondary" onclick="closePreviewModal()">Close</button>
+        <button class="btn btn-primary" id="downloadBtn">Download PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <span class="toast-message" id="toastMessage"></span>
+  </div>
+
+  <!-- jsPDF library for PDF generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="/static/gallery.js"></script>
+</body>
+</html>
