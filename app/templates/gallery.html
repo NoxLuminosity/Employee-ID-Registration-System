@@ -167,6 +167,20 @@
     <span class="toast-message" id="toastMessage"></span>
   </div>
 
+  <!-- Screenshot Protection -->
+  <script src="/static/screenshot_protection.js"></script>
+  <script>
+    // Initialize screenshot protection with user identifier
+    document.addEventListener('DOMContentLoaded', function() {
+      ScreenshotProtection.init({
+        userIdentifier: '{{ username }}',
+        watermarkText: 'CONFIDENTIAL - ID Gallery',
+        logToServer: true,
+        overlayEnabled: true
+      });
+    });
+  </script>
+
   <!-- jsPDF library for PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>

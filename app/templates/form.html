@@ -765,6 +765,24 @@
     </div>
   </div>
 
+<<<<<<< HEAD
+  <!-- Screenshot Protection -->
+  <script src="/static/screenshot_protection.js"></script>
+  <script>
+    // Initialize screenshot protection with user identifier
+    document.addEventListener('DOMContentLoaded', function() {
+      ScreenshotProtection.init({
+        userIdentifier: '{{ user.name or user.email or "Employee" }}',
+        watermarkText: 'CONFIDENTIAL - ID Registration',
+        logToServer: true,
+        overlayEnabled: true
+      });
+    });
+  </script>
+
+  <script src="/static/app.js"></script>
+=======
   <script src="/static/app.js?v=5"></script>
+>>>>>>> a12f72a1fb40b7078b17f31841b552abeeff9026
 </body>
 </html>
