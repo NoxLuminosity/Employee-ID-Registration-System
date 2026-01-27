@@ -24,17 +24,46 @@ SEEDREAM_API_URL = os.environ.get(
 )
 SEEDREAM_MODEL = os.environ.get('BYTEPLUS_MODEL', "seedream-4-5-251128")
 
-# Professional headshot prompt - Updated for corporate executive portrait
-# This prompt generates consistent, professional ID card photos
-HEADSHOT_PROMPT = """Professional high-end corporate headshot based strictly on the provided reference image. Depict a Filipino person aged approximately 25–40 with a medium warm skin tone, smooth even natural complexion, and a well-groomed, polished appearance. Preserve the subject's original facial structure, proportions, hairstyle, hair texture, hair length, hairline, and grooming exactly as shown, with no identity alteration or stylization. The subject is posed in a 3/4 angle with the body turned approximately 20° to the subject's left while the face looks directly at the camera, shoulders relaxed, posture upright, conveying quiet confidence and approachability with warm, engaged eyes. Frame as a close-up shot cropped at the chest to the head, hands not visible, head slightly off-center following the rule of thirds with the eyes aligned along the upper third and balanced headroom. Outfit consists of a navy blazer, crisp white dress shirt, and burgundy silk tie, clean and modern with no added or removed accessories. Use soft, diffused studio lighting with a gentle key light at roughly 45 degrees to the face, even facial illumination, accurate skin tones, minimal shadows, and subtle rim lighting for clean subject separation. Achieve a professional full-frame portrait look (Canon EOS R or Nikon Z6 style) using an 85mm lens aesthetic, shallow depth of field, sharp focus on the eyes, and studio-level clarity. Transparent Background—no white, gray, or colored backdrop—and no environmental elements or props. The final image should project professionalism, confidence, and approachability, suitable for executive, corporate, and LinkedIn profile, full side to side shown and body from torso should be shown.subject only, no background, transparent background."""
+# Multiple headshot prompts for different styles
+# Each prompt generates a different professional look
+HEADSHOT_PROMPTS = {
+    # Male 1 - Navy blazer, white shirt, burgundy tie (default)
+    "male_1": """Professional high-end corporate headshot based strictly on the provided reference image. Depict a Filipino person aged approximately 25–40 with a medium warm skin tone, smooth even natural complexion, and a well-groomed, polished appearance. Preserve the subject's original facial structure, proportions, hairstyle, hair texture, hair length, hairline, and grooming exactly as shown, with no identity alteration or stylization. The subject is posed in a 3/4 angle with the body turned approximately 20° to the subject's left while the face looks directly at the camera, shoulders relaxed, posture upright, conveying quiet confidence and approachability with warm, engaged eyes. Frame as a close-up shot cropped at the chest to the head, hands not visible, head slightly off-center following the rule of thirds with the eyes aligned along the upper third and balanced headroom. Outfit consists of a navy blazer, crisp white dress shirt, and burgundy silk tie, clean and modern with no added or removed accessories. Use soft, diffused studio lighting with a gentle key light at roughly 45 degrees to the face, even facial illumination, accurate skin tones, minimal shadows, and subtle rim lighting for clean subject separation. Achieve a professional full-frame portrait look (Canon EOS R or Nikon Z6 style) using an 85mm lens aesthetic, shallow depth of field, sharp focus on the eyes, and studio-level clarity. Transparent Background—no white, gray, or colored backdrop—and no environmental elements or props. The final image should project professionalism, confidence, and approachability, suitable for executive, corporate, and LinkedIn profile, full side to side shown and body from torso should be shown. Subject only, no background, transparent background.""",
+    
+    # Male 2 - Charcoal gray blazer, light blue shirt, dark tie
+    "male_2": """Professional high-end corporate headshot based strictly on the provided reference image. Depict a Filipino person aged approximately 25–40 with a medium warm skin tone, smooth even natural complexion, and a well-groomed, polished appearance. Preserve the subject's original facial structure, proportions, hairstyle, hair texture, hair length, hairline, and grooming exactly as shown, with no identity alteration or stylization. The subject is posed in a 3/4 angle with the body turned approximately 20° to the subject's left while the face looks directly at the camera, shoulders relaxed, posture upright, conveying quiet confidence and approachability with warm, engaged eyes. Frame as a close-up shot cropped at the chest to the head, hands not visible, head slightly off-center following the rule of thirds with the eyes aligned along the upper third and balanced headroom. Outfit: a tailored charcoal gray blazer layered over a light blue dress shirt with an optional slim dark tie, clean and modern with no added or removed accessories. Use soft, diffused studio lighting with a gentle key light at roughly 45 degrees to the face, even facial illumination, accurate skin tones, minimal shadows, and subtle rim lighting for clean subject separation. Achieve a professional full-frame portrait look (Canon EOS R or Nikon Z6 style) using an 85mm lens aesthetic, shallow depth of field, sharp focus on the eyes, and studio-level clarity. Transparent Background—no white, gray, or colored backdrop—and no environmental elements or props. The final image should project professionalism, confidence, and approachability, suitable for executive, corporate, and LinkedIn profile, full side to side shown and body from torso should be shown. Subject only, no background, transparent background.""",
+    
+    # Female 1 - Navy blazer, white blouse, minimal accessories
+    "female_1": """Professional high-end corporate headshot based strictly on the provided reference image. Depict a Filipino woman aged approximately 25–40 with a medium warm skin tone, smooth even natural complexion, and a well-groomed, polished appearance. Preserve the subject's original facial structure, proportions, hairstyle, hair texture, hair length, hairline, and grooming exactly as shown, with no identity alteration or stylization. The subject is posed in a 3/4 angle with the body turned approximately 20° to the subject's left while the face looks directly at the camera, shoulders relaxed, posture upright, conveying quiet confidence and approachability with warm, engaged eyes. Frame as a close-up shot cropped at the chest to the head, hands not visible, head slightly off-center following the rule of thirds with the eyes aligned along the upper third and balanced headroom. Outfit: a tailored navy blazer layered over a crisp white blouse with a subtle neckline detail, clean and modern with minimal accessories (optionally a simple necklace or stud earrings), professional and polished. Use soft, diffused studio lighting with a gentle key light at roughly 45 degrees to the face, even facial illumination, accurate skin tones, minimal shadows, and subtle rim lighting for clean subject separation. Achieve a professional full-frame portrait look (Canon EOS R or Nikon Z6 style) using an 85mm lens aesthetic, shallow depth of field, sharp focus on the eyes, and studio-level clarity. Transparent Background—no white, gray, or colored backdrop—and no environmental elements or props. The final image should project professionalism, confidence, and approachability, suitable for executive, corporate, and LinkedIn profile, full side-to-side shown, and body from torso should be shown. Subject only, no background, transparent background.""",
+    
+    # Female 2 - Dark teal blazer, white blouse, statement collar
+    "female_2": """Professional high-end corporate headshot based strictly on the provided reference image. Depict a Filipino woman aged approximately 25–40 with a medium warm skin tone, smooth even natural complexion, and a well-groomed, polished appearance. Preserve the subject's original facial structure, proportions, hairstyle, hair texture, hair length, hairline, and grooming exactly as shown, with no identity alteration or stylization. The subject is posed in a 3/4 angle with the body turned approximately 20° to the subject's left while the face looks directly at the camera, shoulders relaxed, posture upright, conveying quiet confidence and approachability with warm, engaged eyes. Frame as a close-up shot cropped at the chest to the head, hands not visible, head slightly off-center following the rule of thirds with the eyes aligned along the upper third and balanced headroom. Outfit: dark teal fitted blazer layered over a crisp white blouse with a slight statement collar or bow detail. Clean lines, minimal jewelry (optional small studs or delicate necklace). Stylish, professional, and modern corporate aesthetic. Use soft, diffused studio lighting with a gentle key light at roughly 45 degrees to the face, even facial illumination, accurate skin tones, minimal shadows, and subtle rim lighting for clean subject separation. Achieve a professional full-frame portrait look (Canon EOS R or Nikon Z6 style) using an 85mm lens aesthetic, shallow depth of field, sharp focus on the eyes, and studio-level clarity. Transparent Background—no white, gray, or colored backdrop—and no environmental elements or props. The final image should project professionalism, confidence, and approachability, suitable for executive, corporate, and LinkedIn profile, full side-to-side shown, and body from torso should be shown. Subject only, no background, transparent background."""
+}
+
+# Default prompt (Male 1) - kept for backward compatibility
+HEADSHOT_PROMPT = HEADSHOT_PROMPTS["male_1"]
 
 
-def generate_headshot_from_url(image_url: str) -> Tuple[Optional[str], Optional[str]]:
+def get_prompt_by_type(prompt_type: str = "male_1") -> str:
+    """
+    Get the headshot prompt by type.
+    
+    Args:
+        prompt_type: One of 'male_1', 'male_2', 'female_1', 'female_2'
+    
+    Returns:
+        The corresponding prompt string, or default (male_1) if not found
+    """
+    return HEADSHOT_PROMPTS.get(prompt_type, HEADSHOT_PROMPTS["male_1"])
+
+
+def generate_headshot_from_url(image_url: str, prompt_type: str = "male_1") -> Tuple[Optional[str], Optional[str]]:
     """
     Generate a professional headshot using BytePlus Seedream API.
     
     Args:
         image_url: Public URL of the image to use as reference
+        prompt_type: One of 'male_1', 'male_2', 'female_1', 'female_2' (default: male_1)
     
     Returns:
         Tuple of (generated_image_url, None) on success, or (None, error_message) on failure
@@ -50,11 +79,15 @@ def generate_headshot_from_url(image_url: str) -> Tuple[Optional[str], Optional[
         logger.error("No image URL provided")
         return None, "No image URL provided"
     
+    # Get the appropriate prompt based on type
+    selected_prompt = get_prompt_by_type(prompt_type)
+    logger.info(f"Using prompt type: {prompt_type}")
+    
     try:
         # Prepare the request payload with updated settings
         payload = {
             "model": SEEDREAM_MODEL,
-            "prompt": HEADSHOT_PROMPT,
+            "prompt": selected_prompt,
             "image": image_url,  # Must be a public URL
             "sequential_image_generation": "disabled",
             "response_format": "url",  # Return URL instead of base64

@@ -288,7 +288,9 @@ function initPhotoUpload() {
 // ============================================
 // AI Headshot Generation (with server-side background removal)
 // ============================================
-async function generateAIHeadshot(imageBase64) {
+async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
+  console.log('=== generateAIHeadshot called ===');
+  console.log('promptType received:', promptType);
   const loadingText = document.getElementById('aiLoadingText');
   
   // Reset AI generation state
@@ -306,13 +308,17 @@ async function generateAIHeadshot(imageBase64) {
     // Update loading text - server handles AI generation + background removal
     if (loadingText) loadingText.textContent = 'Generating AI headshot...';
     
+    const requestBody = { image: imageBase64, prompt_type: promptType };
+    console.log('=== Sending to /generate-headshot ===');
+    console.log('Request body prompt_type:', requestBody.prompt_type);
+    
     const response = await fetch('/generate-headshot', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       credentials: 'include',
-      body: JSON.stringify({ image: imageBase64 }),
+      body: JSON.stringify(requestBody),
       signal: state.aiGenerationController.signal
     });
     
@@ -410,9 +416,17 @@ async function generateAIHeadshot(imageBase64) {
 // REMOVED: Background removal functions (disabled on Employee side)
 // The background removal feature is not available on the Employee portal
 
-// Regenerate AI image with original prompt (called from Regenerate button)
-async function regenerateAIImage() {
-  console.log('regenerateAIImage: Starting regeneration...');
+// Regenerate AI image with selected prompt style (called from dropdown)
+async function regenerateAIImage(promptType = 'male_1') {
+  console.log('=== regenerateAIImage called ===');
+  console.log('promptType parameter:', promptType);
+  console.log('typeof promptType:', typeof promptType);
+  
+  // Store the selected prompt type for the regenerate button
+  state.lastSelectedPromptType = promptType;
+  
+  // Close the dropdown menu
+  closeRegenerateDropdown();
   
   const photoInput = elements.photoInput;
   
@@ -434,15 +448,87 @@ async function regenerateAIImage() {
     elements.aiError.style.display = 'none';
     elements.aiLoading.style.display = 'flex';
     
-    // Re-trigger AI generation with the base64 data
-    await generateAIHeadshot(imageData);
+    // Re-trigger AI generation with the base64 data and selected prompt type
+    await generateAIHeadshot(imageData, promptType);
   };
   
   reader.readAsDataURL(file);
 }
 
-// Make regenerateAIImage globally accessible for inline onclick
+// Simple regenerate button - uses last selected prompt type
+async function simpleRegenerateAI() {
+  console.log('=== simpleRegenerateAI called ===');
+  console.log('Using last selected prompt type:', state.lastSelectedPromptType);
+  
+  const photoInput = elements.photoInput;
+  
+  // Check if original photo exists
+  if (!photoInput || !photoInput.files || !photoInput.files[0]) {
+    showMessage('Please upload a photo first', 'error');
+    return;
+  }
+  
+  // Convert file to base64 before regeneration
+  const file = photoInput.files[0];
+  const reader = new FileReader();
+  
+  reader.onload = async (event) => {
+    const imageData = event.target.result;
+    
+    // Reset AI preview state (show loading spinner)
+    elements.aiPreviewImg.style.display = 'none';
+    elements.aiError.style.display = 'none';
+    elements.aiLoading.style.display = 'flex';
+    
+    // Re-trigger AI generation with the last selected prompt type
+    await generateAIHeadshot(imageData, state.lastSelectedPromptType);
+  };
+  
+  reader.readAsDataURL(file);
+}
+
+// Toggle regenerate dropdown menu
+function toggleRegenerateDropdown(event) {
+  if (event) event.stopPropagation();
+  
+  const menu = document.getElementById('regenerateDropdownMenu');
+  const dropdown = document.getElementById('regenerateDropdown');
+  
+  if (menu && dropdown) {
+    const isOpen = menu.classList.contains('show');
+    
+    if (isOpen) {
+      menu.classList.remove('show');
+      dropdown.classList.remove('open');
+    } else {
+      menu.classList.add('show');
+      dropdown.classList.add('open');
+    }
+  }
+}
+
+// Close regenerate dropdown menu
+function closeRegenerateDropdown() {
+  const menu = document.getElementById('regenerateDropdownMenu');
+  const dropdown = document.getElementById('regenerateDropdown');
+  
+  if (menu) menu.classList.remove('show');
+  if (dropdown) dropdown.classList.remove('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+  const dropdown = document.getElementById('regenerateDropdown');
+  if (dropdown && !dropdown.contains(event.target)) {
+    closeRegenerateDropdown();
+  }
+});
+
+// Make functions globally accessible for inline onclick
 window.regenerateAIImage = regenerateAIImage;
+window.simpleRegenerateAI = simpleRegenerateAI;
+window.toggleRegenerateDropdown = toggleRegenerateDropdown;
+window.closeRegenerateDropdown = closeRegenerateDropdown;
 
 // REMOVED: Background removal functionality is fully disabled on Employee side
 // The following functions are no longer used:
@@ -785,6 +871,28 @@ function updateIdCardPreview() {
         signatureContainer.classList.remove('has-image');
       }
     }
+  }
+
+  // Update dynamic website URLs with first name
+  const firstNameLower = firstName ? firstName.toLowerCase() : '';
+  const backDynamicUrl = `www.okpo.com/spm/${firstNameLower}`;
+  
+  // Front-side website URL (always static)
+  const frontWebsiteEl = document.getElementById('id_front_website_url');
+  if (frontWebsiteEl) {
+    frontWebsiteEl.textContent = 'www.spmadrid.com';
+  }
+  
+  // Back-side website URL (dynamic with first name)
+  const backWebsiteEl = document.getElementById('id_back_website_url');
+  if (backWebsiteEl) {
+    backWebsiteEl.textContent = firstNameLower ? backDynamicUrl : 'www.okpo.com/spm/';
+  }
+  
+  // Back-side contact label ("{First name}'s Contact")
+  const backContactLabel = document.getElementById('id_back_contact_label');
+  if (backContactLabel) {
+    backContactLabel.textContent = firstName ? `${firstName}'s Contact` : "'s Contact";
   }
 }
 

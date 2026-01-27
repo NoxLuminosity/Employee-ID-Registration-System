@@ -60,6 +60,7 @@ def verify_employee_auth(employee_session: str) -> bool:
 # Request model for generate-headshot endpoint
 class GenerateHeadshotRequest(BaseModel):
     image: str  # Base64-encoded image
+    prompt_type: str = "male_1"  # One of: male_1, male_2, female_1, female_2
 
 
 @router.post("/generate-headshot")
@@ -70,12 +71,13 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
     
     Complete Flow:
         1. Upload base64 image to Cloudinary (to get a public URL)
-        2. Send URL to BytePlus Seedream API
+        2. Send URL to BytePlus Seedream API with selected prompt
         3. Upload AI image to Cloudinary with background removal
         4. Return final Cloudinary URL (transparent image)
     
     Expects JSON body with:
         image: Base64-encoded image data (with or without data URI prefix)
+        prompt_type: One of 'male_1', 'male_2', 'female_1', 'female_2' (default: male_1)
     
     Returns:
         JSON with generated_image (Cloudinary URL of transparent PNG) on success
@@ -90,13 +92,17 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
         )
     
     try:
-        logger.info("Received headshot generation request")
+        logger.info(f"Received headshot generation request with prompt_type: {request.prompt_type}")
         
         if not request.image:
             return JSONResponse(
                 status_code=400,
                 content={"success": False, "error": "No image data provided"}
             )
+        
+        # Validate prompt_type
+        valid_prompt_types = ["male_1", "male_2", "female_1", "female_2"]
+        prompt_type = request.prompt_type if request.prompt_type in valid_prompt_types else "male_1"
         
         # Step 1: Upload original to Cloudinary to get a public URL
         temp_id = f"temp_preview_{uuid.uuid4().hex[:8]}"
@@ -117,9 +123,9 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
         
         logger.info(f"Original uploaded to Cloudinary: {cloudinary_url}")
         
-        # Step 2: Generate headshot using Seedream with the Cloudinary URL
-        logger.info("Step 2: Generating AI headshot with Seedream...")
-        generated_url, error = generate_headshot_from_url(cloudinary_url)
+        # Step 2: Generate headshot using Seedream with the Cloudinary URL and selected prompt
+        logger.info(f"Step 2: Generating AI headshot with Seedream (prompt: {prompt_type})...")
+        generated_url, error = generate_headshot_from_url(cloudinary_url, prompt_type)
         
         if not generated_url:
             logger.warning(f"Failed to generate headshot: {error}")
