@@ -471,10 +471,11 @@ function renderGallery() {
 
   const cards = employees.map(emp => {
     const statusClass = emp.status.toLowerCase();
+    console.log('Rendering card for employee:', emp.id, emp.employee_name, 'type of id:', typeof emp.id);
 
     return `
       <div class="id-gallery-card" data-id="${emp.id}">
-        <div class="id-card-image-wrapper" onclick="previewID(${emp.id})">
+        <div class="id-card-image-wrapper">
           ${generateIDCardHtml(emp)}
         </div>
         <div class="id-gallery-card-footer">
@@ -488,14 +489,14 @@ function renderGallery() {
             <span>${escapeHtml(emp.department)}</span>
           </div>
           <div class="id-card-actions">
-            <button class="btn-preview" onclick="previewID(${emp.id})">
+            <button class="btn-preview">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <path d="M8 3C4.5 3 1.7 5.5 1 8c.7 2.5 3.5 5 7 5s6.3-2.5 7-5c-.7-2.5-3.5-5-7-5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/>
               </svg>
               Preview
             </button>
-            <button class="btn-download" onclick="downloadSinglePdf(${emp.id})">
+            <button class="btn-download">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <path d="M8 2v8M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M2 12v2h12v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -510,6 +511,62 @@ function renderGallery() {
 
   if (elements.galleryGrid) {
     elements.galleryGrid.innerHTML = cards;
+    
+    // Log number of buttons found
+    const previewBtns = elements.galleryGrid.querySelectorAll('.btn-preview');
+    const downloadBtns = elements.galleryGrid.querySelectorAll('.btn-download');
+    const imageWrappers = elements.galleryGrid.querySelectorAll('.id-card-image-wrapper');
+    console.log('renderGallery: Found buttons - preview:', previewBtns.length, 'download:', downloadBtns.length, 'images:', imageWrappers.length);
+    
+    // Add event delegation for dynamically created buttons
+    // This ensures buttons work even if onclick attributes fail
+    previewBtns.forEach((btn, idx) => {
+      console.log('Attaching preview listener to button', idx);
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const card = this.closest('.id-gallery-card');
+        const empId = card ? Number(card.dataset.id) : null;
+        console.log('Preview button clicked - empId:', empId, 'type:', typeof empId);
+        if (empId && !isNaN(empId)) {
+          previewID(empId);
+        } else {
+          console.error('Invalid empId from dataset:', card?.dataset?.id);
+          showToast('Could not find employee ID', 'error');
+        }
+      });
+    });
+    
+    downloadBtns.forEach((btn, idx) => {
+      console.log('Attaching download listener to button', idx);
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const card = this.closest('.id-gallery-card');
+        const empId = card ? Number(card.dataset.id) : null;
+        console.log('Download button clicked - empId:', empId, 'type:', typeof empId);
+        if (empId && !isNaN(empId)) {
+          downloadSinglePdf(empId);
+        } else {
+          console.error('Invalid empId from dataset:', card?.dataset?.id);
+          showToast('Could not find employee ID', 'error');
+        }
+      });
+    });
+    
+    // Also add click handler for card images
+    elements.galleryGrid.querySelectorAll('.id-card-image-wrapper').forEach(wrapper => {
+      wrapper.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const card = this.closest('.id-gallery-card');
+        const empId = card ? Number(card.dataset.id) : null;
+        console.log('Image clicked - empId:', empId, 'type:', typeof empId);
+        if (empId && !isNaN(empId)) {
+          previewID(empId);
+        }
+      });
+    });
   }
 }
 
@@ -533,6 +590,12 @@ function generateIDCardHtml(emp) {
 
   // Get nickname or use first name
   const nickname = emp.id_nickname || emp.employee_name.split(' ')[0];
+  
+  // Get first name for dynamic back-side URL (lowercase)
+  const firstName = emp.employee_name.split(' ')[0] || '';
+  const firstNameLower = firstName.toLowerCase();
+  const backDynamicUrl = `www.okpo.com/spm/${firstNameLower}`;
+  const frontStaticUrl = 'www.spmadrid.com';
 
   return `
     <div class="id-card gallery-id-card">
@@ -585,7 +648,7 @@ function generateIDCardHtml(emp) {
 
         <!-- Website icon and URL -->
         <div class="id-website-strip">
-          <p class="id-website-url">www.spmadrid.com</p>
+          <p class="id-website-url">${escapeHtml(frontStaticUrl)}</p>
           <svg class="id-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="2" y1="12" x2="22" y2="12"></line>
@@ -608,6 +671,12 @@ function generateIDCardBackHtml(emp) {
   // Get username from nickname or first name
   const nickname = emp.id_nickname || emp.employee_name.split(' ')[0];
   const username = nickname.toLowerCase().replace(/\s+/g, '');
+  
+  // Get first name for dynamic URL and contact label
+  const firstName = emp.employee_name.split(' ')[0] || '';
+  const firstNameLower = firstName.toLowerCase();
+  const dynamicUrl = `www.okpo.com/spm/${firstNameLower}`;
+  const contactLabel = `${firstName}'s Contact`;
   
   // Emergency contact details
   const emergencyName = emp.emergency_name || 'Not provided';
@@ -644,7 +713,7 @@ function generateIDCardBackHtml(emp) {
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
           </div>
-          <span class="id-back-vcard-label">${escapeHtml(username)}</span>
+          <span class="id-back-vcard-label">${escapeHtml(contactLabel)}</span>
         </div>
       </div>
 
@@ -697,7 +766,7 @@ function generateIDCardBackHtml(emp) {
               <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
             </svg>
           </div>
-          <span class="id-back-website-url">www.spmadrid.com</span>
+          <span class="id-back-website-url">${escapeHtml(backDynamicUrl)}</span>
         </div>
       </div>
     </div>
@@ -728,8 +797,20 @@ function filterGallery() {
 // Preview & Download
 // ============================================
 function previewID(id) {
-  const emp = galleryState.employees.find(e => e.id === id);
-  if (!emp) return;
+  console.log('previewID called with id:', id, 'type:', typeof id);
+  console.log('galleryState.employees count:', galleryState.employees.length);
+  
+  // Coerce id to number for comparison (in case it's passed as string from onclick)
+  const numericId = Number(id);
+  const emp = galleryState.employees.find(e => e.id === numericId || e.id === id);
+  
+  console.log('Found employee:', emp ? emp.employee_name : 'NOT FOUND');
+  
+  if (!emp) {
+    console.error('previewID: Employee not found for id:', id);
+    showToast('Employee not found', 'error');
+    return;
+  }
 
   galleryState.currentEmployee = emp;
 
@@ -836,10 +917,8 @@ function showPreviewSide(side) {
   }
 }
 
-// Make showPreviewSide available globally
-window.showPreviewSide = showPreviewSide;
-
 function closePreviewModal() {
+  console.log('closePreviewModal called');
   if (elements.previewModal) {
     elements.previewModal.classList.remove('active');
   }
@@ -848,8 +927,19 @@ function closePreviewModal() {
 
 // Download single ID as PDF
 function downloadSinglePdf(id) {
-  const emp = galleryState.employees.find(e => e.id === id);
-  if (!emp) return;
+  console.log('downloadSinglePdf called with id:', id, 'type:', typeof id);
+  
+  // Coerce id to number for comparison (in case it's passed as string from onclick)
+  const numericId = Number(id);
+  const emp = galleryState.employees.find(e => e.id === numericId || e.id === id);
+  
+  console.log('Found employee for PDF:', emp ? emp.employee_name : 'NOT FOUND');
+  
+  if (!emp) {
+    console.error('downloadSinglePdf: Employee not found for id:', id);
+    showToast('Employee not found', 'error');
+    return;
+  }
   downloadIDPdf(emp);
 }
 
@@ -1019,7 +1109,18 @@ async function downloadIDPdf(emp) {
     showToast(`PDF downloaded (${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}" at ${PDF_CONFIG.PRINT_DPI} DPI)`, 'success');
   } catch (error) {
     console.error('Error generating PDF:', error);
-    showToast('Failed to generate PDF. Please try again.', 'error');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    // Provide more specific error messages
+    if (error.message && error.message.includes('tainted')) {
+      showToast('PDF failed: Image loading issue (CORS). Please try again.', 'error');
+    } else if (error.message && error.message.includes('SecurityError')) {
+      showToast('PDF failed: Security error with images. Please try again.', 'error');
+    } else {
+      showToast('Failed to generate PDF. Please try again.', 'error');
+    }
   }
 }
 
@@ -1235,3 +1336,21 @@ function debounce(func, wait) {
     timeout = setTimeout(later, wait);
   };
 }
+
+// ============================================
+// Global Window Exports for onclick handlers
+// Must be at the END after all functions are defined
+// ============================================
+window.showPreviewSide = showPreviewSide;
+window.previewID = previewID;
+window.closePreviewModal = closePreviewModal;
+window.downloadSinglePdf = downloadSinglePdf;
+window.downloadAllPdfs = downloadAllPdfs;
+
+console.log('Gallery.js loaded - window exports ready:', {
+  previewID: typeof window.previewID,
+  closePreviewModal: typeof window.closePreviewModal,
+  downloadSinglePdf: typeof window.downloadSinglePdf,
+  downloadAllPdfs: typeof window.downloadAllPdfs,
+  showPreviewSide: typeof window.showPreviewSide
+});

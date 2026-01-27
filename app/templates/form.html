@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employee ID Registration</title>
   <meta name="description" content="Employee ID Registration System - Submit your details for company ID card">
-  <link rel="stylesheet" href="/static/styles.css?v=2">
+  <link rel="stylesheet" href="/static/styles.css?v=6">
   <style>
     /* User Info Bar Styles */
     .user-info-bar {
@@ -260,15 +260,53 @@
                     <img id="aiPreviewImg" class="ai-clickable" src="" alt="AI generated headshot" style="display: none;" onclick="openLightbox(this.src)">
                     <p class="ai-error" id="aiError" style="display: none;">AI generation unavailable</p>
                   </div>
-                  <!-- Regenerate Button - Regenerates AI image with original prompt -->
-                  <div class="ai-actions" id="aiActions" style="display: none;">
-                    <button type="button" class="btn-regenerate" id="regenerateBtn" onclick="regenerateAIImage()">
+                  <!-- Regenerate Dropdown - Multiple AI style options -->
+                  <div class="ai-actions" id="aiActions" style="display: none; margin-top: 12px;">
+                    <!-- Simple Regenerate Button -->
+                    <button type="button" class="btn-regenerate-simple" id="simpleRegenerateBtn" onclick="simpleRegenerateAI()">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M1 4v6h6"/>
                         <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
                       </svg>
-                      <span id="regenerateBtnText">Regenerate</span>
+                      <span>Regenerate</span>
                     </button>
+                    
+                    <!-- Change Style Dropdown -->
+                    <div class="regenerate-dropdown" id="regenerateDropdown">
+                      <button type="button" class="btn-regenerate dropdown-toggle" id="regenerateBtn" onclick="toggleRegenerateDropdown(event)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M1 4v6h6"/>
+                          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                        </svg>
+                        <span id="regenerateBtnText">Change Style</span>
+                        <svg class="dropdown-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                      </button>
+                      <div class="regenerate-dropdown-menu" id="regenerateDropdownMenu">
+                        <!-- Male Styles Section -->
+                        <div class="dropdown-section-header">Male Styles</div>
+                        <button type="button" class="dropdown-item" onclick="regenerateAIImage('male_1')">
+                          <span class="item-icon">👔</span>
+                          <span class="item-text">Navy Blazer</span>
+                        </button>
+                        <button type="button" class="dropdown-item" onclick="regenerateAIImage('male_2')">
+                          <span class="item-icon">🎩</span>
+                          <span class="item-text">Gray Blazer</span>
+                        </button>
+                        
+                        <!-- Female Styles Section -->
+                        <div class="dropdown-section-header">Female Styles</div>
+                        <button type="button" class="dropdown-item" onclick="regenerateAIImage('female_1')">
+                          <span class="item-icon">👗</span>
+                          <span class="item-text">Navy Blazer</span>
+                        </button>
+                        <button type="button" class="dropdown-item" onclick="regenerateAIImage('female_2')">
+                          <span class="item-icon">👠</span>
+                          <span class="item-text">Teal Blazer</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -458,7 +496,7 @@
 
                 <!-- Website icon and URL -->
                 <div class="id-website-strip">
-                  <p class="id-website-url">WWW.spmadrid.com</p>
+                  <p class="id-website-url" id="id_front_website_url">www.okpo.com/spm/</p>
                   <svg class="id-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
                     <line x1="2" y1="12" x2="22" y2="12"></line>
@@ -504,7 +542,7 @@
                       <circle cx="12" cy="7" r="4"></circle>
                     </svg>
                   </div>
-                  <span class="id-back-vcard-label" id="id_back_username">Ian's vCard</span>
+                  <span class="id-back-vcard-label" id="id_back_contact_label">'s Contact</span>
                 </div>
               </div>
 
@@ -557,7 +595,7 @@
                       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                     </svg>
                   </div>
-                  <span class="id-back-website-url">www.spmadrid.com</span>
+                  <span class="id-back-website-url" id="id_back_website_url">www.okpo.com/spm/</span>
                 </div>
               </div>
             </div>
@@ -727,6 +765,7 @@
     </div>
   </div>
 
+<<<<<<< HEAD
   <!-- Screenshot Protection -->
   <script src="/static/screenshot_protection.js"></script>
   <script>
@@ -742,5 +781,8 @@
   </script>
 
   <script src="/static/app.js"></script>
+=======
+  <script src="/static/app.js?v=5"></script>
+>>>>>>> a12f72a1fb40b7078b17f31841b552abeeff9026
 </body>
 </html>
