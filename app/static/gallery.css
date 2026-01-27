@@ -438,8 +438,6 @@
   cursor: pointer;
   transition: all 0.2s ease;
   border: none;
-  position: relative;
-  z-index: 20;
 }
 
 .id-card-actions .btn-preview {
