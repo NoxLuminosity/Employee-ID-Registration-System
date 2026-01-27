@@ -492,6 +492,15 @@ async def submit_employee(
         # Step 4: Append submission to Lark Bitable
         try:
             logger.info(f"Attempting to append to Lark Bitable for employee: {id_number}")
+            
+            # Debug: Log what URLs we're sending to Lark Base
+            logger.info("=" * 60)
+            logger.info("🔍 CLOUDINARY URLS BEING SENT TO LARK BASE:")
+            logger.info(f"  Photo URL: {cloudinary_photo_url or 'MISSING/NONE'}")
+            logger.info(f"  Signature URL: {cloudinary_signature_url or 'MISSING/NONE'}")
+            logger.info(f"  AI Headshot URL: {cloudinary_ai_headshot_url or 'MISSING/NONE'}")
+            logger.info("=" * 60)
+            
             lark_success = append_employee_submission(
                 employee_name=employee_name,
                 id_nickname=id_nickname,

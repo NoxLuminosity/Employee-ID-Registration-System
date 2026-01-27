@@ -5,10 +5,11 @@ Handles appending employee submissions to Lark Bitable (spreadsheet-like databas
 Authentication: Uses LARK_APP_ID and LARK_APP_SECRET environment variables.
 This is production-safe for Vercel serverless functions.
 
-Dual Upload Strategy:
-- Files are uploaded to Cloudinary (primary storage, URLs stored in local DB)
-- Files are ALSO uploaded to Lark Drive to get file_tokens for Bitable attachments
-- Bitable attachment fields receive [{"file_token": "xxx"}] format
+Direct Cloudinary URL Strategy:
+- Files are uploaded to Cloudinary (primary storage with CDN)
+- Cloudinary URLs are used directly in Bitable attachment fields
+- No Lark Drive upload required (avoids permission issues)
+- Attachment fields receive: [{"url": "cloudinary_url", "name": "filename"}]
 """
 import os
 import json
@@ -305,6 +306,37 @@ def build_attachment_field(file_token: Optional[str]) -> Optional[List[Dict[str,
     return [{"file_token": file_token}]
 
 
+def build_attachment_from_url(url: str, filename: str = None) -> Optional[List[Dict[str, str]]]:
+    """
+    Build attachment field value from a Cloudinary URL.
+    
+    Lark Base attachment fields accept this format for URL-based attachments:
+    [{"url": "https://example.com/image.jpg", "name": "image.jpg"}]
+    
+    This avoids the need for Lark Drive permissions.
+    
+    Args:
+        url: The Cloudinary URL to the image
+        filename: Optional filename to display in Lark Base
+        
+    Returns:
+        List containing attachment dict, or None if URL is invalid
+    """
+    if not url:
+        return None
+    
+    # Extract filename from URL if not provided
+    if not filename:
+        try:
+            filename = url.split('/')[-1].split('?')[0]
+            if not filename or len(filename) < 3:
+                filename = "attachment.jpg"
+        except:
+            filename = "attachment.jpg"
+    
+    return [{"url": url, "name": filename}]
+
+
 # ============================================
 # Bitable Operations
 # ============================================
@@ -556,48 +588,45 @@ def append_employee_submission(
         print(f"  {key}: {repr(val)} (type: {type(val).__name__})")
     
     # =========================================
-    # Step 2: Upload files to Lark Drive and build ATTACHMENT fields
-    # Only add attachment fields if upload succeeds (file_token obtained)
+    # Step 2: Add URL fields for photo/signature/headshot
+    # Columns are URL/Link type - use Lark URL format: {"link": "url", "text": "display"}
     # =========================================
     
-    # Safe ID for filenames
+    # Safe ID for logging
     safe_id = id_number.replace(' ', '_').replace('/', '-').replace('\\', '-') if id_number else 'unknown'
     
-    # Photo attachment (original uploaded photo)
+    logger.info("=" * 60)
+    logger.info("🔗 PROCESSING IMAGE URLS (Lark URL Field Format)")
+    logger.info(f"  Photo URL: {photo_url[:80] + '...' if photo_url and len(photo_url) > 80 else photo_url}")
+    logger.info(f"  AI Headshot URL: {ai_headshot_url[:80] + '...' if ai_headshot_url and len(ai_headshot_url) > 80 else ai_headshot_url}")
+    logger.info(f"  Signature URL: {signature_url[:80] + '...' if signature_url and len(signature_url) > 80 else signature_url}")
+    logger.info("=" * 60)
+    
+    # Photo URL (photo_preview column) - Lark URL field format
     if photo_url:
-        logger.info(f"Uploading photo to Lark Drive for {safe_id}...")
-        photo_token = upload_url_to_lark_drive(photo_url, f"{safe_id}_photo.jpg")
-        photo_attachment = build_attachment_field(photo_token)
-        if photo_attachment:
-            fields["photo_preview"] = photo_attachment
-            logger.info(f"Photo attachment added for {safe_id}")
+        fields["photo_preview"] = {"link": photo_url, "text": "Photo"}
+        logger.info(f"✅ Photo URL added for {safe_id}")
+    else:
+        logger.info(f"ℹ️ No photo URL provided for {safe_id}")
     
-    # AI Headshot attachment
+    # AI Headshot URL (new_photo column) - Lark URL field format
     if ai_headshot_url:
-        logger.info(f"Uploading AI headshot to Lark Drive for {safe_id}...")
-        ai_token = upload_url_to_lark_drive(ai_headshot_url, f"{safe_id}_ai_headshot.jpg")
-        ai_attachment = build_attachment_field(ai_token)
-        if ai_attachment:
-            fields["new_photo"] = ai_attachment
-            logger.info(f"AI headshot attachment added for {safe_id}")
+        fields["new_photo"] = {"link": ai_headshot_url, "text": "AI Headshot"}
+        logger.info(f"✅ AI headshot URL added for {safe_id}")
+    else:
+        logger.info(f"ℹ️ No AI headshot URL provided for {safe_id}")
     
-    # Signature attachment
+    # Signature URL (signature_preview column) - Lark URL field format
     if signature_url:
-        logger.info(f"Uploading signature to Lark Drive for {safe_id}...")
-        sig_token = upload_url_to_lark_drive(signature_url, f"{safe_id}_signature.png")
-        sig_attachment = build_attachment_field(sig_token)
-        if sig_attachment:
-            fields["signature_preview"] = sig_attachment
-            logger.info(f"Signature attachment added for {safe_id}")
+        fields["signature_preview"] = {"link": signature_url, "text": "Signature"}
+        logger.info(f"✅ Signature URL added for {safe_id}")
+    else:
+        logger.info(f"ℹ️ No signature URL provided for {safe_id}")
     
-    # Render URL attachment (if provided)
+    # Render URL (if provided) - Lark URL field format
     if render_url:
-        logger.info(f"Uploading render to Lark Drive for {safe_id}...")
-        render_token = upload_url_to_lark_drive(render_url, f"{safe_id}_render.png")
-        render_attachment = build_attachment_field(render_token)
-        if render_attachment:
-            fields["render_url"] = render_attachment
-            logger.info(f"Render attachment added for {safe_id}")
+        fields["render_url"] = {"link": render_url, "text": "Render"}
+        logger.info(f"✅ Render URL added for {safe_id}")
     
     # =========================================
     # Step 3: Log final payload and append to Bitable
