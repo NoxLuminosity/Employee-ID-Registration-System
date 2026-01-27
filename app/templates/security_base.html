@@ -180,15 +180,15 @@
         // Security Initialization
         // ============================================
         
-        // Initialize screenshot protection
+        // Initialize screenshot protection with v2.0 API
         if (typeof ScreenshotProtection !== 'undefined') {
             ScreenshotProtection.init({
                 logToServer: true,
                 serverEndpoint: '/api/security/log-attempt',
-                blurOnDetection: true,
-                showWarningModal: true,
                 watermarkEnabled: true,
-                watermarkText: 'CONFIDENTIAL - Session: ' + (new Date().getTime().toString(36).toUpperCase()),
+                watermarkText: 'CONFIDENTIAL',
+                overlayEnabled: true,
+                showWarningOnKeyboard: true,
             });
         }
         

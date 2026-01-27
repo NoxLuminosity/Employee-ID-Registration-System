@@ -1,18 +1,22 @@
 /**
  * ============================================
- * Screenshot Protection Module
+ * Screenshot Protection Module v2.0
  * ============================================
  * 
- * Comprehensive client-side protection against screenshots and screen recording.
+ * Web-safe client-side protection that discourages screenshots and screen capture
+ * by obscuring content when the user is not actively viewing the page.
  * Works on both localhost and Vercel production environments.
  * 
  * Features:
- * - Keyboard shortcut detection (Print Screen, Ctrl+Shift+S, Cmd+Shift+3/4)
- * - Screen recording heuristics (visibility changes, focus loss patterns)
- * - Content blur/overlay on detection
+ * - Full-screen black overlay when tab loses visibility (Page Visibility API)
+ * - Full-screen overlay when browser window loses focus
+ * - Dynamic watermark with user identifier and timestamp
+ * - Keyboard shortcut detection for screenshot attempts
  * - Server-side event logging for audit trail
- * - Per-user and session-based watermarking
  * - Graceful degradation for older browsers
+ * 
+ * NOTE: This does NOT prevent OS-level screenshots. It only obscures content
+ * when the user is not actively engaged with the page.
  */
 
 const ScreenshotProtection = (function() {
@@ -22,21 +26,22 @@ const ScreenshotProtection = (function() {
     const config = {
         logToServer: true,
         serverEndpoint: '/api/security/log-attempt',
-        blurOnDetection: true,
-        showWarningModal: true,
+        showWarningOnKeyboard: true,
         watermarkEnabled: true,
         watermarkText: 'CONFIDENTIAL',
         detectionDebounceMs: 100,
-        recordingThreshold: 3, // Number of rapid events before considering it recording
+        overlayEnabled: true, // Enable/disable the visibility overlay
+        overlayMessage: 'Content hidden for security',
     };
     
     // State tracking
     const state = {
         initialized: false,
-        shortcutAttemptsInWindow: 0,
-        lastShortcutAttempt: 0,
-        recordingLikelihood: 0,
-        blurActive: false,
+        overlayActive: false,
+        lastKeyboardAttempt: 0,
+        userIdentifier: null,
+        watermarkElement: null,
+        overlayElement: null,
     };
     
     // ============================================
@@ -52,15 +57,278 @@ const ScreenshotProtection = (function() {
             return;
         }
         
-        console.log('[ScreenshotProtection] Initializing protection module');
+        console.log('[ScreenshotProtection] Initializing protection module v2.0');
         
+        // Store user identifier from options or extract from page
+        state.userIdentifier = options.userIdentifier || extractUserIdentifier();
+        
+        // Create DOM elements for overlay and watermark
+        createOverlayElement();
+        createWatermarkElement();
+        
+        // Setup event listeners
+        setupVisibilityDetection();
+        setupFocusDetection();
         setupKeyboardDetection();
-        setupRecordingDetection();
-        setupDataProtection();
-        setupWatermarking();
+        
+        // Start watermark timestamp updates
+        startWatermarkUpdates();
         
         state.initialized = true;
         console.log('[ScreenshotProtection] Initialization complete');
+        console.log('[ScreenshotProtection] User identifier:', state.userIdentifier);
+    }
+    
+    // ============================================
+    // User Identifier Extraction
+    // ============================================
+    
+    function extractUserIdentifier() {
+        // Try to get from data attribute on body
+        const bodyIdentifier = document.body.dataset.userIdentifier;
+        if (bodyIdentifier) return bodyIdentifier;
+        
+        // Try to get from meta tag
+        const metaUser = document.querySelector('meta[name="user-identifier"]');
+        if (metaUser) return metaUser.content;
+        
+        // Try to extract from visible user info on page
+        const userNameEl = document.querySelector('.user-name, .username, [data-username]');
+        if (userNameEl) return userNameEl.textContent.trim() || userNameEl.dataset.username;
+        
+        // Try to get from cookie
+        const sessionId = getSessionIdFromCookie();
+        if (sessionId) return `Session: ${sessionId.substring(0, 8).toUpperCase()}`;
+        
+        // Fallback to anonymous with random ID
+        return `User-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    }
+    
+    function getSessionIdFromCookie() {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'hr_session' || name === 'employee_session') {
+                return value;
+            }
+        }
+        return null;
+    }
+    
+    // ============================================
+    // Overlay Element (Black Screen)
+    // ============================================
+    
+    function createOverlayElement() {
+        if (state.overlayElement) return;
+        
+        const overlay = document.createElement('div');
+        overlay.id = 'screenshot-protection-overlay';
+        overlay.innerHTML = `
+            <div class="spo-content">
+                <svg class="spo-icon" width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <h2 class="spo-title">${config.overlayMessage}</h2>
+                <p class="spo-subtitle">Return to this window to continue viewing</p>
+            </div>
+        `;
+        
+        // Apply styles directly to ensure they work
+        const style = document.createElement('style');
+        style.id = 'screenshot-protection-styles';
+        style.textContent = `
+            #screenshot-protection-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                width: 100vw;
+                height: 100vh;
+                background: #000000;
+                z-index: 999999;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transition: opacity 0.15s ease;
+                pointer-events: all;
+            }
+            
+            #screenshot-protection-overlay.active {
+                display: flex;
+                opacity: 1;
+            }
+            
+            #screenshot-protection-overlay .spo-content {
+                text-align: center;
+                color: #ffffff;
+                padding: 2rem;
+                max-width: 400px;
+            }
+            
+            #screenshot-protection-overlay .spo-icon {
+                color: #666666;
+                margin-bottom: 1.5rem;
+            }
+            
+            #screenshot-protection-overlay .spo-title {
+                font-size: 1.5rem;
+                font-weight: 600;
+                margin: 0 0 0.5rem 0;
+                color: #ffffff;
+            }
+            
+            #screenshot-protection-overlay .spo-subtitle {
+                font-size: 0.95rem;
+                color: #888888;
+                margin: 0;
+            }
+            
+            /* Dynamic Watermark Styles */
+            #screenshot-protection-watermark {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                width: 100vw;
+                height: 100vh;
+                pointer-events: none;
+                z-index: 999990;
+                overflow: hidden;
+                opacity: 0.08;
+            }
+            
+            #screenshot-protection-watermark .watermark-pattern {
+                position: absolute;
+                top: -50%;
+                left: -50%;
+                width: 200%;
+                height: 200%;
+                display: flex;
+                flex-wrap: wrap;
+                align-content: flex-start;
+                transform: rotate(-30deg);
+            }
+            
+            #screenshot-protection-watermark .watermark-item {
+                padding: 60px 80px;
+                font-size: 14px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-weight: 500;
+                color: #000000;
+                white-space: nowrap;
+                user-select: none;
+            }
+            
+            /* Keyboard shortcut warning modal */
+            #screenshot-keyboard-warning {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) scale(0.9);
+                background: #1a1a1a;
+                color: #ffffff;
+                padding: 2rem 2.5rem;
+                border-radius: 12px;
+                z-index: 999998;
+                text-align: center;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.2s ease;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            }
+            
+            #screenshot-keyboard-warning.active {
+                opacity: 1;
+                visibility: visible;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            
+            #screenshot-keyboard-warning .warning-icon {
+                color: #f59e0b;
+                margin-bottom: 1rem;
+            }
+            
+            #screenshot-keyboard-warning .warning-title {
+                font-size: 1.25rem;
+                font-weight: 600;
+                margin: 0 0 0.5rem 0;
+            }
+            
+            #screenshot-keyboard-warning .warning-text {
+                font-size: 0.9rem;
+                color: #888888;
+                margin: 0;
+            }
+        `;
+        
+        document.head.appendChild(style);
+        document.body.appendChild(overlay);
+        state.overlayElement = overlay;
+        
+        console.log('[ScreenshotProtection] Overlay element created');
+    }
+    
+    // ============================================
+    // Watermark Element (Semi-transparent overlay with user info)
+    // ============================================
+    
+    function createWatermarkElement() {
+        if (!config.watermarkEnabled) return;
+        if (state.watermarkElement) return;
+        
+        const watermark = document.createElement('div');
+        watermark.id = 'screenshot-protection-watermark';
+        watermark.innerHTML = '<div class="watermark-pattern"></div>';
+        
+        document.body.appendChild(watermark);
+        state.watermarkElement = watermark;
+        
+        // Initial watermark render
+        updateWatermarkContent();
+        
+        console.log('[ScreenshotProtection] Watermark element created');
+    }
+    
+    function updateWatermarkContent() {
+        if (!state.watermarkElement) return;
+        
+        const pattern = state.watermarkElement.querySelector('.watermark-pattern');
+        if (!pattern) return;
+        
+        const timestamp = new Date().toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        
+        const watermarkText = `${config.watermarkText} • ${state.userIdentifier} • ${timestamp}`;
+        
+        // Create enough items to cover the rotated area
+        let items = '';
+        for (let i = 0; i < 100; i++) {
+            items += `<span class="watermark-item">${watermarkText}</span>`;
+        }
+        
+        pattern.innerHTML = items;
+    }
+    
+    function startWatermarkUpdates() {
+        if (!config.watermarkEnabled) return;
+        
+        // Update watermark every 30 seconds to keep timestamp current
+        setInterval(() => {
+            updateWatermarkContent();
+        }, 30000);
     }
     
     // ============================================
@@ -112,297 +380,130 @@ const ScreenshotProtection = (function() {
         }
         
         if (detected) {
-            handleDetection(eventType, 'keyboard');
+            handleKeyboardDetection(eventType);
             e.preventDefault();
             e.stopPropagation();
         }
     }
     
     // ============================================
-    // Screen Recording Heuristics
+    // Page Visibility Detection (Tab visibility)
     // ============================================
     
-    function setupRecordingDetection() {
-        // Monitor visibility changes (tab visibility)
+    function setupVisibilityDetection() {
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        
-        // Monitor window focus/blur
+        console.log('[ScreenshotProtection] Page Visibility API detection enabled');
+    }
+    
+    function handleVisibilityChange() {
+        if (document.visibilityState === 'hidden') {
+            // Tab is hidden (user switched tabs or minimized)
+            showOverlay('visibility');
+            logEvent('tab_hidden', 'visibility_change');
+            console.log('[ScreenshotProtection] Tab hidden - overlay activated');
+        } else if (document.visibilityState === 'visible') {
+            // Tab is visible again
+            hideOverlay('visibility');
+            console.log('[ScreenshotProtection] Tab visible - overlay deactivated');
+        }
+    }
+    
+    // ============================================
+    // Window Focus Detection
+    // ============================================
+    
+    function setupFocusDetection() {
         window.addEventListener('blur', handleWindowBlur);
         window.addEventListener('focus', handleWindowFocus);
-        
-        // Monitor frame rate drops (CPU load heuristic for recording)
-        startFrameRateMonitoring();
+        console.log('[ScreenshotProtection] Window focus detection enabled');
     }
     
-    let visibilityChangeEvents = [];
-    function handleVisibilityChange() {
-        const now = Date.now();
-        visibilityChangeEvents.push(now);
-        
-        // Keep only last 10 events within 5 second window
-        visibilityChangeEvents = visibilityChangeEvents.filter(t => now - t < 5000);
-        
-        // If more than 5 visibility changes in 5 seconds, likely recording
-        if (visibilityChangeEvents.length > 5) {
-            handleDetection('visibility_spam', 'recording_heuristic');
-            visibilityChangeEvents = [];
-        }
-    }
-    
-    let focusLossEvents = [];
     function handleWindowBlur() {
-        const now = Date.now();
-        focusLossEvents.push(now);
-        
-        // Keep only events within last 3 seconds
-        focusLossEvents = focusLossEvents.filter(t => now - t < 3000);
-        
-        // More than 3 rapid focus losses suggest recording
-        if (focusLossEvents.length > 3) {
-            handleDetection('focus_loss_spam', 'recording_heuristic');
-            focusLossEvents = [];
-        }
+        // Window lost focus (user clicked outside browser)
+        showOverlay('blur');
+        logEvent('window_blur', 'focus_change');
+        console.log('[ScreenshotProtection] Window blur - overlay activated');
     }
     
     function handleWindowFocus() {
-        // Reset counters on focus regain
-        focusLossEvents = [];
-    }
-    
-    // Frame rate monitoring (CPU load heuristic)
-    function startFrameRateMonitoring() {
-        let frameCount = 0;
-        let lastTime = Date.now();
-        let lowFrameRateCount = 0;
-        
-        function countFrames() {
-            const now = Date.now();
-            const elapsed = now - lastTime;
-            
-            if (elapsed > 1000) {
-                // FPS calculation
-                const fps = Math.round((frameCount / elapsed) * 1000);
-                
-                // If FPS drops below 20, likely recording
-                if (fps < 20 && fps > 0) {
-                    lowFrameRateCount++;
-                    if (lowFrameRateCount > 5) {
-                        // Only log once to avoid spam
-                        console.log('[ScreenshotProtection] Low FPS detected:', fps);
-                        logEvent('low_frame_rate', `FPS: ${fps}`);
-                    }
-                } else {
-                    lowFrameRateCount = Math.max(0, lowFrameRateCount - 1);
-                }
-                
-                frameCount = 0;
-                lastTime = now;
-            }
-            frameCount++;
-            requestAnimationFrame(countFrames);
-        }
-        
-        requestAnimationFrame(countFrames);
+        // Window regained focus
+        hideOverlay('focus');
+        console.log('[ScreenshotProtection] Window focus - overlay deactivated');
     }
     
     // ============================================
-    // Data Protection (Copy/Paste/Select)
+    // Overlay Control
     // ============================================
     
-    function setupDataProtection() {
-        // Prevent copy on sensitive elements
-        document.addEventListener('copy', handleCopyEvent);
+    function showOverlay(reason) {
+        if (!config.overlayEnabled) return;
+        if (!state.overlayElement) return;
         
-        // Prevent paste on restricted elements
-        document.addEventListener('paste', handlePasteEvent);
+        state.overlayActive = true;
+        state.overlayElement.classList.add('active');
         
-        // Prevent text selection on sensitive elements
-        document.addEventListener('selectstart', handleSelectEvent);
+        // Update watermark when overlay shows
+        updateWatermarkContent();
+    }
+    
+    function hideOverlay(reason) {
+        if (!state.overlayElement) return;
         
-        // Prevent drag operations
-        document.addEventListener('dragstart', handleDragEvent);
-    }
-    
-    function handleCopyEvent(e) {
-        const target = e.target.closest('.sensitive-data, [data-protect="copy"]');
-        if (target) {
-            e.preventDefault();
-            e.clipboardData.setData('text/plain', '[REDACTED - SENSITIVE INFORMATION]');
-            logEvent('copy_attempted', target.id || 'unknown');
-        }
-    }
-    
-    function handlePasteEvent(e) {
-        const target = e.target.closest('[data-protect="paste"]');
-        if (target) {
-            e.preventDefault();
-            logEvent('paste_attempted', target.id || 'unknown');
-        }
-    }
-    
-    function handleSelectEvent(e) {
-        const target = e.target.closest('.sensitive-data, [data-protect="select"]');
-        if (target) {
-            e.preventDefault();
-            logEvent('select_attempted', target.id || 'unknown');
-        }
-    }
-    
-    function handleDragEvent(e) {
-        const target = e.target.closest('.sensitive-data, [data-protect="drag"]');
-        if (target) {
-            e.preventDefault();
-            logEvent('drag_attempted', target.id || 'unknown');
+        // Only hide if tab is visible AND window has focus
+        // This prevents flicker when both events fire
+        if (document.visibilityState === 'visible' && document.hasFocus()) {
+            state.overlayActive = false;
+            state.overlayElement.classList.remove('active');
         }
     }
     
     // ============================================
-    // Watermarking System
+    // Keyboard Detection Handler
     // ============================================
     
-    function setupWatermarking() {
-        if (!config.watermarkEnabled) return;
-        
-        // Get session/user identifier
-        const sessionId = getSessionId();
-        const watermarkText = `${config.watermarkText} • Session: ${sessionId} • ${new Date().toLocaleTimeString()}`;
-        
-        // Add watermark to sensitive elements
-        addWatermarksToElements(watermarkText);
-        
-        // Re-apply watermark if DOM changes (MutationObserver)
-        observeDOM(watermarkText);
-    }
-    
-    function getSessionId() {
-        // Try to extract from JWT cookie
-        const cookies = document.cookie.split(';');
-        for (let cookie of cookies) {
-            if (cookie.includes('hr_session') || cookie.includes('employee_session')) {
-                return cookie.split('=')[1].substring(0, 8).toUpperCase();
-            }
-        }
-        return Math.random().toString(36).substring(2, 8).toUpperCase();
-    }
-    
-    function addWatermarksToElements(watermarkText) {
-        const sensitiveElements = document.querySelectorAll(
-            '.id-card-preview, .sensitive-data, [data-watermark="true"], .employee-data'
-        );
-        
-        sensitiveElements.forEach(element => {
-            if (!element.hasAttribute('data-watermarked')) {
-                element.setAttribute('data-watermark-text', watermarkText);
-                element.setAttribute('data-watermarked', 'true');
-                element.style.position = 'relative';
-            }
-        });
-    }
-    
-    function observeDOM(watermarkText) {
-        const observer = new MutationObserver((mutations) => {
-            // Re-apply watermarks to new sensitive elements
-            addWatermarksToElements(watermarkText);
-        });
-        
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: false,
-            characterData: false,
-        });
-    }
-    
-    // ============================================
-    // Detection Handler (Main Trigger)
-    // ============================================
-    
-    function handleDetection(detectionType, source = 'unknown') {
+    function handleKeyboardDetection(eventType) {
         const now = Date.now();
         
-        console.warn(`[ScreenshotProtection] DETECTION: ${detectionType} from ${source}`);
-        
-        // Debounce multiple rapid detections
-        if (now - state.lastShortcutAttempt < config.detectionDebounceMs) {
+        // Debounce
+        if (now - state.lastKeyboardAttempt < config.detectionDebounceMs) {
             return;
         }
-        state.lastShortcutAttempt = now;
+        state.lastKeyboardAttempt = now;
+        
+        console.warn(`[ScreenshotProtection] Keyboard shortcut detected: ${eventType}`);
         
         // Log the event
-        logEvent(detectionType, source);
+        logEvent(eventType, 'keyboard_shortcut');
         
-        // Show warning modal
-        if (config.showWarningModal) {
-            showWarningModal(detectionType);
+        // Show keyboard warning (brief, non-blocking)
+        if (config.showWarningOnKeyboard) {
+            showKeyboardWarning();
+        }
+    }
+    
+    function showKeyboardWarning() {
+        // Create warning element if it doesn't exist
+        let warning = document.getElementById('screenshot-keyboard-warning');
+        if (!warning) {
+            warning = document.createElement('div');
+            warning.id = 'screenshot-keyboard-warning';
+            warning.innerHTML = `
+                <svg class="warning-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 9v4M12 17h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <h3 class="warning-title">Screenshot Shortcut Detected</h3>
+                <p class="warning-text">This action has been logged for security purposes</p>
+            `;
+            document.body.appendChild(warning);
         }
         
-        // Blur sensitive content
-        if (config.blurOnDetection) {
-            blurSensitiveContent();
-        }
+        // Show warning
+        warning.classList.add('active');
         
-        // Increment recording likelihood
-        state.recordingLikelihood++;
-        
-        // Auto-clear blur after 5 seconds if no further detections
+        // Hide after 3 seconds
         setTimeout(() => {
-            state.recordingLikelihood = Math.max(0, state.recordingLikelihood - 1);
-            if (state.recordingLikelihood === 0 && state.blurActive) {
-                unblurSensitiveContent();
-            }
-        }, 5000);
-    }
-    
-    // ============================================
-    // Visual Response to Detection
-    // ============================================
-    
-    function blurSensitiveContent() {
-        if (state.blurActive) return;
-        state.blurActive = true;
-        
-        const sensitiveElements = document.querySelectorAll(
-            '.id-card-preview, .sensitive-data, [data-protect="blur"], .employee-data'
-        );
-        
-        sensitiveElements.forEach(el => {
-            el.style.filter = 'blur(8px)';
-            el.style.opacity = '0.5';
-            el.style.pointerEvents = 'none';
-            el.classList.add('recording-detected');
-        });
-        
-        // Darken entire page
-        document.body.style.backgroundColor = '#f0f0f0';
-        
-        console.log('[ScreenshotProtection] Content blurred due to detection');
-    }
-    
-    function unblurSensitiveContent() {
-        state.blurActive = false;
-        
-        const sensitiveElements = document.querySelectorAll('.recording-detected');
-        sensitiveElements.forEach(el => {
-            el.style.filter = 'none';
-            el.style.opacity = '1';
-            el.style.pointerEvents = 'auto';
-            el.classList.remove('recording-detected');
-        });
-        
-        console.log('[ScreenshotProtection] Content unblurred');
-    }
-    
-    function showWarningModal(detectionType) {
-        const overlay = document.getElementById('screenshotOverlay');
-        if (overlay) {
-            overlay.classList.add('active');
-            console.log('[ScreenshotProtection] Warning modal shown');
-            
-            // Auto-hide after 10 seconds
-            setTimeout(() => {
-                overlay.classList.remove('active');
-            }, 10000);
-        }
+            warning.classList.remove('active');
+        }, 3000);
     }
     
     // ============================================
@@ -410,11 +511,6 @@ const ScreenshotProtection = (function() {
     // ============================================
     
     function logEvent(eventType, details = '') {
-        if (!config.logToServer) {
-            console.log('[ScreenshotProtection] Event logged locally:', eventType, details);
-            return;
-        }
-        
         const payload = {
             event_type: eventType,
             details: details,
@@ -422,15 +518,22 @@ const ScreenshotProtection = (function() {
             url: window.location.href,
             user_agent: navigator.userAgent,
             screen_resolution: `${window.screen.width}x${window.screen.height}`,
+            user_identifier: state.userIdentifier,
         };
+        
+        if (!config.logToServer) {
+            console.log('[ScreenshotProtection] Event logged locally:', payload);
+            return;
+        }
         
         // Use fetch with keepalive to ensure delivery even if page unloads
         fetch(config.serverEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-            keepalive: true, // Ensures request completes even on page close
+            keepalive: true,
         }).catch(err => {
+            // Silently fail - don't break the page for logging errors
             console.log('[ScreenshotProtection] Event logging failed:', err);
         });
     }
@@ -442,16 +545,30 @@ const ScreenshotProtection = (function() {
     return {
         init: init,
         logEvent: logEvent,
-        blur: blurSensitiveContent,
-        unblur: unblurSensitiveContent,
+        showOverlay: () => showOverlay('manual'),
+        hideOverlay: () => hideOverlay('manual'),
+        updateWatermark: updateWatermarkContent,
         getState: () => ({ ...state }),
         getConfig: () => ({ ...config }),
+        setUserIdentifier: (identifier) => {
+            state.userIdentifier = identifier;
+            updateWatermarkContent();
+        },
     };
 })();
 
-// Auto-initialize if data attribute present on body
-if (document.body.getAttribute('data-screenshot-protection') === 'true') {
-    document.addEventListener('DOMContentLoaded', () => {
-        ScreenshotProtection.init();
-    });
+// Auto-initialize when DOM is ready if data attribute is present
+document.addEventListener('DOMContentLoaded', () => {
+    // Check for auto-init attribute
+    const autoInit = document.body.getAttribute('data-screenshot-protection');
+    if (autoInit === 'true' || autoInit === 'auto') {
+        // Get user identifier from body attribute if present
+        const userIdentifier = document.body.dataset.userIdentifier || null;
+        ScreenshotProtection.init({ userIdentifier });
+    }
+});
+
+// Export for module systems (if needed)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ScreenshotProtection;
 }
