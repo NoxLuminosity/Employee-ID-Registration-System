@@ -474,9 +474,10 @@ def append_employee_submission(
     id_nickname: str,
     id_number: str,
     position: str,
-    department: str,
-    email: str,
     personal_number: str,
+    location_branch: Optional[str] = None,
+    department: str = '',
+    email: str = '',
     photo_path: str = None,
     signature_path: str = None,
     status: str = 'Reviewing',
@@ -487,7 +488,8 @@ def append_employee_submission(
     render_url: str = '',
     first_name: Optional[str] = None,
     middle_initial: Optional[str] = None,
-    last_name: Optional[str] = None
+    last_name: Optional[str] = None,
+    suffix: Optional[str] = None
 ) -> bool:
     """
     Append employee submission to Lark Bitable.
@@ -573,14 +575,14 @@ def append_employee_submission(
         "first_name": first_name or "",
         "middle_initial": middle_initial or "",
         "last_name": last_name or "",
+        "suffix": suffix or "",
         "id_nickname": id_nickname or "",
         "id_number": id_number,
         "position": position,
-        "department": department or "",
+        "location_branch": location_branch or "",
         "email": email,
         "personal number": phone_number,  # Number field - send as int
         "status": status,
-        "date last modified": date_value,  # Date field - millisecond timestamp
     }
     
     print(f"\\n[DEBUG] Fields being sent to Lark:")

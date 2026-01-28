@@ -62,9 +62,11 @@ def init_sqlite_db():
         first_name TEXT,
         middle_initial TEXT,
         last_name TEXT,
+        suffix TEXT,
         id_nickname TEXT,
         id_number TEXT NOT NULL,
         position TEXT NOT NULL,
+        location_branch TEXT,
         department TEXT,
         email TEXT,
         personal_number TEXT,
@@ -111,7 +113,9 @@ def init_sqlite_db():
         "ALTER TABLE employees ADD COLUMN emergency_address TEXT",
         "ALTER TABLE employees ADD COLUMN first_name TEXT",
         "ALTER TABLE employees ADD COLUMN middle_initial TEXT",
-        "ALTER TABLE employees ADD COLUMN last_name TEXT"
+        "ALTER TABLE employees ADD COLUMN last_name TEXT",
+        "ALTER TABLE employees ADD COLUMN suffix TEXT",
+        "ALTER TABLE employees ADD COLUMN location_branch TEXT"
     ]
     for sql in migrations:
         try:

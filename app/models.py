@@ -22,12 +22,14 @@ class EmployeeBase(BaseModel):
     first_name: Optional[str] = None
     middle_initial: Optional[str] = None
     last_name: Optional[str] = None
+    suffix: Optional[str] = None
     id_nickname: Optional[str] = None
     id_number: str
     position: str
+    location_branch: Optional[str] = None
     department: Optional[str] = None  # Deprecated - kept for backward compatibility
     email: Optional[str] = None
-    personal_number: Optional[str] = None
+    personal_number: str = '',
     emergency_name: Optional[str] = None
     emergency_contact: Optional[str] = None
     emergency_address: Optional[str] = None

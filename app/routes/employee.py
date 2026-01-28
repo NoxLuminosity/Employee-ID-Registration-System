@@ -313,9 +313,12 @@ async def submit_employee(
     first_name: str = Form(...),
     middle_initial: str = Form(''),
     last_name: str = Form(...),
+    suffix: str = Form(''),
+    suffix_custom: str = Form(''),
     id_nickname: str = Form(''),
     id_number: str = Form(...),
     position: str = Form(...),
+    location_branch: Optional[str] = Form(''),
     email: str = Form(...),
     personal_number: str = Form(...),
     photo: UploadFile = File(...),
@@ -345,6 +348,12 @@ async def submit_employee(
         employee_name_parts.append(mi)
     if last_name:
         employee_name_parts.append(last_name)
+    
+    # Add suffix (use custom suffix if "Other" was selected)
+    final_suffix = suffix_custom.strip() if suffix == 'Other' and suffix_custom else suffix.strip()
+    if final_suffix:
+        employee_name_parts.append(final_suffix)
+    
     employee_name = ' '.join(employee_name_parts)
     
     try:
@@ -463,6 +472,7 @@ async def submit_employee(
             'first_name': first_name,
             'middle_initial': middle_initial,
             'last_name': last_name,
+            'suffix': final_suffix,
             'id_nickname': id_nickname,
             'id_number': id_number,
             'position': position,
@@ -512,6 +522,7 @@ async def submit_employee(
                 id_nickname=id_nickname,
                 id_number=id_number,
                 position=position,
+                location_branch=location_branch,
                 department='',  # Deprecated
                 email=email,
                 personal_number=personal_number,
@@ -525,7 +536,8 @@ async def submit_employee(
                 render_url='',
                 first_name=first_name,
                 middle_initial=middle_initial,
-                last_name=last_name
+                last_name=last_name,
+                suffix=final_suffix
             )
             if lark_success:
                 logger.info(f"✅ Successfully appended employee submission to Lark Bitable: {id_number}")

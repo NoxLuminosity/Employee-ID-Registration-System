@@ -40,7 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
     regenerateBtn: document.getElementById('regenerateBtn'),
     signatureCanvas: document.getElementById('signaturePad'),
     signatureData: document.getElementById('signature_data'),
-    clearSignature: document.getElementById('clearSignature')
+    clearSignature: document.getElementById('clearSignature'),
+    suffixDropdown: document.getElementById('suffix'),
+    suffixCustomGroup: document.getElementById('suffix_custom_group'),
+    suffixCustomInput: document.getElementById('suffix_custom')
   };
 
   initPhotoUpload();
@@ -51,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initPositionRadioButtons(); // Handle position radio button changes
   initPrefilledFields(); // Handle prefilled fields from Lark
   initInputValidation(); // Initialize character restrictions on input fields
+  initSuffixField(); // Initialize suffix dropdown and custom input
   updateReviewSection(); // Update on load
   updateIdCardPreview(); // Update ID card preview on load
   updateIdCardBackside(); // Update ID card backside on load
@@ -126,7 +130,7 @@ function initInputValidation() {
   });
 
   // Contact Name fields - alphanumeric + spaces only
-  const nameFields = ['first_name', 'last_name', 'emergency_name'];
+  const nameFields = ['first_name', 'last_name', 'emergency_name', 'suffix_custom'];
   nameFields.forEach(fieldId => {
     const field = document.getElementById(fieldId);
     if (field) {
@@ -186,6 +190,70 @@ function initInputValidation() {
       }
     });
   }
+}
+
+// ============================================
+// Suffix Field Management
+// ============================================
+function initSuffixField() {
+  const suffixDropdown = elements.suffixDropdown;
+  const suffixCustomGroup = elements.suffixCustomGroup;
+  const suffixCustomInput = elements.suffixCustomInput;
+  
+  console.log('Initializing suffix field:', {
+    dropdown: suffixDropdown,
+    customGroup: suffixCustomGroup,
+    customInput: suffixCustomInput
+  });
+  
+  if (suffixDropdown && suffixCustomGroup && suffixCustomInput) {
+    // Handle dropdown changes
+    suffixDropdown.addEventListener('change', () => {
+      console.log('Suffix dropdown changed to:', suffixDropdown.value);
+      if (suffixDropdown.value === 'Other') {
+        suffixCustomGroup.style.display = 'block';
+        console.log('Showing custom suffix input');
+      } else {
+        suffixCustomGroup.style.display = 'none';
+        suffixCustomInput.value = ''; // Clear custom input when not "Other"
+        console.log('Hiding custom suffix input');
+      }
+      // Trigger update events
+      updateReviewSection();
+      updateIdCardPreview();
+      updateIdCardBackside();
+    });
+    
+    // Check initial state on page load
+    if (suffixDropdown.value === 'Other') {
+      suffixCustomGroup.style.display = 'block';
+      console.log('Initial state: Other selected, showing custom input');
+    }
+  } else {
+    console.error('Suffix field elements not found:', {
+      dropdown: !!suffixDropdown,
+      customGroup: !!suffixCustomGroup,
+      customInput: !!suffixCustomInput
+    });
+  }
+}
+
+// Helper function to get the actual suffix value
+function getSuffixValue() {
+  const suffixDropdown = elements.suffixDropdown;
+  const suffixCustomInput = elements.suffixCustomInput;
+  
+  if (!suffixDropdown) return '';
+  
+  const dropdownValue = suffixDropdown.value;
+  
+  if (dropdownValue === 'Other' && suffixCustomInput) {
+    return suffixCustomInput.value.trim();
+  } else if (dropdownValue && dropdownValue !== '') {
+    return dropdownValue;
+  }
+  
+  return '';
 }
 
 // ============================================
@@ -713,6 +781,9 @@ function updateIdCardPreview() {
   const lastName = getValue('last_name');
   
   // Build full name: "FirstName M.I. LastName" or "FirstName LastName" if no MI
+  // Get suffix value
+  const suffix = getSuffixValue();
+  
   let fullName = '';
   if (firstName) {
     fullName = firstName;
@@ -722,8 +793,14 @@ function updateIdCardPreview() {
     if (lastName) {
       fullName += ' ' + lastName;
     }
+    if (suffix) {
+      fullName += ' ' + suffix;
+    }
   } else if (lastName) {
     fullName = lastName;
+    if (suffix) {
+      fullName += ' ' + suffix;
+    }
   }
   
   const fullnameEl = document.getElementById('id_preview_fullname');
@@ -920,12 +997,15 @@ function updateReviewSection() {
   setText('review_first_name', getValue('first_name'));
   setText('review_middle_initial', getValue('middle_initial'));
   setText('review_last_name', getValue('last_name'));
+  const suffixValue = getSuffixValue();
+  setText('review_suffix', suffixValue || '-');
   setText('review_id_nickname', getValue('id_nickname'));
   setText('review_id_number', getValue('id_number'));
 
   // Update text fields - Work Details (position from radio buttons)
   const position = getSelectedPosition();
   setText('review_position', position || '-');
+  setText('review_location_branch', getValue('location_branch'));
 
   // Update text fields - Contact Information
   setText('review_email', getValue('email'));

@@ -188,7 +188,7 @@
             </div>
             <div class="form-group">
               <label for="middle_initial">
-                M.I.
+                Middle Initial 
                 {% if prefill and prefill.middle_initial %}
                 <span class="prefilled-indicator">
                   <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
@@ -196,7 +196,7 @@
                 </span>
                 {% endif %}
               </label>
-              <input type="text" id="middle_initial" name="middle_initial" maxlength="3" placeholder="M.I."
+              <input type="text" id="middle_initial" name="middle_initial" maxlength="3" placeholder="e.g., A."
                      value="{{ prefill.middle_initial if prefill else '' }}"
                      class="{% if prefill and prefill.middle_initial %}prefilled{% endif %}">
             </div>
@@ -213,6 +213,22 @@
               <input type="text" id="last_name" name="last_name" required maxlength="20" placeholder="Last name"
                      value="{{ prefill.last_name if prefill else '' }}"
                      class="{% if prefill and prefill.last_name %}prefilled{% endif %}">
+            </div>
+            <div class="form-group">
+              <label for="suffix">Suffix (Optional)</label>
+              <select id="suffix" name="suffix">
+                <option value="">Options</option>
+                <option value="Jr.">Jr.</option>
+                <option value="Sr.">Sr.</option>
+                <option value="II">II</option>
+                <option value="III">III</option>
+                <option value="IV">IV</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group" id="suffix_custom_group" style="display: none;">
+              <label for="suffix_custom">Custom Suffix</label>
+              <input type="text" id="suffix_custom" name="suffix_custom" maxlength="10" placeholder="Enter custom suffix">
             </div>
             <div class="form-group">
               <label for="id_nickname">ID Nickname</label>
@@ -338,10 +354,34 @@
                 </label>
                 <label class="checkbox-option">
                   <input type="radio" id="position_others" name="position" value="Others">
-                  <span class="checkbox-label">Others</span>
+                  <span class="checkbox-label">Others (Agents, Solutions, etc.)</span>
                 </label>
               </div>
               <input type="hidden" id="position_value" name="position_value">
+            </div>
+            <div class="form-group full-width">
+              <label>Location / Branch <span class="required">*</span></label>
+              <select id="location_branch" name="location_branch" required>
+                <option value="" disabled selected>Select a branch</option>
+                <option>Makati</option>
+                <option>Quezon City</option>
+                <option>Paranaque</option>
+                <option>Pangasinan</option>
+                <option>Pampanga</option>
+                <option>Bulacan</option>
+                <option>Cavite</option>
+                <option>Laguna</option>
+                <option>Batangas</option>
+                <option>Cebu</option>
+                <option>Iloilo</option>
+                <option>Bacolod</option>
+                <option>Davao</option>
+                <option>Cagayan De Oro</option>
+                <option>Pagadian</option>
+                <option>Tagum</option>
+                <option>Zamboanga</option>
+                <option>General Santos</option>
+              </select>
             </div>
           </div>
         </section>
@@ -623,6 +663,10 @@
                 <div class="value" id="review_last_name">-</div>
               </div>
               <div class="review-item">
+                <label>Suffix</label>
+                <div class="value" id="review_suffix">-</div>
+              </div>
+              <div class="review-item">
                 <label>ID Nickname</label>
                 <div class="value" id="review_id_nickname">-</div>
               </div>
@@ -632,7 +676,7 @@
               </div>
             </div>
           </div>
-
+          
           <div class="review-card">
             <h3 class="review-card-title">Work Details</h3>
             <div class="review-grid">
@@ -640,9 +684,13 @@
                 <label>Position</label>
                 <div class="value" id="review_position">-</div>
               </div>
+              <div class="review-item">
+                <label>Location / Branch</label>
+                <div class="value" id="review_location_branch">-</div>
+              </div>
             </div>
           </div>
-
+              
           <div class="review-card">
             <h3 class="review-card-title">Contact Information</h3>
             <div class="review-grid">

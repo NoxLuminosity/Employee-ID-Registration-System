@@ -10,9 +10,11 @@ CREATE TABLE IF NOT EXISTS employees (
     first_name TEXT,
     middle_initial TEXT,
     last_name TEXT,
+    suffix TEXT,
     id_nickname TEXT,
     id_number TEXT NOT NULL,
     position TEXT NOT NULL,
+    location_branch TEXT,
     department TEXT NOT NULL,
     email TEXT,
     personal_number TEXT,
@@ -42,6 +44,9 @@ CREATE TABLE IF NOT EXISTS employees (
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_name TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS middle_initial TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS last_name TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS suffix TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS location_branch TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS suffix TEXT;
 
 -- Create index for faster status queries
 CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status);
