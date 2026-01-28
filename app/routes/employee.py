@@ -476,6 +476,7 @@ async def submit_employee(
             'id_nickname': id_nickname,
             'id_number': id_number,
             'position': position,
+            'location_branch': location_branch,  # Branch/Location from form
             'department': '',  # Deprecated - kept for backward compatibility
             'email': email,
             'personal_number': personal_number,

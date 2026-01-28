@@ -99,7 +99,7 @@ const elements = {
   tableCount: document.getElementById('tableCount'),
   searchInput: document.getElementById('searchInput'),
   statusFilter: document.getElementById('statusFilter'),
-  departmentFilter: document.getElementById('departmentFilter'),
+  positionFilter: document.getElementById('positionFilter'),
   totalCount: document.getElementById('totalCount'),
   reviewingCount: document.getElementById('reviewingCount'),
   approvedCount: document.getElementById('approvedCount'),
@@ -119,34 +119,66 @@ const elements = {
 // Initialization
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  loadViewedEmployees();
-  initEventListeners();
-  fetchEmployeeData();
+  console.log('Dashboard: DOMContentLoaded fired');
+  try {
+    // Verify critical elements exist
+    const criticalElements = ['loadingState', 'tableSection', 'employeeTableBody', 'searchInput', 'statusFilter', 'positionFilter'];
+    for (const el of criticalElements) {
+      if (!elements[el]) {
+        console.error(`Dashboard: Critical element missing: ${el}`);
+      }
+    }
+    
+    loadViewedEmployees();
+    initEventListeners();
+    fetchEmployeeData();
+  } catch (error) {
+    console.error('Dashboard: Initialization error:', error);
+    // Still try to fetch data even if some initialization fails
+    fetchEmployeeData();
+  }
 });
 
 function initEventListeners() {
-  // Search and filter
-  elements.searchInput.addEventListener('input', debounce(filterEmployees, 300));
-  elements.statusFilter.addEventListener('change', filterEmployees);
-  elements.departmentFilter.addEventListener('change', filterEmployees);
+  // Search and filter - with null checks
+  if (elements.searchInput) {
+    elements.searchInput.addEventListener('input', debounce(filterEmployees, 300));
+  }
+  if (elements.statusFilter) {
+    elements.statusFilter.addEventListener('change', filterEmployees);
+  }
+  if (elements.positionFilter) {
+    elements.positionFilter.addEventListener('change', filterEmployees);
+  }
 
   // Modal
-  elements.closeModal.addEventListener('click', closeModal);
-  elements.detailsModal.addEventListener('click', (e) => {
-    if (e.target === elements.detailsModal) closeModal();
-  });
+  if (elements.closeModal) {
+    elements.closeModal.addEventListener('click', closeModal);
+  }
+  if (elements.detailsModal) {
+    elements.detailsModal.addEventListener('click', (e) => {
+      if (e.target === elements.detailsModal) closeModal();
+    });
+  }
 
   // Quick actions
-  elements.viewGalleryBtn.addEventListener('click', () => {
-    window.location.href = '/hr/gallery';
-  });
+  if (elements.viewGalleryBtn) {
+    elements.viewGalleryBtn.addEventListener('click', () => {
+      window.location.href = '/hr/gallery';
+    });
+  }
 
-  elements.exportDataBtn.addEventListener('click', exportData);
-  elements.refreshDataBtn.addEventListener('click', () => {
-    // Force refresh bypasses cache
-    fetchEmployeeData(true);
-    showToast('Data refreshed successfully', 'success');
-  });
+  if (elements.exportDataBtn) {
+    elements.exportDataBtn.addEventListener('click', exportData);
+  }
+  
+  if (elements.refreshDataBtn) {
+    elements.refreshDataBtn.addEventListener('click', () => {
+      // Force refresh bypasses cache
+      fetchEmployeeData(true);
+      showToast('Data refreshed successfully', 'success');
+    });
+  }
 
   // Escape key to close modal
   document.addEventListener('keydown', (e) => {
@@ -373,8 +405,8 @@ function renderEmployeeTable() {
         <td><span class="employee-id-number">${escapeHtml(emp.id_number)}</span></td>
         <td><span class="employee-email">${escapeHtml(emp.email || '-')}</span></td>
         <td><span class="employee-phone">${escapeHtml(emp.personal_number || '-')}</span></td>
-        <td>${escapeHtml(emp.department)}</td>
         <td>${escapeHtml(emp.position)}</td>
+        <td>${escapeHtml(emp.location_branch || '-')}</td>
         <td><span class="status-badge ${statusClass}">${emp.status}</span></td>
         <td>${submittedDate}</td>
         <td>
@@ -398,23 +430,23 @@ function renderEmployeeTable() {
 function filterEmployees() {
   const searchTerm = elements.searchInput.value.toLowerCase().trim();
   const statusFilter = elements.statusFilter.value;
-  const deptFilter = elements.departmentFilter.value;
+  const positionFilter = elements.positionFilter.value;
 
   dashboardState.filteredEmployees = dashboardState.employees.filter(emp => {
     // Search filter
     const matchesSearch = !searchTerm || 
       emp.employee_name.toLowerCase().includes(searchTerm) ||
       emp.id_number.toLowerCase().includes(searchTerm) ||
-      emp.department.toLowerCase().includes(searchTerm) ||
+      (emp.location_branch || '').toLowerCase().includes(searchTerm) ||
       emp.position.toLowerCase().includes(searchTerm);
 
     // Status filter
     const matchesStatus = !statusFilter || emp.status === statusFilter;
 
-    // Department filter
-    const matchesDept = !deptFilter || emp.department === deptFilter;
+    // Position filter
+    const matchesPosition = !positionFilter || emp.position === positionFilter;
 
-    return matchesSearch && matchesStatus && matchesDept;
+    return matchesSearch && matchesStatus && matchesPosition;
   });
 
   renderEmployeeTable();
@@ -602,12 +634,12 @@ function viewDetails(id) {
         <span class="detail-value">${escapeHtml(emp.id_number)}</span>
       </div>
       <div class="detail-item">
-        <span class="detail-label">Department</span>
-        <span class="detail-value">${escapeHtml(emp.department)}</span>
-      </div>
-      <div class="detail-item">
         <span class="detail-label">Position</span>
         <span class="detail-value">${escapeHtml(emp.position)}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Branch/Location</span>
+        <span class="detail-value">${escapeHtml(emp.location_branch || '-')}</span>
       </div>
       <div class="detail-item">
         <span class="detail-label">Email</span>
@@ -724,11 +756,11 @@ function exportData() {
   }
 
   // Create CSV content
-  const headers = ['Employee Name', 'ID Number', 'Department', 'Position', 'Email', 'Phone', 'Status', 'Submitted Date'];
+  const headers = ['Employee Name', 'ID Number', 'Branch/Location', 'Position', 'Email', 'Phone', 'Status', 'Submitted Date'];
   const rows = employees.map(emp => [
     emp.employee_name,
     emp.id_number,
-    emp.department,
+    emp.location_branch || '',
     emp.position,
     emp.email,
     emp.personal_number,

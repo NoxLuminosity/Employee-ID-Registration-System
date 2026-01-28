@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     galleryGrid: document.getElementById('galleryGrid'),
     emptyState: document.getElementById('emptyState'),
     searchInput: document.getElementById('searchInput'),
-    departmentFilter: document.getElementById('departmentFilter'),
+    positionFilter: document.getElementById('positionFilter'),
     totalApproved: document.getElementById('totalApproved'),
     totalCompleted: document.getElementById('totalCompleted'),
     previewModal: document.getElementById('previewModal'),
@@ -179,8 +179,8 @@ function initEventListeners() {
   if (elements.searchInput) {
     elements.searchInput.addEventListener('input', debounce(filterGallery, 300));
   }
-  if (elements.departmentFilter) {
-    elements.departmentFilter.addEventListener('change', filterGallery);
+  if (elements.positionFilter) {
+    elements.positionFilter.addEventListener('change', filterGallery);
   }
 
   // Modal - add null checks
@@ -485,7 +485,7 @@ function renderGallery() {
           <div class="id-card-meta">
             <span>${escapeHtml(emp.id_number)}</span>
             <span>•</span>
-            <span>${escapeHtml(emp.department)}</span>
+            <span>${escapeHtml(emp.location_branch || '-')}</span>
           </div>
           <div class="id-card-actions">
             <button class="btn-preview" onclick="window.previewID(${emp.id})">
@@ -721,16 +721,17 @@ function generateIDCardBackHtml(emp) {
 // ============================================
 function filterGallery() {
   const searchTerm = elements.searchInput ? elements.searchInput.value.toLowerCase().trim() : '';
-  const deptFilter = elements.departmentFilter ? elements.departmentFilter.value : '';
+  const positionFilter = elements.positionFilter ? elements.positionFilter.value : '';
 
   galleryState.filteredEmployees = galleryState.employees.filter(emp => {
     const matchesSearch = !searchTerm || 
       emp.employee_name.toLowerCase().includes(searchTerm) ||
-      emp.id_number.toLowerCase().includes(searchTerm);
+      emp.id_number.toLowerCase().includes(searchTerm) ||
+      (emp.location_branch || '').toLowerCase().includes(searchTerm);
 
-    const matchesDept = !deptFilter || emp.department === deptFilter;
+    const matchesPosition = !positionFilter || emp.position === positionFilter;
 
-    return matchesSearch && matchesDept;
+    return matchesSearch && matchesPosition;
   });
 
   renderGallery();
@@ -799,8 +800,8 @@ function previewID(id) {
           <span class="value">${escapeHtml(emp.position)}</span>
         </div>
         <div class="preview-info-item">
-          <span class="label">Department</span>
-          <span class="value">${escapeHtml(emp.department)}</span>
+          <span class="label">Branch/Location</span>
+          <span class="value">${escapeHtml(emp.location_branch || '-')}</span>
         </div>
         <div class="preview-info-item">
           <span class="label">Email</span>

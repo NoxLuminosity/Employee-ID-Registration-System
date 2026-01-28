@@ -136,7 +136,7 @@
             <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/>
             <path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <input type="text" id="searchInput" placeholder="Search by name, department, or ID number...">
+          <input type="text" id="searchInput" placeholder="Search by name, location, or ID number...">
         </div>
         <div class="filter-group">
           <select id="statusFilter">
@@ -145,14 +145,12 @@
             <option value="Approved">Approved</option>
             <option value="Completed">Completed</option>
           </select>
-          <select id="departmentFilter">
-            <option value="">All Departments</option>
-            <option value="HR">HR</option>
-            <option value="IT">IT</option>
-            <option value="Finance">Finance</option>
-            <option value="Operations">Operations</option>
-            <option value="Marketing">Marketing</option>
-            <option value="Sales">Sales</option>
+          <select id="positionFilter">
+            <option value="">All Positions</option>
+            <option value="Field Officer">Field Officers</option>
+            <option value="Freelancer">Freelancers</option>
+            <option value="Intern">Interns</option>
+            <option value="Others">Others (Agents, Solutions, etc.)</option>
           </select>
         </div>
       </section>
@@ -179,8 +177,8 @@
                 <th>ID Number</th>
                 <th>Email</th>
                 <th>Personal Number</th>
-                <th>Department</th>
                 <th>Position</th>
+                <th>Branch/Location</th>
                 <th>Status</th>
                 <th>Submitted</th>
                 <th>Actions</th>
@@ -268,6 +266,6 @@
     });
   </script>
 
-  <script src="/static/dashboard.js"></script>
+  <script src="/static/dashboard.js?v=3"></script>
 </body>
 </html>

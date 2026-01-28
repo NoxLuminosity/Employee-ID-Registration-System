@@ -456,7 +456,8 @@ def api_get_employees(request: Request, hr_session: str = Cookie(None)):
                 "id_nickname": row.get("id_nickname"),
                 "id_number": row.get("id_number"),
                 "position": row.get("position"),
-                "department": row.get("department"),
+                "location_branch": row.get("location_branch"),  # Current field used in dashboard
+                "department": row.get("department"),  # Deprecated - kept for backward compatibility
                 "email": row.get("email"),
                 "personal_number": row.get("personal_number"),
                 "photo_path": row.get("photo_path"),

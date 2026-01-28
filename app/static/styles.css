@@ -1470,17 +1470,22 @@ input::placeholder {
   font-weight: 700;
 }
 
-/* ID Card Responsive - Scale for different screen sizes */
-/* Base: 512px × 800px at 97% scale */
+/* ============================================
+   ID Card Responsive - Scale for different screen sizes
+   Base: 512px × 800px at 97% scale
+   ============================================ */
+
+/* Large screens / Laptops (≤1200px) - stack cards vertically */
 @media (max-width: 1200px) {
   .id-preview-wrapper {
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 24px;
     padding: var(--spacing-md);
   }
 }
 
+/* Tablets (≤768px) - scale down cards */
 @media (max-width: 768px) {
   body {
     padding: var(--spacing-md);
@@ -1500,27 +1505,16 @@ input::placeholder {
     justify-content: center;
     align-items: center;
     min-height: auto;
-    gap: 20px;
+    gap: 24px;
   }
   
   /* Scale down for tablet - 512 × 0.65 = 333px width */
   .id-card,
   .id-card-back {
-    transform: scale(0.63);  /* 97% × 0.65 */
+    transform: scale(0.65);
     transform-origin: top center;
-    margin-bottom: -296px;  /* 800 * (1 - 0.63) */
+    margin-bottom: -280px;  /* Compensate for scaled height */
   }
-  
-  /* Flip toggle tablet sizing */
-  .id-flip-toggle {
-    gap: var(--spacing-xs);
-  }
-  
-  .flip-btn {
-    padding: 8px 14px;
-    font-size: 0.8rem;
-  }
-}
   
   /* Flip toggle tablet sizing */
   .id-flip-toggle {
@@ -1533,33 +1527,67 @@ input::placeholder {
   }
 }
 
-/* Extra small screens (< 480px) - smaller scale only */
+/* Mobile phones (≤480px) - smaller scale */
 @media (max-width: 480px) {
+  body {
+    padding: var(--spacing-sm);
+  }
+  
   .id-preview-section {
     padding: var(--spacing-sm);
     margin: var(--spacing-xs);
+    border-radius: var(--radius-sm);
   }
   
   .id-preview-wrapper {
     min-height: auto;
+    padding: var(--spacing-xs);
+    gap: 20px;
   }
   
   /* Scale down for mobile - 512 × 0.55 = 282px width */
   .id-card,
   .id-card-back {
-    transform: scale(0.53);  /* 97% × 0.55 */
+    transform: scale(0.55);
     transform-origin: top center;
-    margin-bottom: -376px;  /* 800 * (1 - 0.53) */
+    margin-bottom: -360px;  /* Compensate for scaled height */
   }
-}
   
   .id-flip-toggle {
     gap: var(--spacing-xs);
+    flex-wrap: wrap;
+    justify-content: center;
   }
   
   .flip-btn {
     padding: 6px 12px;
     font-size: 0.75rem;
+  }
+}
+
+/* Extra small phones (≤360px) - minimum viable scale */
+@media (max-width: 360px) {
+  .id-preview-section {
+    padding: var(--spacing-xs);
+    margin: 0;
+  }
+  
+  .id-preview-wrapper {
+    padding: 4px;
+    gap: 16px;
+  }
+  
+  /* Scale down for very small screens - 512 × 0.48 = 246px width */
+  .id-card,
+  .id-card-back {
+    transform: scale(0.48);
+    transform-origin: top center;
+    margin-bottom: -416px;  /* Compensate for scaled height */
+  }
+  
+  .flip-btn {
+    padding: 5px 10px;
+    font-size: 0.7rem;
   }
 }
 
