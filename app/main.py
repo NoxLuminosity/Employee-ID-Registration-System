@@ -176,10 +176,23 @@ async def logout():
     return response
 
 
-# Apply route - protected, requires Lark authentication
+# Form Selector route - Choose between SPMA and SPMC
+@app.get("/choose-form", response_class=HTMLResponse)
+async def choose_form_page(request: Request, employee_session: str = Cookie(None)):
+    """Form selector page - choose between SPMA and SPMC forms"""
+    if not check_employee_auth(employee_session):
+        return RedirectResponse(url="/auth/lark/login", status_code=302)
+    
+    return templates.TemplateResponse("form-selector.html", {
+        "request": request,
+        "authenticated": True
+    })
+
+
+# Apply route - protected, requires Lark authentication (SPMC Form)
 @app.get("/apply", response_class=HTMLResponse)
 async def apply_page(request: Request, employee_session: str = Cookie(None)):
-    """Employee ID application form - requires Lark authentication"""
+    """Employee ID application form (SPMC) - requires Lark authentication"""
     if not check_employee_auth(employee_session):
         # Not authenticated - redirect to Lark login
         return RedirectResponse(url="/auth/lark/login", status_code=302)
@@ -202,6 +215,40 @@ async def apply_page(request: Request, employee_session: str = Cookie(None)):
             "full_name": full_name,
             "employee_no": session.get("lark_employee_no", ""),  # Employee Number from Lark
             "personal_number": session.get("lark_mobile", ""),  # Personal Number from Lark
+        },
+        "user": {
+            "name": session.get("lark_name"),
+            "email": session.get("lark_email"),
+            "avatar": session.get("lark_avatar"),
+        }
+    })
+
+
+# SPMA Form route - protected, requires Lark authentication
+@app.get("/apply/spma", response_class=HTMLResponse)
+async def apply_spma_page(request: Request, employee_session: str = Cookie(None)):
+    """SPMA Employee ID application form - requires Lark authentication"""
+    if not check_employee_auth(employee_session):
+        return RedirectResponse(url="/auth/lark/login", status_code=302)
+    
+    # Get session data for prefilling
+    session = get_session(employee_session)
+    
+    # Parse name for prefilling
+    full_name = session.get("lark_name") or session.get("username") or ""
+    name_parts = parse_lark_name(full_name)
+    
+    return templates.TemplateResponse("form2.html", {
+        "request": request,
+        "authenticated": True,
+        "prefill": {
+            "first_name": name_parts.get("first_name", ""),
+            "middle_initial": name_parts.get("middle_initial", ""),
+            "last_name": name_parts.get("last_name", ""),
+            "email": session.get("lark_email", ""),
+            "full_name": full_name,
+            "employee_no": session.get("lark_employee_no", ""),
+            "personal_number": session.get("lark_mobile", ""),
         },
         "user": {
             "name": session.get("lark_name"),

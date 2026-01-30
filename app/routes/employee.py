@@ -324,9 +324,11 @@ async def submit_employee(
     photo: UploadFile = File(...),
     signature_data: str = Form(...),
     ai_headshot_data: Optional[str] = Form(None),  # AI-generated headshot URL from frontend
+    ai_generated_image: Optional[str] = Form(None),  # Alternative field name for AI headshot URL
     emergency_name: Optional[str] = Form(''),  # Emergency contact name
     emergency_contact: Optional[str] = Form(''),  # Emergency contact number
     emergency_address: Optional[str] = Form(''),  # Emergency contact address
+    form_type: Optional[str] = Form('SPMC'),  # Form type: SPMC or SPMA
     employee_session: str = Cookie(None)  # Lark authentication
 ):
     """Submit employee registration - requires Lark authentication, returns JSON response."""
@@ -442,19 +444,21 @@ async def submit_employee(
 
         # Step 3: Handle AI-generated headshot URL
         cloudinary_ai_headshot_url = None
-        if ai_headshot_data:
-            if ai_headshot_data.startswith('http'):
+        # Use ai_generated_image if ai_headshot_data is not provided (SPMA form uses this field)
+        effective_ai_data = ai_headshot_data or ai_generated_image
+        if effective_ai_data:
+            if effective_ai_data.startswith('http'):
                 # Direct URL from Seedream - use as-is
-                cloudinary_ai_headshot_url = ai_headshot_data
+                cloudinary_ai_headshot_url = effective_ai_data
                 logger.info(f"Using Seedream URL directly for AI headshot: {cloudinary_ai_headshot_url[:80]}...")
-            elif ai_headshot_data.startswith('data:image'):
+            elif effective_ai_data.startswith('data:image'):
                 # Legacy base64 format - upload to Cloudinary
                 try:
                     ai_headshot_public_id = f"{safe_id}_ai_headshot"
                     logger.info(f"Attempting to upload AI headshot to Cloudinary for employee: {id_number}")
                     
                     cloudinary_ai_headshot_url = upload_base64_to_cloudinary(
-                        base64_data=ai_headshot_data,
+                        base64_data=effective_ai_data,
                         public_id=ai_headshot_public_id,
                         folder="employees"
                     )

@@ -1,0 +1,361 @@
+{% extends "security_base.html" %}
+
+{% block head %}
+  <title>Choose Your Path - ID Registration</title>
+  <meta name="description" content="Select your application path - SPMA or SPMC">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/landing.css">
+  <style>
+    /* Form Selector Specific Styles */
+    .selector-page {
+      min-height: 100vh;
+      background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 50%, #fff7ed 100%);
+      padding: 2rem;
+    }
+
+    .selector-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding-top: 4rem;
+    }
+
+    .selector-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .selector-header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 0.5rem;
+    }
+
+    .selector-header p {
+      font-size: 1.1rem;
+      color: #64748b;
+    }
+
+    .selector-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+
+    @media (max-width: 768px) {
+      .selector-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .path-card {
+      background: white;
+      border-radius: 20px;
+      padding: 2.5rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      border: 2px solid transparent;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .path-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--card-accent), var(--card-accent-light));
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .path-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+      border-color: var(--card-accent);
+    }
+
+    .path-card:hover::before {
+      opacity: 1;
+    }
+
+    .path-card.spma {
+      --card-accent: #2e7d32;
+      --card-accent-light: #4caf50;
+    }
+
+    .path-card.spmc {
+      --card-accent: #e65100;
+      --card-accent-light: #ff9800;
+    }
+
+    .path-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(135deg, var(--card-accent-light) 0%, var(--card-accent) 100%);
+    }
+
+    .path-icon svg {
+      width: 32px;
+      height: 32px;
+      color: white;
+    }
+
+    .path-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 0.5rem;
+    }
+
+    .path-subtitle {
+      font-size: 0.9rem;
+      color: #64748b;
+      margin-bottom: 1.5rem;
+    }
+
+    .path-features {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 1.5rem 0;
+    }
+
+    .path-features li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      font-size: 0.9rem;
+      color: #475569;
+    }
+
+    .path-features li svg {
+      width: 18px;
+      height: 18px;
+      color: var(--card-accent);
+      flex-shrink: 0;
+    }
+
+    .path-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--card-accent);
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-top: 1rem;
+    }
+
+    .path-cta svg {
+      width: 18px;
+      height: 18px;
+      transition: transform 0.2s ease;
+    }
+
+    .path-card:hover .path-cta svg {
+      transform: translateX(4px);
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #64748b;
+      text-decoration: none;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+      transition: color 0.2s ease;
+    }
+
+    .back-link:hover {
+      color: #1a1a2e;
+    }
+
+    .back-link svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Preview wireframe */
+    .path-preview {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+
+    .preview-field {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 0;
+    }
+
+    .preview-label {
+      width: 60px;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+    }
+
+    .preview-input {
+      flex: 1;
+      height: 24px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+    }
+
+    .preview-input.typing {
+      animation: typingPulse 2s infinite;
+    }
+
+    @keyframes typingPulse {
+      0%, 100% { border-color: #e2e8f0; }
+      50% { border-color: var(--card-accent); }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<body data-screenshot-protection="true">
+  <div class="selector-page">
+    <div class="selector-container">
+      <!-- Back Link -->
+      <a href="/" class="back-link">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 10H5M5 10l5-5M5 10l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Back to Home
+      </a>
+
+      <!-- Header -->
+      <div class="selector-header">
+        <h1>Choose Your Path</h1>
+        <p>Select the appropriate form for your ID application</p>
+      </div>
+
+      <!-- Path Cards -->
+      <div class="selector-grid">
+        <!-- SPMA Card -->
+        <a href="/apply/spma" class="path-card spma">
+          <div class="path-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <h2 class="path-title">SPMA Form</h2>
+          <p class="path-subtitle">For Legal Officers with Field Clearance</p>
+          
+          <ul class="path-features">
+            <li>
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Legal Officer Position
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Field Clearance Required
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Division &amp; Department
+            </li>
+          </ul>
+
+          <div class="path-preview">
+            <div class="preview-field">
+              <div class="preview-label"></div>
+              <div class="preview-input typing"></div>
+            </div>
+            <div class="preview-field">
+              <div class="preview-label"></div>
+              <div class="preview-input"></div>
+            </div>
+          </div>
+
+          <div class="path-cta">
+            <span>Start SPMA Application</span>
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 10h12M12 6l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </a>
+
+        <!-- SPMC Card -->
+        <a href="/apply" class="path-card spmc">
+          <div class="path-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="9" cy="10" r="2"/>
+              <path d="M15 8h2M15 12h2M7 16h10"/>
+            </svg>
+          </div>
+          <h2 class="path-title">SPMC Form</h2>
+          <p class="path-subtitle">Standard Employee ID Registration</p>
+          
+          <ul class="path-features">
+            <li>
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Field Officer, Freelancer, Intern
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Photo &amp; AI Enhancement
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Emergency Contact Info
+            </li>
+          </ul>
+
+          <div class="path-preview">
+            <div class="preview-field">
+              <div class="preview-label"></div>
+              <div class="preview-input typing"></div>
+            </div>
+            <div class="preview-field">
+              <div class="preview-label"></div>
+              <div class="preview-input"></div>
+            </div>
+          </div>
+
+          <div class="path-cta">
+            <span>Start SPMC Application</span>
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 10h12M12 6l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/landing.js"></script>
+</body>
+{% endblock %}

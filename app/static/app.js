@@ -77,8 +77,11 @@ function initNameAutoPopulation() {
   
   if (firstNameInput && idNicknameInput) {
     firstNameInput.addEventListener('input', () => {
-      // Auto-populate id_nickname with first name value
-      idNicknameInput.value = firstNameInput.value;
+      // Auto-populate id_nickname with only the first word of first name
+      // e.g., "Sean Raphael" -> "Sean" for the ID card nickname
+      const fullFirstName = firstNameInput.value.trim();
+      const firstWord = fullFirstName.split(' ')[0] || '';
+      idNicknameInput.value = firstWord;
       // Trigger change event to update previews
       idNicknameInput.dispatchEvent(new Event('change'));
     });
@@ -92,9 +95,11 @@ function initPrefilledFields() {
   const firstNameInput = document.getElementById('first_name');
   const idNicknameInput = document.getElementById('id_nickname');
   
-  // If first_name is prefilled, auto-populate id_nickname
+  // If first_name is prefilled, auto-populate id_nickname with only first word
   if (firstNameInput && idNicknameInput && firstNameInput.value) {
-    idNicknameInput.value = firstNameInput.value;
+    const fullFirstName = firstNameInput.value.trim();
+    const firstWord = fullFirstName.split(' ')[0] || '';
+    idNicknameInput.value = firstWord;
     // Trigger change event to update previews
     idNicknameInput.dispatchEvent(new Event('change'));
   }
@@ -372,6 +377,7 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
       state.aiGenerationController.abort();
     }
     state.aiGenerationController = new AbortController();
+    window.aiGenerationController = state.aiGenerationController; // Make accessible globally
     
     // Update loading text - server handles AI generation + background removal
     if (loadingText) loadingText.textContent = 'Generating AI headshot...';
@@ -769,10 +775,12 @@ function updateIdCardPreview() {
   };
 
   // Update Nickname (vertical text on blue sidebar)
+  // Use only first word of the nickname for the ID card display
   const nickname = getValue('id_nickname');
   const nicknameEl = document.getElementById('id_preview_nickname');
   if (nicknameEl) {
-    nicknameEl.textContent = nickname || 'Nickname';
+    const firstWord = nickname ? nickname.trim().split(' ')[0] : 'Nickname';
+    nicknameEl.textContent = firstWord;
   }
 
   // Update Full Name (constructed from first_name, middle_initial, last_name)
@@ -1166,14 +1174,17 @@ function initFormSubmission() {
       }
 
       if (response.ok && (result.success !== false)) {
-        showMessage('Registration submitted successfully! Your ID will be processed shortly.', 'success');
+        // Show success toast first
+        showToast('Success!', 'Your ID registration has been submitted successfully. HR will review and process your request shortly.', 'success');
 
-        // Show success modal with options
-        showSuccessModal();
+        // Show success modal after brief delay
+        setTimeout(() => {
+          showSuccessModal();
+        }, 1500);
         
         // Reset submit button state
         elements.btnSubmit.classList.remove('loading');
-        elements.btnSubmit.textContent = 'Submit';
+        elements.btnSubmit.textContent = 'Submitted';
       } else {
         throw new Error(result.detail || result.error || 'Submission failed');
       }
@@ -1198,6 +1209,45 @@ function showSuccessModal() {
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
   }
+}
+
+// ============================================
+// Toast Notifications
+// ============================================
+function showToast(title, message, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  const icon = type === 'success' 
+    ? '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>'
+    : '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+  
+  toast.innerHTML = `
+    ${icon}
+    <div class="toast-content">
+      <div class="toast-title">${title}</div>
+      <div class="toast-message">${message}</div>
+    </div>
+    <button class="toast-close" onclick="this.parentElement.remove()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  `;
+  
+  container.appendChild(toast);
+  
+  // Trigger animation
+  setTimeout(() => toast.classList.add('show'), 10);
+  
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 5000);
 }
 
 function hideSuccessModal() {
@@ -1252,6 +1302,53 @@ function submitAnotherForm() {
 
 // Make submitAnotherForm available globally for onclick
 window.submitAnotherForm = submitAnotherForm;
+
+// Remove photo function
+function removePhoto() {
+  const photoInput = document.getElementById('photo');
+  const photoComparison = document.getElementById('photoComparison');
+  const photoUploadArea = document.getElementById('photoUploadArea');
+  const photoPreviewImg = document.getElementById('photoPreviewImg');
+  const aiPreviewImg = document.getElementById('aiPreviewImg');
+  
+  // Cancel any ongoing AI generation
+  if (window.aiGenerationController) {
+    window.aiGenerationController.abort();
+    window.aiGenerationController = null;
+  }
+  
+  if (photoInput) {
+    photoInput.value = '';
+  }
+  if (photoPreviewImg) {
+    photoPreviewImg.src = '';
+  }
+  if (aiPreviewImg) {
+    aiPreviewImg.src = '';
+    aiPreviewImg.style.display = 'none';
+  }
+  if (photoComparison) {
+    photoComparison.style.display = 'none';
+  }
+  if (photoUploadArea) {
+    photoUploadArea.style.display = 'flex';
+  }
+  
+  // Reset AI preview states
+  const aiLoading = document.getElementById('aiLoading');
+  const aiError = document.getElementById('aiError');
+  const aiActions = document.getElementById('aiActions');
+  const aiPreviewContainer = document.getElementById('aiPreviewContainer');
+  if (aiLoading) aiLoading.style.display = 'none';
+  if (aiError) aiError.style.display = 'none';
+  if (aiActions) aiActions.style.display = 'none';
+  if (aiPreviewContainer) aiPreviewContainer.classList.remove('loading');
+  
+  // Update ID preview and review section
+  updateIdCardPreview();
+  updateReviewSection();
+}
+window.removePhoto = removePhoto;
 
 // ============================================
 // Cancel Button
