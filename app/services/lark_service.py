@@ -505,7 +505,12 @@ def append_employee_submission(
     middle_initial: Optional[str] = None,
     last_name: Optional[str] = None,
     suffix: Optional[str] = None,
-    table_id: Optional[str] = None
+    table_id: Optional[str] = None,
+    # Field Officer specific fields
+    field_officer_type: Optional[str] = None,
+    field_clearance: Optional[str] = None,
+    fo_division: Optional[str] = None,
+    fo_campaign: Optional[str] = None
 ) -> bool:
     """
     Append employee submission to Lark Bitable.
@@ -599,6 +604,12 @@ def append_employee_submission(
         "email": email,
         "personal number": phone_number,  # Number field - send as int
         "status": status,
+        # Field Officer specific fields (only populated if Field Officer is selected)
+        "field_officer_type": field_officer_type or "",
+        "field_clearance": field_clearance or "",
+        "fo_division": fo_division or "",
+        "fo_department": department or "",
+        "fo_campaign": fo_campaign or "",
     }
     
     print(f"\\n[DEBUG] Fields being sent to Lark:")

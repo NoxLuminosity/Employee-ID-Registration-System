@@ -333,6 +333,12 @@ async def submit_employee(
     emergency_contact: Optional[str] = Form(''),  # Emergency contact number
     emergency_address: Optional[str] = Form(''),  # Emergency contact address
     form_type: Optional[str] = Form('SPMC'),  # Form type: SPMC or SPMA
+    # Field Officer specific fields
+    field_officer_type: Optional[str] = Form(''),  # Reprocessor or Others
+    field_clearance: Optional[str] = Form(''),  # Level 5
+    fo_division: Optional[str] = Form(''),  # Division dropdown
+    fo_department: Optional[str] = Form(''),  # Department dropdown
+    fo_campaign: Optional[str] = Form(''),  # Campaign dropdown
     employee_session: str = Cookie(None)  # Lark authentication
 ):
     """Submit employee registration - requires Lark authentication, returns JSON response."""
@@ -485,7 +491,7 @@ async def submit_employee(
             'id_number': id_number,
             'position': position,
             'location_branch': location_branch,  # Branch/Location from form
-            'department': '',  # Deprecated - kept for backward compatibility
+            'department': fo_department or '',  # Field Officer department or empty
             'email': email,
             'personal_number': personal_number,
             'photo_path': photo_local_path,
@@ -500,7 +506,12 @@ async def submit_employee(
             'render_url': '',
             'emergency_name': emergency_name or '',
             'emergency_contact': emergency_contact or '',
-            'emergency_address': emergency_address or ''
+            'emergency_address': emergency_address or '',
+            # Field Officer specific fields
+            'field_officer_type': field_officer_type or '',
+            'field_clearance': field_clearance or '',
+            'fo_division': fo_division or '',
+            'fo_campaign': fo_campaign or ''
         }
         
         employee_id = insert_employee(employee_data)
@@ -536,7 +547,7 @@ async def submit_employee(
                 id_number=id_number,
                 position=position,
                 location_branch=location_branch,
-                department='',  # Deprecated
+                department=fo_department or '',  # Field Officer department
                 email=email,
                 personal_number=personal_number,
                 photo_path=photo_local_path,
@@ -551,7 +562,12 @@ async def submit_employee(
                 middle_initial=middle_initial,
                 last_name=last_name,
                 suffix=final_suffix,
-                table_id=target_lark_table
+                table_id=target_lark_table,
+                # Field Officer specific fields
+                field_officer_type=field_officer_type or '',
+                field_clearance=field_clearance or '',
+                fo_division=fo_division or '',
+                fo_campaign=fo_campaign or ''
             )
             if lark_success:
                 logger.info(f"✅ Successfully appended employee submission to Lark Bitable: {id_number}")

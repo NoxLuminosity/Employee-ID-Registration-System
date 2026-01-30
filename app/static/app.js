@@ -301,12 +301,182 @@ function updateSubmitButtonState() {
 // ============================================
 function initPositionRadioButtons() {
   const positionRadios = document.querySelectorAll('input[name="position"]');
+  const fieldOfficerSubtypeGroup = document.getElementById('field_officer_subtype_group');
+  const fieldOfficerDetails = document.getElementById('field_officer_details');
+  const foTypeRadios = document.querySelectorAll('input[name="field_officer_type"]');
+  
+  // Handle Field Officer Type selection (Reprocessor/Others)
+  foTypeRadios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      const selectedType = radio.value;
+      
+      // Only show details section for Reprocessor
+      if (selectedType === 'Reprocessor') {
+        if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'block';
+        setFieldOfficerFieldsRequired(true);
+      } else {
+        // Hide for Others or any other value
+        if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'none';
+        setFieldOfficerFieldsRequired(false);
+      }
+      
+      updateIdCardPreview();
+      updateReviewSection();
+      updateFieldOfficePreview();
+    });
+  });
   
   positionRadios.forEach(radio => {
     radio.addEventListener('change', () => {
+      const selectedPosition = radio.value;
+      
+      // Show/hide Field Officer specific fields
+      if (selectedPosition === 'Field Officer') {
+        if (fieldOfficerSubtypeGroup) fieldOfficerSubtypeGroup.style.display = 'block';
+        // Don't show details yet - wait for Reprocessor selection
+        if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'none';
+        setFieldOfficerFieldsRequired(false);
+      } else {
+        if (fieldOfficerSubtypeGroup) fieldOfficerSubtypeGroup.style.display = 'none';
+        if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'none';
+        
+        // Remove required from Field Officer fields
+        setFieldOfficerFieldsRequired(false);
+        
+        // Clear Field Officer type selection
+        foTypeRadios.forEach(r => r.checked = false);
+      }
+      
       updateIdCardPreview();
       updateReviewSection();
       updateFieldOfficePreview(); // Switch templates based on position
+    });
+  });
+  
+  // Initialize searchable dropdowns
+  initSearchableDropdowns();
+}
+
+// Set Field Officer fields as required or not
+function setFieldOfficerFieldsRequired(required) {
+  const foDivision = document.getElementById('fo_division');
+  const foDepartment = document.getElementById('fo_department');
+  const foCampaign = document.getElementById('fo_campaign');
+  const foTypeRadios = document.querySelectorAll('input[name="field_officer_type"]');
+  
+  if (foDivision) foDivision.required = required;
+  if (foDepartment) foDepartment.required = required;
+  if (foCampaign) foCampaign.required = required;
+  
+  // Set first radio as required to ensure one is selected
+  if (foTypeRadios.length > 0) {
+    foTypeRadios[0].required = required;
+  }
+}
+
+// ============================================
+// Searchable Dropdown Functionality
+// ============================================
+function initSearchableDropdowns() {
+  const dropdowns = document.querySelectorAll('.searchable-dropdown');
+  
+  dropdowns.forEach(dropdown => {
+    const searchInput = dropdown.querySelector('.dropdown-search');
+    const hiddenInput = dropdown.querySelector('input[type="hidden"]');
+    const optionsContainer = dropdown.querySelector('.dropdown-options');
+    const options = dropdown.querySelectorAll('.dropdown-option');
+    
+    if (!searchInput || !optionsContainer || !options.length) return;
+    
+    // Show dropdown on focus
+    searchInput.addEventListener('focus', () => {
+      dropdown.classList.add('active');
+    });
+    
+    // Filter options on input
+    searchInput.addEventListener('input', () => {
+      const searchTerm = searchInput.value.toLowerCase();
+      let hasVisibleOptions = false;
+      
+      options.forEach(option => {
+        const text = option.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+          option.classList.remove('hidden');
+          hasVisibleOptions = true;
+        } else {
+          option.classList.add('hidden');
+        }
+      });
+      
+      // Show "no results" message if needed
+      let noResults = dropdown.querySelector('.no-results');
+      if (!hasVisibleOptions) {
+        if (!noResults) {
+          noResults = document.createElement('div');
+          noResults.className = 'no-results';
+          noResults.textContent = 'No matching options';
+          optionsContainer.appendChild(noResults);
+        }
+        noResults.style.display = 'block';
+      } else if (noResults) {
+        noResults.style.display = 'none';
+      }
+      
+      dropdown.classList.add('active');
+    });
+    
+    // Handle option selection
+    options.forEach(option => {
+      option.addEventListener('click', () => {
+        const value = option.dataset.value;
+        searchInput.value = value;
+        searchInput.classList.add('has-value');
+        if (hiddenInput) hiddenInput.value = value;
+        
+        // Remove selected class from all options
+        options.forEach(o => o.classList.remove('selected'));
+        option.classList.add('selected');
+        
+        dropdown.classList.remove('active');
+        
+        // Trigger change events for review section update
+        updateReviewSection();
+        updateIdCardPreview();
+      });
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target)) {
+        dropdown.classList.remove('active');
+      }
+    });
+    
+    // Handle keyboard navigation
+    searchInput.addEventListener('keydown', (e) => {
+      const visibleOptions = Array.from(options).filter(o => !o.classList.contains('hidden'));
+      const currentIndex = visibleOptions.findIndex(o => o.classList.contains('selected'));
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        dropdown.classList.add('active');
+        const nextIndex = currentIndex < visibleOptions.length - 1 ? currentIndex + 1 : 0;
+        visibleOptions.forEach((o, i) => o.classList.toggle('selected', i === nextIndex));
+        visibleOptions[nextIndex]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevIndex = currentIndex > 0 ? currentIndex - 1 : visibleOptions.length - 1;
+        visibleOptions.forEach((o, i) => o.classList.toggle('selected', i === prevIndex));
+        visibleOptions[prevIndex]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const selectedOption = visibleOptions.find(o => o.classList.contains('selected'));
+        if (selectedOption) {
+          selectedOption.click();
+        }
+      } else if (e.key === 'Escape') {
+        dropdown.classList.remove('active');
+      }
     });
   });
 }
@@ -1017,6 +1187,24 @@ function updateReviewSection() {
   setText('review_position', position || '-');
   setText('review_location_branch', getValue('location_branch'));
 
+  // Update Field Officer details in review section
+  const reviewFieldOfficerDetails = document.getElementById('review_field_officer_details');
+  if (position === 'Field Officer') {
+    if (reviewFieldOfficerDetails) reviewFieldOfficerDetails.style.display = 'block';
+    
+    // Get Field Officer type
+    const foTypeRadio = document.querySelector('input[name="field_officer_type"]:checked');
+    setText('review_fo_type', foTypeRadio ? foTypeRadio.value : '-');
+    
+    // Get other Field Officer fields
+    setText('review_field_clearance', 'Level 5');
+    setText('review_fo_division', getValue('fo_division') || '-');
+    setText('review_fo_department', getValue('fo_department') || '-');
+    setText('review_fo_campaign', getValue('fo_campaign') || '-');
+  } else {
+    if (reviewFieldOfficerDetails) reviewFieldOfficerDetails.style.display = 'none';
+  }
+
   // Update text fields - Contact Information
   setText('review_email', getValue('email'));
   setText('review_personal_number', getValue('personal_number'));
@@ -1107,6 +1295,42 @@ function initFormSubmission() {
         }, { once: true });
       }
     });
+
+    // Validate Field Officer fields if Field Officer is selected
+    const selectedPosition = getSelectedPosition();
+    if (selectedPosition === 'Field Officer') {
+      // Check Field Officer Type
+      const foTypeSelected = document.querySelector('input[name="field_officer_type"]:checked');
+      if (!foTypeSelected) {
+        isValid = false;
+        showMessage('Please select a Field Officer Type (Reprocessor or Others).', 'error');
+        return;
+      }
+      
+      // Check Division
+      const foDivision = document.getElementById('fo_division');
+      const foDivisionSearch = document.getElementById('fo_division_search');
+      if (!foDivision || !foDivision.value.trim()) {
+        isValid = false;
+        if (foDivisionSearch) foDivisionSearch.style.borderColor = 'var(--color-danger)';
+      }
+      
+      // Check Department
+      const foDepartment = document.getElementById('fo_department');
+      const foDepartmentSearch = document.getElementById('fo_department_search');
+      if (!foDepartment || !foDepartment.value.trim()) {
+        isValid = false;
+        if (foDepartmentSearch) foDepartmentSearch.style.borderColor = 'var(--color-danger)';
+      }
+      
+      // Check Campaign
+      const foCampaign = document.getElementById('fo_campaign');
+      const foCampaignSearch = document.getElementById('fo_campaign_search');
+      if (!foCampaign || !foCampaign.value.trim()) {
+        isValid = false;
+        if (foCampaignSearch) foCampaignSearch.style.borderColor = 'var(--color-danger)';
+      }
+    }
 
     if (!isValid) {
       showMessage('Please fill in all required fields.', 'error');
