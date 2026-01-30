@@ -20,7 +20,11 @@ from pydantic import BaseModel
 from app.database import insert_employee, USE_SUPABASE
 
 # Lark Bitable integration (for appending data)
-from app.services.lark_service import append_employee_submission
+from app.services.lark_service import (
+    append_employee_submission, 
+    append_spma_employee_submission,
+    LARK_TABLE_ID_SPMA
+)
 # Cloudinary integration (for image uploads)
 from app.services.cloudinary_service import (
     upload_image_to_cloudinary, 
@@ -522,6 +526,10 @@ async def submit_employee(
             logger.info(f"  AI Headshot URL: {cloudinary_ai_headshot_url or 'MISSING/NONE'}")
             logger.info("=" * 60)
             
+            # Route to appropriate Lark table based on form type
+            target_lark_table = LARK_TABLE_ID_SPMA if form_type == 'SPMA' else None
+            logger.info(f"📋 Form Type: {form_type} → Table: {target_lark_table or 'default (SPMC)'}")
+            
             lark_success = append_employee_submission(
                 employee_name=employee_name,
                 id_nickname=id_nickname,
@@ -542,7 +550,8 @@ async def submit_employee(
                 first_name=first_name,
                 middle_initial=middle_initial,
                 last_name=last_name,
-                suffix=final_suffix
+                suffix=final_suffix,
+                table_id=target_lark_table
             )
             if lark_success:
                 logger.info(f"✅ Successfully appended employee submission to Lark Bitable: {id_number}")
@@ -563,6 +572,212 @@ async def submit_employee(
         
     except Exception as e:
         logger.error(f"Submit error: {str(e)}\n{traceback.format_exc()}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": "Submission failed", "detail": str(e)}
+        )
+
+
+@router.post("/submit-spma")
+async def submit_spma_employee(
+    first_name: str = Form(...),
+    middle_initial: str = Form(''),
+    last_name: str = Form(...),
+    suffix: str = Form(''),
+    suffix_custom: str = Form(''),
+    id_number: str = Form(...),
+    division: str = Form(...),
+    department: str = Form(...),
+    field_clearance: str = Form(...),
+    location_branch: Optional[str] = Form(''),
+    email: str = Form(...),
+    personal_number: str = Form(...),
+    photo: UploadFile = File(...),
+    signature_data: str = Form(...),
+    employee_session: str = Cookie(None)
+):
+    """Submit SPMA (Legal Officer) employee registration - dedicated endpoint for SPMA form."""
+    import base64
+    
+    # Verify Lark authentication
+    if not verify_employee_auth(employee_session):
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "error": "Authentication required. Please sign in with Lark."}
+        )
+    
+    # Construct full employee_name from parts
+    employee_name_parts = [first_name]
+    if middle_initial:
+        mi = middle_initial.strip()
+        if not mi.endswith('.'):
+            mi += '.'
+        employee_name_parts.append(mi)
+    if last_name:
+        employee_name_parts.append(last_name)
+    
+    # Add suffix (use custom suffix if "Other" was selected)
+    final_suffix = suffix_custom.strip() if suffix == 'Other' and suffix_custom else suffix.strip()
+    if final_suffix:
+        employee_name_parts.append(final_suffix)
+    
+    employee_name = ' '.join(employee_name_parts)
+    
+    logger.info(f"📋 SPMA Form Submission: {employee_name} (ID: {id_number})")
+    logger.info(f"   Division: {division}, Department: {department}")
+    logger.info(f"   Field Clearance: {field_clearance}")
+    
+    try:
+        # Ensure uploads directory exists
+        if IS_VERCEL:
+            uploads_dir = "/tmp/uploads"
+        else:
+            uploads_dir = str(BASE_DIR / "static" / "uploads")
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        # Save photo with timestamp
+        timestamp = datetime.now().timestamp()
+        filename = f"{timestamp}_{photo.filename}"
+        photo_path = os.path.join(uploads_dir, filename)
+        
+        with open(photo_path, "wb") as buffer:
+            shutil.copyfileobj(photo.file, buffer)
+        
+        photo_local_path = f"uploads/{filename}"
+        
+        # Save signature from base64
+        signature_local_path = None
+        if signature_data and signature_data.startswith('data:image'):
+            try:
+                header, encoded = signature_data.split(',', 1)
+                signature_bytes = base64.b64decode(encoded)
+                signature_filename = f"{timestamp}_signature.png"
+                signature_path = os.path.join(uploads_dir, signature_filename)
+                
+                with open(signature_path, "wb") as sig_file:
+                    sig_file.write(signature_bytes)
+                
+                signature_local_path = f"uploads/{signature_filename}"
+                logger.info(f"Saved SPMA signature for employee: {id_number}")
+            except Exception as e:
+                logger.error(f"Error saving SPMA signature: {str(e)}")
+
+        # ===== CLOUDINARY UPLOAD =====
+        date_last_modified = datetime.now().isoformat()
+        cloudinary_photo_url = None
+        cloudinary_signature_url = None
+        
+        safe_id = id_number.replace(' ', '_').replace('/', '-').replace('\\', '-')
+        
+        # Upload photo to Cloudinary
+        try:
+            photo_public_id = f"spma_{safe_id}_photo"
+            logger.info(f"Uploading SPMA photo to Cloudinary: {id_number}")
+            
+            cloudinary_photo_url = upload_image_to_cloudinary(
+                file_path=photo_path,
+                public_id=photo_public_id
+            )
+            
+            if cloudinary_photo_url:
+                logger.info(f"✅ SPMA photo uploaded: {cloudinary_photo_url[:60]}...")
+        except Exception as e:
+            logger.error(f"Error uploading SPMA photo: {str(e)}")
+        
+        # Upload signature to Cloudinary
+        if signature_local_path:
+            try:
+                signature_public_id = f"spma_{safe_id}_signature"
+                signature_path_full = os.path.join(uploads_dir, os.path.basename(signature_local_path.replace('uploads/', '')))
+                
+                cloudinary_signature_url = upload_image_to_cloudinary(
+                    file_path=signature_path_full,
+                    public_id=signature_public_id
+                )
+                
+                if cloudinary_signature_url:
+                    logger.info(f"✅ SPMA signature uploaded: {cloudinary_signature_url[:60]}...")
+            except Exception as e:
+                logger.error(f"Error uploading SPMA signature: {str(e)}")
+
+        # Save to database
+        employee_data = {
+            'employee_name': employee_name,
+            'first_name': first_name,
+            'middle_initial': middle_initial,
+            'last_name': last_name,
+            'suffix': final_suffix,
+            'id_nickname': '',  # SPMA doesn't use nickname
+            'id_number': id_number,
+            'position': 'Legal Officer',  # Fixed for SPMA
+            'location_branch': location_branch,
+            'department': department,  # SPMA uses department
+            'email': email,
+            'personal_number': personal_number,
+            'photo_path': photo_local_path,
+            'photo_url': cloudinary_photo_url or '',
+            'new_photo': 0,  # SPMA doesn't use AI generation
+            'new_photo_url': '',
+            'signature_path': signature_local_path or '',
+            'signature_url': cloudinary_signature_url or '',
+            'status': 'Reviewing',
+            'date_last_modified': date_last_modified,
+            'id_generated': 0,
+            'render_url': '',
+            'emergency_name': '',
+            'emergency_contact': '',
+            'emergency_address': ''
+        }
+        
+        employee_id = insert_employee(employee_data)
+        
+        if employee_id is None:
+            logger.error(f"Failed to insert SPMA employee: {id_number}")
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": "Database error", "detail": "Failed to save employee"}
+            )
+        
+        logger.info(f"✅ SPMA employee saved to database (id={employee_id})")
+        
+        # ===== APPEND TO SPMA LARK TABLE =====
+        try:
+            logger.info(f"📤 Appending to SPMA Lark Table: {id_number}")
+            logger.info("=" * 60)
+            logger.info(f"  Photo URL: {cloudinary_photo_url or 'NONE'}")
+            logger.info(f"  Signature URL: {cloudinary_signature_url or 'NONE'}")
+            logger.info("=" * 60)
+            
+            lark_success = append_spma_employee_submission(
+                employee_name=employee_name,
+                middle_initial=middle_initial,
+                last_name=last_name,
+                suffix=final_suffix,
+                id_number=id_number,
+                division=division,
+                department=department,
+                field_clearance=field_clearance,
+                branch_location=location_branch,
+                email=email,
+                personal_number=personal_number,
+                photo_url=cloudinary_photo_url,
+                signature_url=cloudinary_signature_url
+            )
+            
+            if lark_success:
+                logger.info(f"✅ SPMA submission appended to Lark Bitable: {id_number}")
+            else:
+                logger.warning(f"⚠️ Failed to append SPMA to Lark (saved to database): {id_number}")
+        except Exception as e:
+            logger.error(f"❌ Error appending SPMA to Lark: {str(e)}", exc_info=True)
+        
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "message": "SPMA submission successful"}
+        )
+        
+    except Exception as e:
+        logger.error(f"SPMA Submit error: {str(e)}\n{traceback.format_exc()}")
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": "Submission failed", "detail": str(e)}

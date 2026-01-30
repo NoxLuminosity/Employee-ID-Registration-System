@@ -28,6 +28,12 @@ LARK_APP_ID = os.environ.get('LARK_APP_ID', 'cli_a866185f1638502f')
 LARK_APP_SECRET = os.environ.get('LARK_APP_SECRET', 'zaduPnvOLTxcb7W8XHYIaggtYgzOUOI6')
 LARK_BITABLE_ID = os.environ.get('LARK_BITABLE_ID', 'WxvXbLMt8aoPzzszjR3lIXhlgNc')
 LARK_TABLE_ID = os.environ.get('LARK_TABLE_ID', 'tbl3Jm6881dJMF6E')
+LARK_TABLE_ID_SPMA = os.environ.get('LARK_TABLE_ID_SPMA', 'tblajlHwJ6qFRlVa')
+
+# SPMA Lark app credentials (may be different if table is in different Base)
+LARK_APP_ID_SPMA = os.environ.get('LARK_APP_ID_SPMA', os.environ.get('LARK_APP_ID'))
+LARK_APP_SECRET_SPMA = os.environ.get('LARK_APP_SECRET_SPMA', os.environ.get('LARK_APP_SECRET'))
+LARK_BITABLE_ID_SPMA = os.environ.get('LARK_BITABLE_ID_SPMA', os.environ.get('LARK_BITABLE_ID'))
 
 # Lark API endpoints
 LARK_TOKEN_URL = "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal"
@@ -342,17 +348,26 @@ def build_attachment_from_url(url: str, filename: str = None) -> Optional[List[D
 # ============================================
 
 
-def append_record_to_bitable(app_token: str, table_id: str, fields: Dict[str, Any]) -> bool:
-    """Append a record to Lark Bitable table."""
+def append_record_to_bitable(app_token: str, table_id: str, fields: Dict[str, Any], token: Optional[str] = None) -> bool:
+    """Append a record to Lark Bitable table.
+    
+    Args:
+        app_token: Lark Bitable app token (base ID)
+        table_id: Table ID within the app
+        fields: Dictionary of field values
+        token: Optional pre-obtained access token (if None, will get default token)
+    """
     logger.info(f"🔵 Appending record to Lark Bitable...")
     logger.info(f"   App Token: {app_token[:10]}...{app_token[-4:]}")
     logger.info(f"   Table ID: {table_id}")
     logger.info(f"   Fields count: {len(fields)}")
     
-    token = get_tenant_access_token()
-    if not token:
-        logger.error("❌ Failed to get tenant access token")
-        return False
+    # Use provided token or get default
+    if token is None:
+        token = get_tenant_access_token()
+        if not token:
+            logger.error("❌ Failed to get tenant access token")
+            return False
     
     logger.info(f"✅ Got tenant access token: {token[:10]}...")
     
@@ -489,7 +504,8 @@ def append_employee_submission(
     first_name: Optional[str] = None,
     middle_initial: Optional[str] = None,
     last_name: Optional[str] = None,
-    suffix: Optional[str] = None
+    suffix: Optional[str] = None,
+    table_id: Optional[str] = None
 ) -> bool:
     """
     Append employee submission to Lark Bitable.
@@ -506,15 +522,15 @@ def append_employee_submission(
     
     # Use configured Bitable credentials
     app_token = LARK_BITABLE_ID or os.environ.get('LARK_BITABLE_APP_TOKEN')
-    table_id = LARK_TABLE_ID or os.environ.get('LARK_BITABLE_TABLE_ID')
+    target_table_id = table_id or LARK_TABLE_ID or os.environ.get('LARK_BITABLE_TABLE_ID')
     
     logger.info(f"[CONFIG] Lark BITABLE_ID: {app_token[:20] if app_token else 'MISSING'}...")
-    logger.info(f"[CONFIG] Lark TABLE_ID: {table_id[:20] if table_id else 'MISSING'}...")
+    logger.info(f"[CONFIG] Lark TABLE_ID: {target_table_id[:20] if target_table_id else 'MISSING'}...")
     
     if not app_token:
         logger.error("[ERROR] LARK_BITABLE_ID not configured. Skipping Lark append.")
         return False
-    if not table_id:
+    if not target_table_id:
         logger.error("[ERROR] LARK_TABLE_ID not configured. Skipping Lark append.")
         return False
     
@@ -642,4 +658,121 @@ def append_employee_submission(
     import json
     logger.info(f"Final payload JSON: {json.dumps({k: str(v)[:50] for k, v in fields.items()}, indent=2)}")
     
-    return append_record_to_bitable(app_token, table_id, fields)
+    return append_record_to_bitable(app_token, target_table_id, fields)
+
+
+def append_spma_employee_submission(
+    employee_name: str,
+    middle_initial: str = '',
+    last_name: str = '',
+    suffix: str = '',
+    id_number: str = '',
+    division: str = '',
+    department: str = '',
+    field_clearance: str = '',
+    branch_location: str = '',
+    email: str = '',
+    personal_number: str = '',
+    photo_url: Optional[str] = None,
+    signature_url: Optional[str] = None
+) -> bool:
+    """
+    Append SPMA (Legal Officer) employee submission to Lark Bitable.
+    
+    This uses the SPMA table (tblajlHwJ6qFRlVa) with different field structure:
+    - employee_name, middle_initial, last_name, suffix
+    - id_number, division, department, field_clearance
+    - branch_location, email, personal_number
+    - photo_preview (URL), signature (URL)
+    
+    NOTE: SPMA table may be in a different Lark Base, uses separate credentials.
+    """
+    logger.info(f"[START] Starting SPMA Lark Bitable submission for employee: {id_number}")
+    
+    # Use SPMA-specific Lark credentials (may be different Base)
+    app_token = LARK_BITABLE_ID_SPMA
+    target_table_id = LARK_TABLE_ID_SPMA
+    spma_app_id = LARK_APP_ID_SPMA
+    spma_app_secret = LARK_APP_SECRET_SPMA
+    
+    logger.info(f"[CONFIG] SPMA - Lark BITABLE_ID: {app_token[:20] if app_token else 'MISSING'}...")
+    logger.info(f"[CONFIG] SPMA - Lark TABLE_ID: {target_table_id if target_table_id else 'MISSING'}...")
+    logger.info(f"[CONFIG] SPMA - Using separate app credentials: {spma_app_id[:10]}...")
+    
+    if not app_token:
+        logger.error("[ERROR] LARK_BITABLE_ID_SPMA not configured. Skipping SPMA Lark append.")
+        return False
+    if not target_table_id:
+        logger.error("[ERROR] LARK_TABLE_ID_SPMA not configured. Skipping SPMA Lark append.")
+        return False
+    
+    # Get SPMA-specific access token using SPMA app credentials
+    logger.info("Getting SPMA-specific tenant access token...")
+    spma_token = None
+    if spma_app_id and spma_app_secret:
+        try:
+            response = _make_request(LARK_TOKEN_URL, method="POST", data={
+                "app_id": spma_app_id,
+                "app_secret": spma_app_secret
+            })
+            if response.get("code") == 0:
+                spma_token = response.get("tenant_access_token")
+                logger.info(f"✅ SPMA access token obtained: {spma_token[:10]}...")
+            else:
+                logger.error(f"❌ Failed to get SPMA access token: {response.get('msg')}")
+        except Exception as e:
+            logger.error(f"❌ Error getting SPMA token: {str(e)}")
+    
+    if not spma_token:
+        logger.error("[ERROR] Could not obtain SPMA access token. Check LARK_APP_ID_SPMA and LARK_APP_SECRET_SPMA")
+        return False
+    
+    # Parse personal_number to integer for Number field
+    phone_number = 0
+    if personal_number:
+        phone_digits = ''.join(c for c in str(personal_number) if c.isdigit())
+        phone_number = int(phone_digits) if phone_digits else 0
+    
+    # Build fields matching SPMA table structure
+    fields = {
+        "employee_name": employee_name,
+        "middle_initial": middle_initial or "",
+        "last_name": last_name or "",
+        "suffix": suffix or "",
+        "id_number": id_number,
+        "division": division or "",
+        "department": department or "",
+        "field_clearance": field_clearance or "",
+        "branch_location": branch_location or "",
+        "email": email or "",
+        "personal_number": phone_number,  # Number field
+    }
+    
+    # Safe ID for logging
+    safe_id = id_number.replace(' ', '_').replace('/', '-').replace('\\', '-') if id_number else 'unknown'
+    
+    logger.info("=" * 60)
+    logger.info("🔗 SPMA - PROCESSING IMAGE URLS")
+    logger.info(f"  Photo URL: {photo_url[:80] + '...' if photo_url and len(photo_url) > 80 else photo_url}")
+    logger.info(f"  Signature URL: {signature_url[:80] + '...' if signature_url and len(signature_url) > 80 else signature_url}")
+    logger.info("=" * 60)
+    
+    # Photo URL (photo_preview column) - Lark URL field format
+    if photo_url:
+        fields["photo_preview"] = {"link": photo_url, "text": "Photo"}
+        logger.info(f"✅ SPMA Photo URL added for {safe_id}")
+    
+    # Signature URL (signature column) - Lark URL field format
+    if signature_url:
+        fields["signature"] = {"link": signature_url, "text": "Signature"}
+        logger.info(f"✅ SPMA Signature URL added for {safe_id}")
+    
+    # Log final payload
+    logger.info(f"SPMA Bitable payload fields: {list(fields.keys())}")
+    
+    print(f"\n[DEBUG SPMA] Fields being sent to Lark:")
+    for key, val in fields.items():
+        print(f"  {key}: {repr(val)[:50]} (type: {type(val).__name__})")
+    
+    # Use SPMA-specific token for append
+    return append_record_to_bitable(app_token, target_table_id, fields, token=spma_token)
