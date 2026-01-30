@@ -58,13 +58,14 @@ document.addEventListener('DOMContentLoaded', () => {
   updateReviewSection(); // Update on load
   updateIdCardPreview(); // Update ID card preview on load
   updateIdCardBackside(); // Update ID card backside on load
+  updateFieldOfficePreview(); // Update Field Office ID preview on load
   updateSubmitButtonState(); // Initialize submit button state
   
   // Auto-update review and ID card preview when form changes
   document.querySelectorAll('input, select, textarea').forEach(el => {
-    el.addEventListener('change', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); });
-    el.addEventListener('input', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); });
-    el.addEventListener('blur', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); });
+    el.addEventListener('change', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); updateFieldOfficePreview(); });
+    el.addEventListener('input', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); updateFieldOfficePreview(); });
+    el.addEventListener('blur', () => { updateReviewSection(); updateIdCardPreview(); updateIdCardBackside(); updateFieldOfficePreview(); });
   });
 });
 
@@ -305,6 +306,7 @@ function initPositionRadioButtons() {
     radio.addEventListener('change', () => {
       updateIdCardPreview();
       updateReviewSection();
+      updateFieldOfficePreview(); // Switch templates based on position
     });
   });
 }
@@ -1367,7 +1369,13 @@ function initCancelButton() {
 function showCardSide(side) {
   const frontCard = document.getElementById('idCardFront');
   const backCard = document.getElementById('idCardBack');
+  const fieldOfficeFront = document.getElementById('idCardFieldOfficeFront');
+  const fieldOfficeBack = document.getElementById('idCardFieldOfficeBack');
   const flipBtns = document.querySelectorAll('.flip-btn');
+  
+  // Get selected position to determine which template to show
+  const position = getSelectedPosition();
+  const isFieldOfficer = position === 'Field Officer';
   
   // Update button states
   flipBtns.forEach(btn => {
@@ -1378,13 +1386,27 @@ function showCardSide(side) {
     }
   });
   
-  // Show/hide cards
-  if (side === 'front') {
-    if (frontCard) frontCard.style.display = 'block';
-    if (backCard) backCard.style.display = 'none';
+  // Hide all cards first
+  if (frontCard) frontCard.style.display = 'none';
+  if (backCard) backCard.style.display = 'none';
+  if (fieldOfficeFront) fieldOfficeFront.style.display = 'none';
+  if (fieldOfficeBack) fieldOfficeBack.style.display = 'none';
+  
+  // Show appropriate card based on position and side
+  if (isFieldOfficer) {
+    // Show Field Office template
+    if (side === 'front') {
+      if (fieldOfficeFront) fieldOfficeFront.style.display = 'block';
+    } else {
+      if (fieldOfficeBack) fieldOfficeBack.style.display = 'block';
+    }
   } else {
-    if (frontCard) frontCard.style.display = 'none';
-    if (backCard) backCard.style.display = 'block';
+    // Show regular template
+    if (side === 'front') {
+      if (frontCard) frontCard.style.display = 'block';
+    } else {
+      if (backCard) backCard.style.display = 'block';
+    }
   }
 }
 
@@ -1438,6 +1460,166 @@ function updateIdCardBackside() {
     emergencyAddressEl.textContent = address || 'Contact Address';
   }
 }
+
+// ============================================
+// Field Office ID Card Preview Update
+// ============================================
+function updateFieldOfficePreview() {
+  // Helper function to safely get element value
+  const getValue = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    return el.value.trim();
+  };
+
+  // Get selected position
+  const position = getSelectedPosition();
+  const isFieldOfficer = position === 'Field Officer';
+  
+  // Get the currently active side (front or back)
+  const activeFrontBtn = document.querySelector('.flip-btn[data-side="front"].active');
+  const currentSide = activeFrontBtn ? 'front' : 'back';
+  
+  // Get all ID card elements
+  const frontCard = document.getElementById('idCardFront');
+  const backCard = document.getElementById('idCardBack');
+  const fieldOfficeFront = document.getElementById('idCardFieldOfficeFront');
+  const fieldOfficeBack = document.getElementById('idCardFieldOfficeBack');
+  
+  // Show/hide appropriate templates based on position
+  if (isFieldOfficer) {
+    // Hide regular templates, show Field Office templates
+    if (frontCard) frontCard.style.display = 'none';
+    if (backCard) backCard.style.display = 'none';
+    
+    if (currentSide === 'front') {
+      if (fieldOfficeFront) fieldOfficeFront.style.display = 'block';
+      if (fieldOfficeBack) fieldOfficeBack.style.display = 'none';
+    } else {
+      if (fieldOfficeFront) fieldOfficeFront.style.display = 'none';
+      if (fieldOfficeBack) fieldOfficeBack.style.display = 'block';
+    }
+  } else {
+    // Hide Field Office templates, show regular templates
+    if (fieldOfficeFront) fieldOfficeFront.style.display = 'none';
+    if (fieldOfficeBack) fieldOfficeBack.style.display = 'none';
+    
+    if (currentSide === 'front') {
+      if (frontCard) frontCard.style.display = 'block';
+      if (backCard) backCard.style.display = 'none';
+    } else {
+      if (frontCard) frontCard.style.display = 'none';
+      if (backCard) backCard.style.display = 'block';
+    }
+  }
+  
+  // Only update Field Office placeholders if Field Officer is selected
+  if (!isFieldOfficer) return;
+  
+  // Update Employee Name (First Name + Last Name format for ID)
+  const firstName = getValue('first_name');
+  const lastName = getValue('last_name');
+  const suffix = getSuffixValue();
+  
+  let displayName = '';
+  if (firstName && lastName) {
+    displayName = firstName + '\n' + lastName;
+    if (suffix) {
+      displayName += ' ' + suffix;
+    }
+  } else if (firstName) {
+    displayName = firstName;
+  } else if (lastName) {
+    displayName = lastName;
+  } else {
+    displayName = 'Name\nPlaceholder';
+  }
+  
+  const nameEl = document.getElementById('id_fo_preview_name');
+  if (nameEl) {
+    nameEl.innerHTML = displayName.replace('\n', '<br>');
+  }
+  
+  // Update Position (always "LEGAL OFFICER" for Field Officer)
+  const positionEl = document.getElementById('id_fo_preview_position');
+  if (positionEl) {
+    positionEl.textContent = 'LEGAL OFFICER';
+  }
+  
+  // Update Field Clearance Level (based on location/branch or default)
+  // For now, display a default level - can be customized later
+  const clearanceEl = document.getElementById('id_fo_preview_clearance');
+  if (clearanceEl) {
+    clearanceEl.textContent = 'Level 5';
+  }
+  
+  // Update ID Number
+  const idNumber = getValue('id_number');
+  const idNumberEl = document.getElementById('id_fo_preview_idnumber');
+  if (idNumberEl) {
+    idNumberEl.textContent = idNumber || 'ID Number Placeholder';
+  }
+  
+  // Update Photo - prefer AI generated, fallback to original
+  const aiPreviewImg = document.getElementById('aiPreviewImg');
+  const photoPreviewImg = document.getElementById('photoPreviewImg');
+  const foPhotoEl = document.getElementById('id_fo_preview_photo');
+  const foPhotoPlaceholder = document.getElementById('id_fo_photo_placeholder');
+  const foPhotoContainer = document.getElementById('id_fo_photo_container');
+  
+  let photoSrc = '';
+  
+  // Check AI generated photo first
+  if (aiPreviewImg && aiPreviewImg.style.display !== 'none' && aiPreviewImg.src && 
+      (aiPreviewImg.src.startsWith('data:') || aiPreviewImg.src.startsWith('http') || aiPreviewImg.src.startsWith('blob:'))) {
+    photoSrc = aiPreviewImg.src;
+  }
+  // Fallback to original photo
+  else if (photoPreviewImg && photoPreviewImg.src && 
+           (photoPreviewImg.src.startsWith('data:') || photoPreviewImg.src.startsWith('blob:'))) {
+    photoSrc = photoPreviewImg.src;
+  }
+  
+  if (foPhotoEl && foPhotoPlaceholder) {
+    if (photoSrc) {
+      foPhotoEl.src = photoSrc;
+      foPhotoEl.style.display = 'block';
+      foPhotoPlaceholder.style.display = 'none';
+      if (foPhotoContainer) foPhotoContainer.classList.add('has-image');
+    } else {
+      foPhotoEl.style.display = 'none';
+      foPhotoEl.removeAttribute('src');
+      foPhotoPlaceholder.style.display = 'block';
+      if (foPhotoContainer) foPhotoContainer.classList.remove('has-image');
+    }
+  }
+  
+  // Update Signature
+  const signatureData = document.getElementById('signature_data');
+  const foSignatureEl = document.getElementById('id_fo_preview_signature');
+  const foSignaturePlaceholder = document.getElementById('id_fo_signature_placeholder');
+  const foSignatureContainer = document.getElementById('id_fo_signature_container');
+  
+  const signatureSrc = signatureData ? signatureData.value : '';
+  const hasSignature = signatureSrc && signatureSrc.startsWith('data:');
+  
+  if (foSignatureEl && foSignaturePlaceholder) {
+    if (hasSignature) {
+      foSignatureEl.src = signatureSrc;
+      foSignatureEl.style.display = 'block';
+      foSignaturePlaceholder.style.display = 'none';
+      if (foSignatureContainer) foSignatureContainer.classList.add('has-image');
+    } else {
+      foSignatureEl.style.display = 'none';
+      foSignatureEl.removeAttribute('src');
+      foSignaturePlaceholder.style.display = 'block';
+      if (foSignatureContainer) foSignatureContainer.classList.remove('has-image');
+    }
+  }
+}
+
+// Make updateFieldOfficePreview available globally
+window.updateFieldOfficePreview = updateFieldOfficePreview;
 
 // ============================================
 // Messages
