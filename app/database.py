@@ -83,7 +83,12 @@ def init_sqlite_db():
         render_url TEXT,
         emergency_name TEXT,
         emergency_contact TEXT,
-        emergency_address TEXT
+        emergency_address TEXT,
+        field_officer_type TEXT,
+        field_clearance TEXT,
+        fo_division TEXT,
+        fo_department TEXT,
+        fo_campaign TEXT
     )
     """)
     
@@ -115,7 +120,12 @@ def init_sqlite_db():
         "ALTER TABLE employees ADD COLUMN middle_initial TEXT",
         "ALTER TABLE employees ADD COLUMN last_name TEXT",
         "ALTER TABLE employees ADD COLUMN suffix TEXT",
-        "ALTER TABLE employees ADD COLUMN location_branch TEXT"
+        "ALTER TABLE employees ADD COLUMN location_branch TEXT",
+        "ALTER TABLE employees ADD COLUMN field_officer_type TEXT",
+        "ALTER TABLE employees ADD COLUMN field_clearance TEXT",
+        "ALTER TABLE employees ADD COLUMN fo_division TEXT",
+        "ALTER TABLE employees ADD COLUMN fo_department TEXT",
+        "ALTER TABLE employees ADD COLUMN fo_campaign TEXT"
     ]
     for sql in migrations:
         try:
@@ -157,7 +167,21 @@ def get_connection():
 # Employee CRUD Operations
 # =============================================================================
 def insert_employee(data: Dict[str, Any]) -> Optional[int]:
-    """Insert a new employee record"""
+    """Insert a new employee record with logging and defensive fallback"""
+    # Defensive fallback: Ensure field_officer_type exists (insert as NULL/empty if missing)
+    field_officer_fields = ['field_officer_type', 'field_clearance', 'fo_division', 'fo_department', 'fo_campaign']
+    for field in field_officer_fields:
+        if field not in data or data[field] is None:
+            data[field] = ''  # Set to empty string instead of NULL to prevent errors
+    
+    # Log the payload before insertion
+    logger.info("=" * 60)
+    logger.info("📝 INSERT_EMPLOYEE - Final Payload:")
+    logger.info(f"  Database: {'Supabase' if USE_SUPABASE else 'SQLite'}")
+    logger.info(f"  Columns: {list(data.keys())}")
+    logger.info(f"  field_officer_type: {data.get('field_officer_type', 'NOT SET')}")
+    logger.info("=" * 60)
+    
     if USE_SUPABASE:
         try:
             # Remove id if present (auto-generated)
@@ -168,12 +192,14 @@ def insert_employee(data: Dict[str, Any]) -> Optional[int]:
             if 'id_generated' in insert_data:
                 insert_data['id_generated'] = bool(insert_data['id_generated'])
             
+            logger.info(f"Supabase INSERT columns: {list(insert_data.keys())}")
             result = supabase_client.table("employees").insert(insert_data).execute()
             if result.data:
+                logger.info(f"✅ Supabase INSERT successful, id={result.data[0].get('id')}")
                 return result.data[0].get('id')
             return None
         except Exception as e:
-            logger.error(f"Supabase insert error: {e}")
+            logger.error(f"❌ Supabase insert error: {e}")
             return None
     else:
         # SQLite fallback
@@ -185,11 +211,21 @@ def insert_employee(data: Dict[str, Any]) -> Optional[int]:
         placeholders = ', '.join(['?' for _ in data])
         values = tuple(data.values())
         
-        cursor.execute(f"INSERT INTO employees ({columns}) VALUES ({placeholders})", values)
-        employee_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return employee_id
+        sql = f"INSERT INTO employees ({columns}) VALUES ({placeholders})"
+        logger.info(f"SQLite INSERT SQL: {sql}")
+        logger.info(f"SQLite INSERT values count: {len(values)}")
+        
+        try:
+            cursor.execute(sql, values)
+            employee_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            logger.info(f"✅ SQLite INSERT successful, id={employee_id}")
+            return employee_id
+        except Exception as e:
+            logger.error(f"❌ SQLite insert error: {e}")
+            conn.close()
+            return None
 
 
 def get_all_employees() -> List[Dict[str, Any]]:

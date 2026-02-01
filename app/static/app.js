@@ -314,15 +314,20 @@ function initPositionRadioButtons() {
       if (selectedType === 'Reprocessor') {
         if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'block';
         setFieldOfficerFieldsRequired(true);
+        // Show dual template preview for Reprocessor
+        showDualTemplateMode(true);
       } else {
         // Hide for Others or any other value
         if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'none';
         setFieldOfficerFieldsRequired(false);
+        // Show single template preview for Others (Field Office template only)
+        showDualTemplateMode(false);
       }
       
       updateIdCardPreview();
       updateReviewSection();
       updateFieldOfficePreview();
+      updateDualTemplatePreview();
     });
   });
   
@@ -336,6 +341,8 @@ function initPositionRadioButtons() {
         // Don't show details yet - wait for Reprocessor selection
         if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'none';
         setFieldOfficerFieldsRequired(false);
+        // Reset to single template mode until subtype is selected
+        showDualTemplateMode(false);
       } else {
         if (fieldOfficerSubtypeGroup) fieldOfficerSubtypeGroup.style.display = 'none';
         if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'none';
@@ -345,6 +352,9 @@ function initPositionRadioButtons() {
         
         // Clear Field Officer type selection
         foTypeRadios.forEach(r => r.checked = false);
+        
+        // Always show single template mode for non-Field Officers
+        showDualTemplateMode(false);
       }
       
       updateIdCardPreview();
@@ -356,6 +366,243 @@ function initPositionRadioButtons() {
   // Initialize searchable dropdowns
   initSearchableDropdowns();
 }
+
+// ============================================
+// Dual Template Mode Handling
+// ============================================
+function showDualTemplateMode(isDualMode) {
+  const singleContainer = document.getElementById('singleTemplateContainer');
+  const dualContainer = document.getElementById('dualTemplateContainer');
+  
+  if (isDualMode) {
+    // Show dual template container for Reprocessor
+    if (singleContainer) singleContainer.style.display = 'none';
+    if (dualContainer) dualContainer.style.display = 'block';
+    // Update dual template previews
+    updateDualTemplatePreview();
+  } else {
+    // Show single template container for Others/non-Field Officer
+    if (singleContainer) singleContainer.style.display = 'block';
+    if (dualContainer) dualContainer.style.display = 'none';
+  }
+}
+
+// Show/hide sides in dual template mode
+function showDualCardSide(template, side) {
+  const templatePrefix = template === 'original' ? 'dualOriginal' : 'dualReprocessor';
+  const frontCard = document.getElementById(`${templatePrefix}Front`);
+  const backCard = document.getElementById(`${templatePrefix}Back`);
+  
+  // Update button states for this template only
+  const templateCard = (template === 'original') 
+    ? document.querySelector('.dual-template-card:first-child')
+    : document.querySelector('.dual-template-card:last-child');
+  
+  if (templateCard) {
+    const flipBtns = templateCard.querySelectorAll('.flip-btn');
+    flipBtns.forEach(btn => {
+      if (btn.dataset.side === side) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+  
+  // Show/hide cards
+  if (side === 'front') {
+    if (frontCard) frontCard.style.display = 'block';
+    if (backCard) backCard.style.display = 'none';
+  } else {
+    if (frontCard) frontCard.style.display = 'none';
+    if (backCard) backCard.style.display = 'block';
+  }
+}
+
+// Make showDualCardSide available globally
+window.showDualCardSide = showDualCardSide;
+
+// Update dual template previews with form data
+// Image source rules:
+// - Original Template (Portrait): Uses AI-generated photo
+// - Reprocessor Template (Landscape): Uses original uploaded photo
+function updateDualTemplatePreview() {
+  const dualContainer = document.getElementById('dualTemplateContainer');
+  if (!dualContainer || dualContainer.style.display === 'none') return;
+  
+  // Helper function to safely get element value
+  const getValue = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    return el.value.trim();
+  };
+  
+  // Get suffix value
+  const getSuffixValue = () => {
+    const suffixSelect = document.getElementById('suffix');
+    if (!suffixSelect) return '';
+    const val = suffixSelect.value;
+    return (val && val !== 'None' && val !== '') ? val : '';
+  };
+  
+  // Get form values
+  const firstName = getValue('first_name');
+  const lastName = getValue('last_name');
+  const middleInitial = getValue('middle_initial');
+  const suffix = getSuffixValue();
+  const nickname = getValue('id_nickname') || firstName;
+  const idNumber = getValue('id_number');
+  const emergencyName = getValue('emergency_name');
+  const emergencyContact = getValue('emergency_contact');
+  const emergencyAddress = getValue('emergency_address');
+  
+  // Build full name
+  let fullName = '';
+  if (firstName) fullName += firstName;
+  if (middleInitial) fullName += ' ' + middleInitial + '.';
+  if (lastName) fullName += ' ' + lastName;
+  if (suffix) fullName += ' ' + suffix;
+  fullName = fullName.trim() || 'Bonifacio M. Aguinaldo';
+  
+  // Get photo sources - separate AI and original
+  const aiPreviewImg = document.getElementById('aiPreviewImg');
+  const photoPreviewImg = document.getElementById('photoPreviewImg');
+  const signatureData = document.getElementById('signature_data');
+  
+  // AI photo source (for Original Template - Portrait)
+  let aiPhotoSrc = '';
+  if (aiPreviewImg && aiPreviewImg.style.display !== 'none' && aiPreviewImg.src && 
+      (aiPreviewImg.src.startsWith('data:') || aiPreviewImg.src.startsWith('http') || aiPreviewImg.src.startsWith('blob:'))) {
+    aiPhotoSrc = aiPreviewImg.src;
+  }
+  
+  // Original uploaded photo source (for Reprocessor Template - Landscape)
+  let originalPhotoSrc = '';
+  if (photoPreviewImg && photoPreviewImg.src && 
+      (photoPreviewImg.src.startsWith('data:') || photoPreviewImg.src.startsWith('blob:'))) {
+    originalPhotoSrc = photoPreviewImg.src;
+  }
+  
+  const signatureSrc = signatureData ? signatureData.value : '';
+  const hasSignature = signatureSrc && signatureSrc.startsWith('data:');
+  
+  // === Update Original Template (uses AI photo) ===
+  // Nickname
+  const origNickname = document.getElementById('dual_original_nickname');
+  if (origNickname) origNickname.textContent = nickname || 'Ian';
+  
+  // Full name
+  const origFullname = document.getElementById('dual_original_fullname');
+  if (origFullname) origFullname.textContent = fullName;
+  
+  // Position
+  const origPosition = document.getElementById('dual_original_position');
+  if (origPosition) origPosition.textContent = 'Field Officer - Reprocessor';
+  
+  // ID Number
+  const origIdNumber = document.getElementById('dual_original_idnumber');
+  if (origIdNumber) origIdNumber.textContent = idNumber || '012402-081';
+  
+  // Photo - Original Template uses AI photo
+  const origPhoto = document.getElementById('dual_original_photo');
+  const origPhotoPlaceholder = document.getElementById('dual_original_photo_placeholder');
+  if (origPhoto && origPhotoPlaceholder) {
+    if (aiPhotoSrc) {
+      origPhoto.src = aiPhotoSrc;
+      origPhoto.style.display = 'block';
+      origPhotoPlaceholder.style.display = 'none';
+    } else {
+      origPhoto.style.display = 'none';
+      origPhotoPlaceholder.style.display = 'block';
+      origPhotoPlaceholder.textContent = 'AI Image';
+    }
+  }
+  
+  // Signature
+  const origSignature = document.getElementById('dual_original_signature');
+  const origSignaturePlaceholder = document.getElementById('dual_original_signature_placeholder');
+  if (origSignature && origSignaturePlaceholder) {
+    if (hasSignature) {
+      origSignature.src = signatureSrc;
+      origSignature.style.display = 'block';
+      origSignaturePlaceholder.style.display = 'none';
+    } else {
+      origSignature.style.display = 'none';
+      origSignaturePlaceholder.style.display = 'block';
+    }
+  }
+  
+  // Emergency contact for back side
+  const origContactLabel = document.getElementById('dual_original_contact_label');
+  if (origContactLabel) origContactLabel.textContent = `${firstName || 'Employee'}'s Contact`;
+  
+  const origEmergencyName = document.getElementById('dual_original_emergency_name');
+  if (origEmergencyName) origEmergencyName.textContent = emergencyName || 'Emergency Contact Name';
+  
+  const origEmergencyContact = document.getElementById('dual_original_emergency_contact');
+  if (origEmergencyContact) origEmergencyContact.textContent = emergencyContact || '+63 XXX XXX XXXX';
+  
+  const origEmergencyAddress = document.getElementById('dual_original_emergency_address');
+  if (origEmergencyAddress) origEmergencyAddress.textContent = emergencyAddress || 'Contact Address';
+  
+  // === Update Reprocessor Template (uses ORIGINAL uploaded photo, NOT AI) ===
+  // Name (with line break)
+  const reprocessorName = document.getElementById('dual_reprocessor_name');
+  if (reprocessorName) {
+    let displayName = '';
+    if (firstName && lastName) {
+      displayName = firstName + '<br>' + lastName;
+      if (suffix) displayName += ' ' + suffix;
+    } else {
+      displayName = 'Name<br>Placeholder';
+    }
+    reprocessorName.innerHTML = displayName;
+  }
+  
+  // Position
+  const reprocessorPosition = document.getElementById('dual_reprocessor_position');
+  if (reprocessorPosition) reprocessorPosition.textContent = 'REPROCESSOR';
+  
+  // Clearance
+  const reprocessorClearance = document.getElementById('dual_reprocessor_clearance');
+  if (reprocessorClearance) reprocessorClearance.textContent = 'Level 5';
+  
+  // ID Number
+  const reprocessorIdNumber = document.getElementById('dual_reprocessor_idnumber');
+  if (reprocessorIdNumber) reprocessorIdNumber.textContent = idNumber || 'ID Number Placeholder';
+  
+  // Photo - Reprocessor Template uses ORIGINAL uploaded photo (NOT AI)
+  const reprocessorPhoto = document.getElementById('dual_reprocessor_photo');
+  const reprocessorPhotoPlaceholder = document.getElementById('dual_reprocessor_photo_placeholder');
+  if (reprocessorPhoto && reprocessorPhotoPlaceholder) {
+    if (originalPhotoSrc) {
+      reprocessorPhoto.src = originalPhotoSrc;
+      reprocessorPhoto.style.display = 'block';
+      reprocessorPhotoPlaceholder.style.display = 'none';
+    } else {
+      reprocessorPhoto.style.display = 'none';
+      reprocessorPhotoPlaceholder.style.display = 'block';
+      reprocessorPhotoPlaceholder.textContent = 'Original Photo';
+    }
+  }
+  
+  // Signature
+  const reprocessorSignature = document.getElementById('dual_reprocessor_signature');
+  const reprocessorSignaturePlaceholder = document.getElementById('dual_reprocessor_signature_placeholder');
+  if (reprocessorSignature && reprocessorSignaturePlaceholder) {
+    if (hasSignature) {
+      reprocessorSignature.src = signatureSrc;
+      reprocessorSignature.style.display = 'block';
+      reprocessorSignaturePlaceholder.style.display = 'none';
+    } else {
+      reprocessorSignature.style.display = 'none';
+      reprocessorSignaturePlaceholder.style.display = 'block';
+    }
+  }
+}
+
+// Make updateDualTemplatePreview available globally
+window.updateDualTemplatePreview = updateDualTemplatePreview;
 
 // Set Field Officer fields as required or not
 function setFieldOfficerFieldsRequired(required) {
@@ -770,9 +1017,19 @@ document.addEventListener('click', function(event) {
   }
 });
 
+// Regenerate with outfit selection from dropdown
+async function regenerateWithOutfit() {
+  const outfitSelect = document.getElementById('outfitSelect');
+  const selectedOutfit = outfitSelect ? outfitSelect.value : 'male_1';
+  console.log('=== regenerateWithOutfit called ===');
+  console.log('Selected outfit:', selectedOutfit);
+  await regenerateAIImage(selectedOutfit);
+}
+
 // Make functions globally accessible for inline onclick
 window.regenerateAIImage = regenerateAIImage;
 window.simpleRegenerateAI = simpleRegenerateAI;
+window.regenerateWithOutfit = regenerateWithOutfit;
 window.toggleRegenerateDropdown = toggleRegenerateDropdown;
 window.closeRegenerateDropdown = closeRegenerateDropdown;
 
@@ -1151,6 +1408,11 @@ function updateIdCardPreview() {
   if (backContactLabel) {
     backContactLabel.textContent = firstName ? `${firstName}'s Contact` : "'s Contact";
   }
+  
+  // Also update dual template preview if in Reprocessor mode
+  if (typeof updateDualTemplatePreview === 'function') {
+    updateDualTemplatePreview();
+  }
 }
 
 // ============================================
@@ -1307,28 +1569,28 @@ function initFormSubmission() {
         return;
       }
       
-      // Check Division
-      const foDivision = document.getElementById('fo_division');
-      const foDivisionSearch = document.getElementById('fo_division_search');
-      if (!foDivision || !foDivision.value.trim()) {
-        isValid = false;
-        if (foDivisionSearch) foDivisionSearch.style.borderColor = 'var(--color-danger)';
-      }
-      
-      // Check Department
-      const foDepartment = document.getElementById('fo_department');
-      const foDepartmentSearch = document.getElementById('fo_department_search');
-      if (!foDepartment || !foDepartment.value.trim()) {
-        isValid = false;
-        if (foDepartmentSearch) foDepartmentSearch.style.borderColor = 'var(--color-danger)';
-      }
-      
-      // Check Campaign
-      const foCampaign = document.getElementById('fo_campaign');
-      const foCampaignSearch = document.getElementById('fo_campaign_search');
-      if (!foCampaign || !foCampaign.value.trim()) {
-        isValid = false;
-        if (foCampaignSearch) foCampaignSearch.style.borderColor = 'var(--color-danger)';
+      // Only require Division, Department, Campaign for Reprocessor type
+      if (foTypeSelected.value === 'Reprocessor') {
+        // Check Division - now using native select
+        const foDivision = document.getElementById('fo_division');
+        if (!foDivision || !foDivision.value || foDivision.value === '') {
+          isValid = false;
+          if (foDivision) foDivision.style.borderColor = 'var(--color-danger)';
+        }
+        
+        // Check Department - now using native select
+        const foDepartment = document.getElementById('fo_department');
+        if (!foDepartment || !foDepartment.value || foDepartment.value === '') {
+          isValid = false;
+          if (foDepartment) foDepartment.style.borderColor = 'var(--color-danger)';
+        }
+        
+        // Check Campaign - now using native select
+        const foCampaign = document.getElementById('fo_campaign');
+        if (!foCampaign || !foCampaign.value || foCampaign.value === '') {
+          isValid = false;
+          if (foCampaign) foCampaign.style.borderColor = 'var(--color-danger)';
+        }
       }
     }
 

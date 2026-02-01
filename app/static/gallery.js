@@ -96,6 +96,34 @@ const PDF_CONFIG = {
   get CANVAS_SCALE() { return this.PRINT_DPI / this.SCREEN_DPI; }  // ~3.125
 };
 
+// Landscape PDF Config for Field Officer templates
+// PDF Dimensions: 3.33" width × 2.13" height (landscape orientation)
+// Card Preview: 512px × 319px (matches .id-card-field-office)
+const PDF_CONFIG_LANDSCAPE = {
+  // Landscape dimensions (credit card aspect ratio)
+  WIDTH_INCHES: 3.33,
+  HEIGHT_INCHES: 2.13,  // Exact 3.33:2.13 ratio as requested
+  
+  // Preview canvas dimensions for landscape (pixels) - MUST match CSS
+  PREVIEW_WIDTH_PX: 512,
+  PREVIEW_HEIGHT_PX: 319,
+  
+  // Print quality DPI
+  PRINT_DPI: 300,
+  SCREEN_DPI: 96,
+  
+  // Calculated dimensions in mm (for jsPDF)
+  get WIDTH_MM() { return this.WIDTH_INCHES * 25.4; },  // 84.582mm
+  get HEIGHT_MM() { return this.HEIGHT_INCHES * 25.4; }, // 54.102mm
+  
+  // Pixel dimensions at 300 DPI for rendering
+  get RENDER_WIDTH_PX() { return Math.round(this.WIDTH_INCHES * this.PRINT_DPI); },  // 999px
+  get RENDER_HEIGHT_PX() { return Math.round(this.HEIGHT_INCHES * this.PRINT_DPI); }, // 639px
+  
+  // html2canvas scale factor (DPI ratio)
+  get CANVAS_SCALE() { return this.PRINT_DPI / this.SCREEN_DPI; }  // ~3.125
+};
+
 // Cache settings - MUST match dashboard.js for shared cache
 // VERCEL FIX: Use shared cache key with dashboard so both pages see the same data
 const GALLERY_CACHE_KEY = 'hrEmployeeDataCache';  // Shared with dashboard.js
@@ -514,7 +542,26 @@ function renderGallery() {
 }
 
 // Generate the ID card HTML for display - matches the exact design from form.html id-preview-section
+// Now supports different templates based on position and field_officer_type
 function generateIDCardHtml(emp) {
+  // Check if this is a Field Officer - Reprocessor (needs dual templates)
+  const isFieldOfficer = emp.position === 'Field Officer';
+  const isReprocessor = isFieldOfficer && emp.field_officer_type === 'Reprocessor';
+  
+  // For Field Officers (both Reprocessor and Others), use the Field Office template
+  if (isFieldOfficer) {
+    return generateFieldOfficeIDCardHtml(emp);
+  }
+  
+  // For non-Field Officers, use the regular template
+  return generateRegularIDCardHtml(emp);
+}
+
+// Generate Regular ID Card HTML (for Freelancer, Intern, Others)
+// Image source rule: Uses AI-generated photo (nobg_photo_url preferred)
+// For Reprocessor Portrait Template: Uses AI photo
+function generateRegularIDCardHtml(emp) {
+  // Use AI-generated photo (nobg_photo_url or new_photo_url) for portrait template
   const idPhotoUrl = emp.nobg_photo_url || emp.new_photo_url || emp.photo_url;
   const photoHasImage = idPhotoUrl ? 'has-image' : '';
   const photoHtml = idPhotoUrl 
@@ -605,6 +652,86 @@ function generateIDCardHtml(emp) {
           <span class="id-exp-date">${expDateStr}</span>
         </div>
       </div>
+    </div>
+  `;
+}
+
+// Generate Field Office ID Card HTML (for Field Officers)
+// Image source rule: Uses ORIGINAL uploaded photo (NOT AI-generated)
+// - Field Officer (Others): Uses original photo only
+// - Field Officer (Reprocessor) Landscape Template: Uses original photo
+function generateFieldOfficeIDCardHtml(emp) {
+  // Use original uploaded photo only (NOT AI photo)
+  const idPhotoUrl = emp.photo_url;
+  const photoHasImage = idPhotoUrl ? 'has-image' : '';
+  const photoHtml = idPhotoUrl 
+    ? `<img src="${idPhotoUrl}" alt="${escapeHtml(emp.employee_name)}" crossorigin="anonymous">`
+    : `<span class="id-fo-photo-placeholder">Photo</span>`;
+
+  const signatureHtml = emp.signature_url 
+    ? `<img src="${emp.signature_url}" alt="Signature" crossorigin="anonymous">`
+    : `<span class="id-fo-signature-placeholder"></span>`;
+
+  // Parse name for multi-line display
+  const nameParts = emp.employee_name.split(' ');
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || '';
+  const displayName = firstName && lastName ? `${firstName}<br>${lastName}` : emp.employee_name;
+  
+  // Get field officer type for position display
+  const foType = emp.field_officer_type || 'LEGAL OFFICER';
+  const positionDisplay = foType === 'Reprocessor' ? 'REPROCESSOR' : 'LEGAL OFFICER';
+  
+  // Field clearance (default to Level 5)
+  const clearanceLevel = emp.field_clearance || 'Level 5';
+
+  return `
+    <div class="id-card-field-office gallery-id-card-field-office">
+      <div class="id-field-office-content">
+        <!-- Photo Section with border -->
+        <div class="id-fo-photo-section">
+          <div class="id-fo-photo-container ${photoHasImage}">
+            ${photoHtml}
+          </div>
+        </div>
+
+        <!-- Signature Section -->
+        <div class="id-fo-signature-section">
+          <div class="id-fo-signature-container ${emp.signature_url ? 'has-image' : ''}">
+            ${signatureHtml}
+          </div>
+        </div>
+
+        <!-- Employee Name -->
+        <div class="id-fo-name-section">
+          <h1 class="id-fo-name">${displayName}</h1>
+        </div>
+
+        <!-- Position -->
+        <div class="id-fo-position-section">
+          <span class="id-fo-position">${escapeHtml(positionDisplay)}</span>
+        </div>
+
+        <!-- Field Clearance Level -->
+        <div class="id-fo-clearance-section">
+          <span class="id-fo-clearance-label">FIELD CLEARANCE:</span>
+          <span class="id-fo-clearance-level">${escapeHtml(clearanceLevel)}</span>
+        </div>
+
+        <!-- ID Number -->
+        <div class="id-fo-idnumber-section">
+          <span class="id-fo-idnumber">${escapeHtml(emp.id_number)}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Generate Field Office ID Card Back HTML
+function generateFieldOfficeIDCardBackHtml(emp) {
+  return `
+    <div class="id-card-field-office-back gallery-id-card-field-office-back">
+      <!-- Back side uses 4.png as background - no editable content -->
     </div>
   `;
 }
@@ -716,6 +843,195 @@ function generateIDCardBackHtml(emp) {
   `;
 }
 
+// Generate appropriate back HTML based on employee type
+function getBackHtml(emp) {
+  const isFieldOfficer = emp.position === 'Field Officer';
+  if (isFieldOfficer) {
+    return generateFieldOfficeIDCardBackHtml(emp);
+  }
+  return generateIDCardBackHtml(emp);
+}
+
+// Generate single template preview HTML (for Others/non-Field Officers)
+function generateSingleTemplatePreviewHtml(emp, isFieldOfficer) {
+  return `
+    <!-- Flip Toggle Buttons -->
+    <div class="id-flip-toggle">
+      <button type="button" class="flip-btn active" data-side="front" onclick="showPreviewSide('front')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="9" cy="10" r="2"/>
+          <path d="M15 8h2M15 12h2M7 16h10"/>
+        </svg>
+        Front
+      </button>
+      <button type="button" class="flip-btn" data-side="back" onclick="showPreviewSide('back')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M7 7h10v10H7z"/>
+          <path d="M12 11v4M12 7v1"/>
+        </svg>
+        Back
+      </button>
+    </div>
+    
+    <div class="id-preview-wrapper">
+      <div id="previewFront">
+        ${generateIDCardHtml(emp)}
+      </div>
+      <div id="previewBack" style="display: none;">
+        ${getBackHtml(emp)}
+      </div>
+    </div>
+  `;
+}
+
+// Generate dual template preview HTML (for Reprocessor - shows both Original and Reprocessor templates)
+function generateDualTemplatePreviewHtml(emp) {
+  return `
+    <div class="dual-template-grid gallery-dual-template-grid">
+      <!-- Original Template -->
+      <div class="dual-template-card">
+        <h3 class="dual-template-title">Original Template</h3>
+        <div class="id-flip-toggle dual-flip-toggle">
+          <button type="button" class="flip-btn active" data-side="front" data-template="original" onclick="showDualPreviewSide('original', 'front')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="9" cy="10" r="2"/>
+              <path d="M15 8h2M15 12h2M7 16h10"/>
+            </svg>
+            Front
+          </button>
+          <button type="button" class="flip-btn" data-side="back" data-template="original" onclick="showDualPreviewSide('original', 'back')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M7 7h10v10H7z"/>
+              <path d="M12 11v4M12 7v1"/>
+            </svg>
+            Back
+          </button>
+        </div>
+        <div class="id-preview-wrapper dual-preview-wrapper">
+          <div id="dualOriginalFront">
+            ${generateRegularIDCardHtml(emp)}
+          </div>
+          <div id="dualOriginalBack" style="display: none;">
+            ${generateIDCardBackHtml(emp)}
+          </div>
+        </div>
+      </div>
+      
+      <!-- Reprocessor Template -->
+      <div class="dual-template-card">
+        <h3 class="dual-template-title">Reprocessor Template</h3>
+        <div class="id-flip-toggle dual-flip-toggle">
+          <button type="button" class="flip-btn active" data-side="front" data-template="reprocessor" onclick="showDualPreviewSide('reprocessor', 'front')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="9" cy="10" r="2"/>
+              <path d="M15 8h2M15 12h2M7 16h10"/>
+            </svg>
+            Front
+          </button>
+          <button type="button" class="flip-btn" data-side="back" data-template="reprocessor" onclick="showDualPreviewSide('reprocessor', 'back')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M7 7h10v10H7z"/>
+              <path d="M12 11v4M12 7v1"/>
+            </svg>
+            Back
+          </button>
+        </div>
+        <div class="id-preview-wrapper dual-preview-wrapper">
+          <div id="dualReprocessorFront">
+            ${generateFieldOfficeIDCardHtml(emp)}
+          </div>
+          <div id="dualReprocessorBack" style="display: none;">
+            ${generateFieldOfficeIDCardBackHtml(emp)}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Generate employee information HTML for preview modal
+function generateEmployeeInfoHtml(emp) {
+  return `
+    <div class="id-preview-details">
+      <h3>Employee Information</h3>
+      <div class="preview-info-grid">
+        <div class="preview-info-item">
+          <span class="label">Full Name</span>
+          <span class="value">${escapeHtml(emp.employee_name)}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">ID Number</span>
+          <span class="value">${escapeHtml(emp.id_number)}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">Position</span>
+          <span class="value">${escapeHtml(emp.position)}${emp.field_officer_type ? ' - ' + escapeHtml(emp.field_officer_type) : ''}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">Branch/Location</span>
+          <span class="value">${escapeHtml(emp.location_branch || '-')}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">Email</span>
+          <span class="value">${escapeHtml(emp.email)}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">Phone</span>
+          <span class="value">${escapeHtml(emp.personal_number)}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">Emergency Contact</span>
+          <span class="value">${escapeHtml(emp.emergency_name || 'Not provided')}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">Status</span>
+          <span class="value"><span class="status-badge ${emp.status.toLowerCase()}">${emp.status}</span></span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Show/hide sides in dual template preview mode (for gallery modal)
+function showDualPreviewSide(template, side) {
+  const templatePrefix = template === 'original' ? 'dualOriginal' : 'dualReprocessor';
+  const frontCard = document.getElementById(`${templatePrefix}Front`);
+  const backCard = document.getElementById(`${templatePrefix}Back`);
+  
+  // Update button states for this template only
+  const templateCards = document.querySelectorAll('.dual-template-card');
+  const templateCard = template === 'original' ? templateCards[0] : templateCards[1];
+  
+  if (templateCard) {
+    const flipBtns = templateCard.querySelectorAll('.flip-btn');
+    flipBtns.forEach(btn => {
+      if (btn.dataset.side === side) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+  
+  // Show/hide cards
+  if (side === 'front') {
+    if (frontCard) frontCard.style.display = 'block';
+    if (backCard) backCard.style.display = 'none';
+  } else {
+    if (frontCard) frontCard.style.display = 'none';
+    if (backCard) backCard.style.display = 'block';
+  }
+}
+
+// Make showDualPreviewSide available globally
+window.showDualPreviewSide = showDualPreviewSide;
+
 // ============================================
 // Filtering
 // ============================================
@@ -755,73 +1071,22 @@ function previewID(id) {
     return;
   }
 
-  elements.modalBody.innerHTML = `
-    <!-- Flip Toggle Buttons -->
-    <div class="id-flip-toggle">
-      <button type="button" class="flip-btn active" data-side="front" onclick="showPreviewSide('front')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <circle cx="9" cy="10" r="2"/>
-          <path d="M15 8h2M15 12h2M7 16h10"/>
-        </svg>
-        Front
-      </button>
-      <button type="button" class="flip-btn" data-side="back" onclick="showPreviewSide('back')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <path d="M7 7h10v10H7z"/>
-          <path d="M12 11v4M12 7v1"/>
-        </svg>
-        Back
-      </button>
-    </div>
-    
-    <div class="id-preview-wrapper">
-      <div id="previewFront">
-        ${generateIDCardHtml(emp)}
-      </div>
-      <div id="previewBack" style="display: none;">
-        ${generateIDCardBackHtml(emp)}
-      </div>
-    </div>
-    <div class="id-preview-details">
-      <h3>Employee Information</h3>
-      <div class="preview-info-grid">
-        <div class="preview-info-item">
-          <span class="label">Full Name</span>
-          <span class="value">${escapeHtml(emp.employee_name)}</span>
-        </div>
-        <div class="preview-info-item">
-          <span class="label">ID Number</span>
-          <span class="value">${escapeHtml(emp.id_number)}</span>
-        </div>
-        <div class="preview-info-item">
-          <span class="label">Position</span>
-          <span class="value">${escapeHtml(emp.position)}</span>
-        </div>
-        <div class="preview-info-item">
-          <span class="label">Branch/Location</span>
-          <span class="value">${escapeHtml(emp.location_branch || '-')}</span>
-        </div>
-        <div class="preview-info-item">
-          <span class="label">Email</span>
-          <span class="value">${escapeHtml(emp.email)}</span>
-        </div>
-        <div class="preview-info-item">
-          <span class="label">Phone</span>
-          <span class="value">${escapeHtml(emp.personal_number)}</span>
-        </div>
-        <div class="preview-info-item">
-          <span class="label">Emergency Contact</span>
-          <span class="value">${escapeHtml(emp.emergency_name || 'Not provided')}</span>
-        </div>
-        <div class="preview-info-item">
-          <span class="label">Status</span>
-          <span class="value"><span class="status-badge ${emp.status.toLowerCase()}">${emp.status}</span></span>
-        </div>
-      </div>
-    </div>
-  `;
+  // Check if this is a Reprocessor (needs dual template display)
+  const isFieldOfficer = emp.position === 'Field Officer';
+  const isReprocessor = isFieldOfficer && emp.field_officer_type === 'Reprocessor';
+  
+  // Generate the appropriate preview HTML
+  let previewHtml = '';
+  
+  if (isReprocessor) {
+    // Dual template preview for Reprocessor
+    previewHtml = generateDualTemplatePreviewHtml(emp);
+  } else {
+    // Single template preview for Others/non-Field Officers
+    previewHtml = generateSingleTemplatePreviewHtml(emp, isFieldOfficer);
+  }
+  
+  elements.modalBody.innerHTML = previewHtml + generateEmployeeInfoHtml(emp);
 
   if (elements.previewModal) {
     elements.previewModal.classList.add('active');
@@ -871,10 +1136,73 @@ function downloadSinglePdf(id) {
   downloadIDPdf(emp);
 }
 
+// Helper function to capture a card canvas for PDF generation
+async function captureCardCanvas(tempContainer, cardHtml, designWidth, designHeight, scaleToFit, waitTime = 1000) {
+  tempContainer.innerHTML = `
+    <div class="pdf-id-card-wrapper" style="width: ${designWidth}px; padding: 0; margin: 0; background: white; display: inline-block;">
+      ${cardHtml}
+    </div>
+  `;
+
+  // Try to find the card element - could be .id-card or .id-card-field-office or .id-card-back
+  let cardEl = tempContainer.querySelector('.id-card');
+  if (!cardEl) {
+    cardEl = tempContainer.querySelector('.id-card-field-office');
+  }
+  if (!cardEl) {
+    cardEl = tempContainer.querySelector('.id-card-field-office-back');
+  }
+  if (!cardEl) {
+    cardEl = tempContainer.querySelector('[class*="id-card"]');
+  }
+  
+  // Guard against null element
+  if (!cardEl) {
+    console.error('captureCardCanvas: No card element found in HTML');
+    throw new Error('Card element not found for PDF capture');
+  }
+
+  cardEl.style.width = `${designWidth}px`;
+  cardEl.style.height = `${designHeight}px`;
+  cardEl.style.minWidth = `${designWidth}px`;
+  cardEl.style.minHeight = `${designHeight}px`;
+  cardEl.style.transform = 'none';
+  cardEl.style.transformOrigin = 'top left';
+  cardEl.style.margin = '0';
+  cardEl.style.overflow = 'hidden';
+
+  await new Promise(resolve => setTimeout(resolve, waitTime));
+  
+  const images = tempContainer.querySelectorAll('img');
+  await Promise.all(Array.from(images).map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise(resolve => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  }));
+
+  return await html2canvas(cardEl, {
+    scale: scaleToFit,
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: '#ffffff',
+    width: designWidth,
+    height: designHeight,
+    scrollY: 0,
+    scrollX: 0,
+    logging: false
+  });
+}
+
 // Download ID card as PDF using jsPDF and html2canvas - includes both front and back
 // PDF Dimensions: 2.13" × 3.33" (97% of 3.43" original) at 300 DPI
+// For Reprocessor: generates 4-page PDF (Original + Field Officer templates)
 async function downloadIDPdf(emp) {
-  showToast('Generating print-quality PDF (2.13" × 3.33" at 300 DPI)...', 'success');
+  const isReprocessor = emp.position === 'Field Officer' && emp.field_officer_type === 'Reprocessor';
+  const pageCount = isReprocessor ? 4 : 2;
+  
+  showToast(`Generating ${pageCount}-page print-quality PDF (2.13" × 3.33" at 300 DPI)...`, 'success');
 
   try {
     // Log PDF configuration for debugging
@@ -883,7 +1211,9 @@ async function downloadIDPdf(emp) {
       dimensionsMm: `${PDF_CONFIG.WIDTH_MM.toFixed(2)}mm × ${PDF_CONFIG.HEIGHT_MM.toFixed(2)}mm`,
       renderPx: `${PDF_CONFIG.RENDER_WIDTH_PX}px × ${PDF_CONFIG.RENDER_HEIGHT_PX}px`,
       dpi: PDF_CONFIG.PRINT_DPI,
-      scale: PDF_CONFIG.CANVAS_SCALE.toFixed(3)
+      scale: PDF_CONFIG.CANVAS_SCALE.toFixed(3),
+      isReprocessor: isReprocessor,
+      pageCount: pageCount
     });
 
     // Create a temporary container - position off-screen but rendered
@@ -900,111 +1230,10 @@ async function downloadIDPdf(emp) {
     const designHeight = PDF_CONFIG.PREVIEW_HEIGHT_PX; // 800px
     const scaleToFit = PDF_CONFIG.CANVAS_SCALE;        // ~3.125 for 300 DPI
     
-    // Render front side at actual size for 300 DPI output
-    tempContainer.innerHTML = `
-      <div class="pdf-id-card-wrapper" style="width: ${designWidth}px; padding: 0; margin: 0; background: white; display: inline-block;">
-        ${generateIDCardHtml(emp)}
-      </div>
-    `;
-
-    // Ensure the card renders at exact 512×800 dimensions - NO scaling transforms
-    const frontCardEl = tempContainer.querySelector('.id-card');
-    frontCardEl.style.width = `${designWidth}px`;
-    frontCardEl.style.height = `${designHeight}px`;
-    frontCardEl.style.minWidth = `${designWidth}px`;
-    frontCardEl.style.minHeight = `${designHeight}px`;
-    frontCardEl.style.transform = 'none';  // Remove any CSS transforms
-    frontCardEl.style.transformOrigin = 'top left';
-    frontCardEl.style.margin = '0';
-    frontCardEl.style.overflow = 'hidden';
-
-    // Wait for images to fully load
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Preload all images in the container
-    const images = tempContainer.querySelectorAll('img');
-    await Promise.all(Array.from(images).map(img => {
-      if (img.complete) return Promise.resolve();
-      return new Promise(resolve => {
-        img.onload = resolve;
-        img.onerror = resolve;
-      });
-    }));
-    
-    // Use fixed height for consistent output
-    const actualDesignHeight = designHeight;  // Always 800px
-    console.log('PDF Front - Design dimensions:', designWidth, '×', actualDesignHeight);
-    
-    // Capture front side at high resolution for print quality (300 DPI)
-    const frontCanvas = await html2canvas(frontCardEl, {
-      scale: scaleToFit,  // Scale up for 300 DPI print quality
-      useCORS: true,
-      // Avoid tainted-canvas export failures (SecurityError on toDataURL)
-      allowTaint: false,
-      backgroundColor: '#ffffff',
-      width: designWidth,
-      height: actualDesignHeight,
-      scrollY: 0,
-      scrollX: 0,
-      logging: false
-    });
-
-    // Render back side with same exact dimensions
-    tempContainer.innerHTML = `
-      <div class="pdf-id-card-wrapper" style="width: ${designWidth}px; padding: 0; margin: 0; background: white; display: inline-block;">
-        ${generateIDCardBackHtml(emp)}
-      </div>
-    `;
-    
-    const backCardEl = tempContainer.querySelector('.id-card');
-    backCardEl.style.width = `${designWidth}px`;
-    backCardEl.style.height = `${designHeight}px`;
-    backCardEl.style.minWidth = `${designWidth}px`;
-    backCardEl.style.minHeight = `${designHeight}px`;
-    backCardEl.style.transform = 'none';  // Remove any CSS transforms
-    backCardEl.style.transformOrigin = 'top left';
-    backCardEl.style.margin = '0';
-    backCardEl.style.overflow = 'hidden';
-    
-    // Wait for back side images
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const backImages = tempContainer.querySelectorAll('img');
-    await Promise.all(Array.from(backImages).map(img => {
-      if (img.complete) return Promise.resolve();
-      return new Promise(resolve => {
-        img.onload = resolve;
-        img.onerror = resolve;
-      });
-    }));
-    
-    // Use fixed height for back card
-    const actualBackHeight = designHeight;  // Always 800px
-    console.log('PDF Back - Design dimensions:', designWidth, '×', actualBackHeight);
-    
-    // Capture back side at high resolution (300 DPI)
-    const backCanvas = await html2canvas(backCardEl, {
-      scale: scaleToFit,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: '#ffffff',
-      width: designWidth,
-      height: actualBackHeight,
-      scrollY: 0,
-      scrollX: 0,
-      logging: false
-    });
-
     // Use exact PDF dimensions from config (2.13" × 3.33")
     const pdfWidthMm = PDF_CONFIG.WIDTH_MM;
     const pdfHeightMm = PDF_CONFIG.HEIGHT_MM;
     
-    console.log('PDF Output:', {
-      dimensions: `${pdfWidthMm.toFixed(2)}mm × ${pdfHeightMm.toFixed(2)}mm`,
-      inches: `${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}"`,
-      scaleFactor: `${PDF_CONFIG.SCALE_FACTOR * 100}% of ${PDF_CONFIG.ORIGINAL_HEIGHT_INCHES}"`
-    });
-
     // Create PDF with exact ID card dimensions
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({
@@ -1014,17 +1243,174 @@ async function downloadIDPdf(emp) {
       compress: true
     });
 
-    // Add front side - fit to exact page dimensions
-    const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
-    pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+    if (isReprocessor) {
+      // 4-page PDF for Reprocessor: Original (front/back) + Field Officer (front/back)
+      console.log('Generating 4-page PDF for Reprocessor...');
+      
+      // Page 1: Original template front
+      console.log('Capturing Original template front...');
+      const originalFrontCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateRegularIDCardHtml(emp), 
+        designWidth, 
+        designHeight, 
+        scaleToFit, 
+        1500
+      );
+      const originalFrontImgData = originalFrontCanvas.toDataURL('image/png', 1.0);
+      pdf.addImage(originalFrontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      
+      // Page 2: Original template back
+      console.log('Capturing Original template back...');
+      pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
+      const originalBackCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateIDCardBackHtml(emp), 
+        designWidth, 
+        designHeight, 
+        scaleToFit, 
+        1000
+      );
+      const originalBackImgData = originalBackCanvas.toDataURL('image/png', 1.0);
+      pdf.addImage(originalBackImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      
+      // Page 3: Field Officer template front (landscape)
+      console.log('Capturing Field Officer template front...');
+      const landscapeWidthMm = PDF_CONFIG_LANDSCAPE.WIDTH_MM;
+      const landscapeHeightMm = PDF_CONFIG_LANDSCAPE.HEIGHT_MM;
+      const landscapeDesignWidth = PDF_CONFIG_LANDSCAPE.PREVIEW_WIDTH_PX;
+      const landscapeDesignHeight = PDF_CONFIG_LANDSCAPE.PREVIEW_HEIGHT_PX;
+      const landscapeScale = PDF_CONFIG_LANDSCAPE.CANVAS_SCALE;
+      
+      pdf.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
+      const foFrontCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateFieldOfficeIDCardHtml(emp), 
+        landscapeDesignWidth, 
+        landscapeDesignHeight, 
+        landscapeScale, 
+        1000
+      );
+      const foFrontImgData = foFrontCanvas.toDataURL('image/png', 1.0);
+      pdf.addImage(foFrontImgData, 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
+      
+      // Page 4: Field Officer template back (landscape)
+      console.log('Capturing Field Officer template back...');
+      pdf.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
+      const foBackCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateFieldOfficeIDCardBackHtml(emp), 
+        landscapeDesignWidth, 
+        landscapeDesignHeight, 
+        landscapeScale, 
+        1000
+      );
+      const foBackImgData = foBackCanvas.toDataURL('image/png', 1.0);
+      pdf.addImage(foBackImgData, 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
+      
+    } else {
+      // Standard 2-page PDF for non-Reprocessor employees
+      // Field Officer (Others) uses landscape template, others use portrait
+      const isFieldOfficer = emp.position === 'Field Officer';
+      console.log('Generating 2-page PDF...', isFieldOfficer ? '(landscape for Field Officer)' : '(portrait)');
+      
+      if (isFieldOfficer) {
+        // Field Officer (Others) - Use landscape dimensions
+        const landscapeWidthMm = PDF_CONFIG_LANDSCAPE.WIDTH_MM;
+        const landscapeHeightMm = PDF_CONFIG_LANDSCAPE.HEIGHT_MM;
+        const landscapeDesignWidth = PDF_CONFIG_LANDSCAPE.PREVIEW_WIDTH_PX;
+        const landscapeDesignHeight = PDF_CONFIG_LANDSCAPE.PREVIEW_HEIGHT_PX;
+        const landscapeScale = PDF_CONFIG_LANDSCAPE.CANVAS_SCALE;
+        
+        // Create PDF with landscape format
+        const pdfLandscape = new jsPDF({
+          orientation: 'landscape',
+          unit: 'mm',
+          format: [landscapeWidthMm, landscapeHeightMm],
+          compress: true
+        });
+        
+        // Page 1: Front side (landscape Field Officer template)
+        console.log('Capturing Field Officer front side...');
+        const frontCanvas = await captureCardCanvas(
+          tempContainer, 
+          generateFieldOfficeIDCardHtml(emp), 
+          landscapeDesignWidth, 
+          landscapeDesignHeight, 
+          landscapeScale, 
+          1500
+        );
+        const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
+        pdfLandscape.addImage(frontImgData, 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
+        
+        // Page 2: Back side (landscape Field Officer template)
+        console.log('Capturing Field Officer back side...');
+        pdfLandscape.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
+        const backCanvas = await captureCardCanvas(
+          tempContainer, 
+          generateFieldOfficeIDCardBackHtml(emp), 
+          landscapeDesignWidth, 
+          landscapeDesignHeight, 
+          landscapeScale, 
+          1000
+        );
+        const backImgData = backCanvas.toDataURL('image/png', 1.0);
+        pdfLandscape.addImage(backImgData, 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
+        
+        // Cleanup and save
+        document.body.removeChild(tempContainer);
+        const fileName = `${emp.employee_name.replace(/\s+/g, '_')}_ID_Card.pdf`;
+        pdfLandscape.save(fileName);
+        
+        console.log('PDF Output:', {
+          dimensions: `${landscapeWidthMm.toFixed(2)}mm × ${landscapeHeightMm.toFixed(2)}mm`,
+          inches: `${PDF_CONFIG_LANDSCAPE.WIDTH_INCHES}" × ${PDF_CONFIG_LANDSCAPE.HEIGHT_INCHES}"`,
+          pages: 2
+        });
+        
+        showToast(`PDF downloaded (${PDF_CONFIG_LANDSCAPE.WIDTH_INCHES}" × ${PDF_CONFIG_LANDSCAPE.HEIGHT_INCHES}" at ${PDF_CONFIG_LANDSCAPE.PRINT_DPI} DPI)`, 'success');
+        return; // Exit early for Field Officer case
+      }
+      
+      // Non-Field Officer - Use portrait dimensions
+      // Page 1: Front side (uses position-aware template)
+      console.log('Capturing front side...');
+      const frontCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateIDCardHtml(emp), 
+        designWidth, 
+        designHeight, 
+        scaleToFit, 
+        1500
+      );
+      const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
+      pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      
+      // Page 2: Back side (uses position-aware template)
+      console.log('Capturing back side...');
+      pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
+      const backCanvas = await captureCardCanvas(
+        tempContainer, 
+        getBackHtml(emp), 
+        designWidth, 
+        designHeight, 
+        scaleToFit, 
+        1000
+      );
+      const backImgData = backCanvas.toDataURL('image/png', 1.0);
+      pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+    }
     
-    // Add back side on new page with same dimensions
-    pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
-    const backImgData = backCanvas.toDataURL('image/png', 1.0);
-    pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+    console.log('PDF Output:', {
+      dimensions: `${pdfWidthMm.toFixed(2)}mm × ${pdfHeightMm.toFixed(2)}mm`,
+      inches: `${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}"`,
+      scaleFactor: `${PDF_CONFIG.SCALE_FACTOR * 100}% of ${PDF_CONFIG.ORIGINAL_HEIGHT_INCHES}"`,
+      pages: pageCount
+    });
     
     // Download the PDF with descriptive filename
-    pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\\s+/g, '_')}_2.13x3.33in.pdf`);
+    const suffix = isReprocessor ? '_dual' : '';
+    pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}${suffix}_2.13x3.33in.pdf`);
 
     // Cleanup
     document.body.removeChild(tempContainer);
@@ -1034,7 +1420,10 @@ async function downloadIDPdf(emp) {
       await markAsCompleted(emp.id);
     }
 
-    showToast(`PDF downloaded (${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}" at ${PDF_CONFIG.PRINT_DPI} DPI)`, 'success');
+    const message = isReprocessor 
+      ? `4-page PDF downloaded (Original + Field Officer templates at ${PDF_CONFIG.PRINT_DPI} DPI)`
+      : `PDF downloaded (${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}" at ${PDF_CONFIG.PRINT_DPI} DPI)`;
+    showToast(message, 'success');
   } catch (error) {
     console.error('Error generating PDF:', error);
     showToast('Failed to generate PDF. Please try again.', 'error');
@@ -1042,6 +1431,7 @@ async function downloadIDPdf(emp) {
 }
 
 // Download all IDs as PDFs (front and back) - captures full content
+// For Reprocessor employees: generates 4-page PDFs (Original + Field Officer templates)
 async function downloadAllPdfs() {
   const employees = galleryState.filteredEmployees;
   
@@ -1050,7 +1440,18 @@ async function downloadAllPdfs() {
     return;
   }
 
-  showToast(`Generating ${employees.length} print-quality PDFs (2.13" × 3.33")...`, 'success');
+  // Count Reprocessor employees for accurate messaging
+  const reprocessorCount = employees.filter(emp => 
+    emp.position === 'Field Officer' && emp.field_officer_type === 'Reprocessor'
+  ).length;
+  const regularCount = employees.length - reprocessorCount;
+  
+  let message = `Generating ${employees.length} print-quality PDFs`;
+  if (reprocessorCount > 0) {
+    message += ` (${reprocessorCount} dual-template, ${regularCount} standard)`;
+  }
+  showToast(message + '...', 'success');
+  
   elements.downloadAllBtn.disabled = true;
   elements.downloadAllBtn.innerHTML = `
     <svg class="spin" width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -1075,93 +1476,14 @@ async function downloadAllPdfs() {
     document.body.appendChild(tempContainer);
 
     const { jsPDF } = window.jspdf;
+    
+    // Use exact PDF dimensions (2.13" × 3.33")
+    const pdfWidthMm = PDF_CONFIG.WIDTH_MM;
+    const pdfHeightMm = PDF_CONFIG.HEIGHT_MM;
 
     for (let i = 0; i < employees.length; i++) {
       const emp = employees[i];
-      
-      // Render front side at actual 512×800 dimensions
-      tempContainer.innerHTML = `
-        <div class="pdf-id-card-wrapper" style="width: ${designWidth}px; padding: 0; margin: 0; background: white; display: inline-block;">
-          ${generateIDCardHtml(emp)}
-        </div>
-      `;
-      
-      const frontCardEl = tempContainer.querySelector('.id-card');
-      frontCardEl.style.width = `${designWidth}px`;
-      frontCardEl.style.height = `${designHeight}px`;
-      frontCardEl.style.minWidth = `${designWidth}px`;
-      frontCardEl.style.minHeight = `${designHeight}px`;
-      frontCardEl.style.transform = 'none';  // No transform - actual size
-      frontCardEl.style.transformOrigin = 'top left';
-      frontCardEl.style.margin = '0';
-      frontCardEl.style.overflow = 'hidden';
-      
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      const frontImages = tempContainer.querySelectorAll('img');
-      await Promise.all(Array.from(frontImages).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise(resolve => {
-          img.onload = resolve;
-          img.onerror = resolve;
-        });
-      }));
-      
-      // Use fixed 800px height
-      const frontHeight = designHeight;
-      
-      const frontCanvas = await html2canvas(frontCardEl, {
-        scale: scaleToFit,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        width: designWidth,
-        height: frontHeight
-      });
-      
-      // Render back side at actual 512×800 dimensions
-      tempContainer.innerHTML = `
-        <div class="pdf-id-card-wrapper" style="width: ${designWidth}px; padding: 0; margin: 0; background: white; display: inline-block;">
-          ${generateIDCardBackHtml(emp)}
-        </div>
-      `;
-      
-      const backCardEl = tempContainer.querySelector('.id-card');
-      backCardEl.style.width = `${designWidth}px`;
-      backCardEl.style.height = `${designHeight}px`;
-      backCardEl.style.minWidth = `${designWidth}px`;
-      backCardEl.style.minHeight = `${designHeight}px`;
-      backCardEl.style.transform = 'none';  // No transform - actual size
-      backCardEl.style.transformOrigin = 'top left';
-      backCardEl.style.margin = '0';
-      backCardEl.style.overflow = 'hidden';
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const backImages = tempContainer.querySelectorAll('img');
-      await Promise.all(Array.from(backImages).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise(resolve => {
-          img.onload = resolve;
-          img.onerror = resolve;
-        });
-      }));
-      
-      // Use fixed 800px height
-      const backHeight = designHeight;
-      
-      const backCanvas = await html2canvas(backCardEl, {
-        scale: scaleToFit,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        width: designWidth,
-        height: backHeight
-      });
-
-      // Use exact PDF dimensions (2.13" × 3.33")
-      const pdfWidthMm = PDF_CONFIG.WIDTH_MM;
-      const pdfHeightMm = PDF_CONFIG.HEIGHT_MM;
+      const isReprocessor = emp.position === 'Field Officer' && emp.field_officer_type === 'Reprocessor';
 
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -1169,23 +1491,98 @@ async function downloadAllPdfs() {
         format: [pdfWidthMm, pdfHeightMm],
         compress: true
       });
-
-      // Add front side - fit to exact dimensions
-      const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
       
-      // Add back side - fit to exact dimensions
-      pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
-      const backImgData = backCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
-      
-      pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}_2.13x3.33in.pdf`);
+      if (isReprocessor) {
+        // 4-page PDF for Reprocessor: Original (front/back) + Field Officer (front/back)
+        
+        // Page 1: Original template front
+        const originalFrontCanvas = await captureCardCanvas(
+          tempContainer, 
+          generateRegularIDCardHtml(emp), 
+          designWidth, 
+          designHeight, 
+          scaleToFit, 
+          800
+        );
+        pdf.addImage(originalFrontCanvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+        
+        // Page 2: Original template back
+        pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
+        const originalBackCanvas = await captureCardCanvas(
+          tempContainer, 
+          generateIDCardBackHtml(emp), 
+          designWidth, 
+          designHeight, 
+          scaleToFit, 
+          500
+        );
+        pdf.addImage(originalBackCanvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+        
+        // Page 3: Field Officer template front
+        pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
+        const foFrontCanvas = await captureCardCanvas(
+          tempContainer, 
+          generateFieldOfficeIDCardHtml(emp), 
+          designWidth, 
+          designHeight, 
+          scaleToFit, 
+          500
+        );
+        pdf.addImage(foFrontCanvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+        
+        // Page 4: Field Officer template back
+        pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
+        const foBackCanvas = await captureCardCanvas(
+          tempContainer, 
+          generateFieldOfficeIDCardBackHtml(emp), 
+          designWidth, 
+          designHeight, 
+          scaleToFit, 
+          500
+        );
+        pdf.addImage(foBackCanvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+        
+        pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}_dual_2.13x3.33in.pdf`);
+        
+      } else {
+        // Standard 2-page PDF
+        
+        // Page 1: Front side (uses position-aware template)
+        const frontCanvas = await captureCardCanvas(
+          tempContainer, 
+          generateIDCardHtml(emp), 
+          designWidth, 
+          designHeight, 
+          scaleToFit, 
+          800
+        );
+        pdf.addImage(frontCanvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+        
+        // Page 2: Back side (uses position-aware template)
+        pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
+        const backCanvas = await captureCardCanvas(
+          tempContainer, 
+          getBackHtml(emp), 
+          designWidth, 
+          designHeight, 
+          scaleToFit, 
+          500
+        );
+        pdf.addImage(backCanvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+        
+        pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}_2.13x3.33in.pdf`);
+      }
 
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
     document.body.removeChild(tempContainer);
-    showToast(`Downloaded ${employees.length} PDFs (${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}" at ${PDF_CONFIG.PRINT_DPI} DPI)`, 'success');
+    
+    let successMessage = `Downloaded ${employees.length} PDFs`;
+    if (reprocessorCount > 0) {
+      successMessage += ` (${reprocessorCount} with dual templates)`;
+    }
+    showToast(successMessage, 'success');
   } catch (error) {
     console.error('Error downloading PDFs:', error);
     showToast('Failed to download some PDFs. Please try again.', 'error');

@@ -511,8 +511,20 @@ async def submit_employee(
             'field_officer_type': field_officer_type or '',
             'field_clearance': field_clearance or '',
             'fo_division': fo_division or '',
+            'fo_department': fo_department or '',
             'fo_campaign': fo_campaign or ''
         }
+        
+        # Log the payload before insert
+        logger.info("=" * 60)
+        logger.info("📋 EMPLOYEE DATA PAYLOAD FOR DATABASE INSERT:")
+        logger.info(f"  ID Number: {id_number}")
+        logger.info(f"  Position: {position}")
+        logger.info(f"  field_officer_type: {field_officer_type or 'NOT SET'}")
+        logger.info(f"  fo_division: {fo_division or 'NOT SET'}")
+        logger.info(f"  fo_department: {fo_department or 'NOT SET'}")
+        logger.info(f"  fo_campaign: {fo_campaign or 'NOT SET'}")
+        logger.info("=" * 60)
         
         employee_id = insert_employee(employee_data)
         

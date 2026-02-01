@@ -222,13 +222,14 @@ input[readonly]:focus {
 .field-officer-details-section {
   width: 100%;
   max-width: 100%;
-  padding: var(--spacing-xl) var(--spacing-xxl);
-  background: #ffffff;
-  border: 2px solid #e0f2f1;
-  border-left: 4px solid var(--color-primary);
-  border-radius: var(--radius-lg);
-  margin-top: var(--spacing-lg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  margin-top: var(--spacing-md);
+  margin-left: calc(-1 * var(--spacing-xl));
+  margin-right: calc(-1 * var(--spacing-xl));
+  box-shadow: none;
   animation: slideDown 0.3s ease;
 }
 
@@ -245,25 +246,126 @@ input[readonly]:focus {
 
 .field-officer-details-section .form-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(4, 1fr);
   margin-top: 0;
+  gap: var(--spacing-md);
+  padding: 0;
+}
+
+/* Tablet responsiveness for Field Officer section - 2 columns */
+@media (max-width: 1024px) {
+  .field-officer-details-section {
+    padding: var(--spacing-lg) var(--spacing-xl);
+    margin-left: calc(-1 * var(--spacing-xl));
+    margin-right: calc(-1 * var(--spacing-xl));
+  }
+  
+  .field-officer-details-section .form-grid,
+  .fo-fields-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-md);
+  }
+}
+
+/* Medium tablet/mobile responsiveness for Field Officer section */
+@media (max-width: 768px) {
+  .field-officer-details-section {
+    padding: var(--spacing-lg) var(--spacing-lg);
+    margin-left: calc(-1 * var(--spacing-lg));
+    margin-right: calc(-1 * var(--spacing-lg));
+  }
+}
+
+/* Mobile responsiveness for Field Officer section - 1 column */
+@media (max-width: 600px) {
+  .field-officer-details-section .form-grid,
+  .fo-fields-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--spacing-md);
+  }
+}
+
+/* Small mobile responsiveness */
+@media (max-width: 480px) {
+  .field-officer-details-section {
+    padding: var(--spacing-md) var(--spacing-lg);
+    margin-left: calc(-1 * var(--spacing-lg));
+    margin-right: calc(-1 * var(--spacing-lg));
+  }
+}
+
+/* Field Officer details container - merged styles */
+
+/* Removed duplicate - styles moved to .fo-fields-grid */
+
+/* Field Officer Fields Grid - clean horizontal layout matching form-grid */
+.fo-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--spacing-lg);
-}
-
-.field-officer-details-section .form-group {
   width: 100%;
+  padding: 0;
 }
 
-.field-officer-details-section .form-group label {
-  font-weight: 600;
-  color: var(--color-primary);
-  margin-bottom: var(--spacing-sm);
-}
-
-.field-officer-details-section select,
-.field-officer-details-section .searchable-dropdown {
+.fo-fields-grid .form-group.fo-field {
   width: 100%;
-  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.fo-fields-grid .form-group.fo-field label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-xs);
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.fo-fields-grid select,
+.fo-fields-grid input {
+  width: 100%;
+  font-size: 1rem;
+  min-width: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  transition: var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.fo-fields-grid input:focus,
+.fo-fields-grid select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Specific override for Field Officer regular inputs */
+#field_officer_details input[type="text"],
+#field_clearance {
+  font-size: 1rem !important;
+  padding: 0.5rem 1rem !important;
+}
+
+/* Tablet: 2 columns */
+@media (max-width: 768px) {
+  .fo-fields-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-md);
+  }
+}
+
+/* Mobile: 1 column */
+@media (max-width: 480px) {
+  .fo-fields-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Searchable Dropdown Styles */
@@ -274,9 +376,11 @@ input[readonly]:focus {
 
 .searchable-dropdown .dropdown-search {
   width: 100%;
+  height: 42px;
+  min-height: 42px;
   padding: var(--spacing-sm) var(--spacing-md);
   padding-right: 2.5rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-family: inherit;
   color: var(--color-text);
   background: var(--color-card);
@@ -284,6 +388,8 @@ input[readonly]:focus {
   border-radius: var(--radius-md);
   transition: var(--transition-fast);
   cursor: pointer;
+  box-sizing: border-box;
+  line-height: 1.5;
 }
 
 .searchable-dropdown .dropdown-search:focus {
@@ -478,6 +584,16 @@ input::placeholder {
 /* Signature Pad */
 .signature-container {
   margin-top: var(--spacing-md);
+  /* Match form container width - no full-bleed */
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.signature-container > label {
+  display: block;
+  margin-bottom: var(--spacing-sm);
+  font-weight: 500;
+  color: var(--color-text);
 }
 
 .signature-pad-wrapper {
@@ -485,6 +601,8 @@ input::placeholder {
   border-radius: var(--radius-md);
   background: white;
   overflow: hidden;
+  /* Match form container width */
+  max-width: 100%;
 }
 
 .signature-pad {
@@ -591,7 +709,11 @@ input::placeholder {
   gap: var(--spacing-md);
   margin-top: var(--spacing-xl);
   padding-top: var(--spacing-xl);
+  padding-bottom: var(--spacing-lg);
+  padding-right: var(--spacing-lg);
   border-top: 1px solid var(--color-border);
+  /* Proper bottom-right placement with spacing */
+  margin-bottom: var(--spacing-md);
 }
 
 .btn {
@@ -908,12 +1030,119 @@ input::placeholder {
   padding: var(--spacing-lg);
 }
 
-/* AI Actions (Regenerate button) */
+/* Photo Comparison Grid (New Structure) */
+.photo-comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-md);
+}
+
+.photo-preview-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.photo-preview-card .preview-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: var(--spacing-sm);
+  background: var(--color-bg-subtle, #f9fafb);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.photo-preview-card .preview-image-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 250px;
+  padding: var(--spacing-md);
+}
+
+.photo-preview-card .preview-image-container img {
+  max-width: 100%;
+  max-height: 350px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+/* AI Preview Card - Checkered background for transparency */
+.photo-preview-card.ai-preview-card .preview-image-container {
+  background-image: 
+    linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+    linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+    linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  background-color: #f5f5f5;
+}
+
+/* Loading spinner inside photo comparison */
+.photo-preview-card .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive - Stack on mobile */
+@media (max-width: 640px) {
+  .photo-comparison-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .photo-preview-card .preview-image-container {
+    min-height: 200px;
+  }
+}
+
+/* AI Actions (Regenerate button with Outfit selector) */
 .ai-actions {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: var(--spacing-md);
   margin-top: var(--spacing-md);
-  padding: 0 var(--spacing-sm);
+  padding: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+/* Outfit Selector */
+.outfit-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.outfit-selector label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.outfit-dropdown {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  background: white;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.outfit-dropdown:hover,
+.outfit-dropdown:focus {
+  border-color: var(--color-primary);
+  outline: none;
 }
 
 .btn-regenerate {
@@ -1259,30 +1488,42 @@ input::placeholder {
 .id-preview-section {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   border-radius: var(--radius-md);
-  padding: var(--spacing-md);  /* Reduced padding for tighter fit */
+  /* Horizontal padding to match Photo Upload section - no edge-hugging */
+  padding: var(--spacing-lg) var(--spacing-xl);
   margin-top: var(--spacing-lg);
+  margin-left: 0;
+  margin-right: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .id-preview-wrapper {
   display: flex;
   justify-content: center;
-  gap: 24px;  /* Space between front and back when side-by-side */
-  padding: var(--spacing-sm);  /* Reduced padding to minimize empty space */
+  gap: 24px;
+  padding: var(--spacing-sm);
   flex-wrap: wrap;
+  /* Auto height based on content - no fixed min-height */
+  min-height: auto;
+  align-items: flex-start;
 }
 
-/* ID Card Container - 512px × 800px canvas at 97% display scale */
+/* ID Card Container - 512px × 800px canvas (NO initial scale) */
 /* Aspect Ratio: 2.13:3.33 (locked) | Print: 2.13" × 3.33" at 300 DPI */
 .id-card {
   width: 512px;
   height: 800px;
+  min-width: 512px;  /* Prevent horizontal compression */
+  min-height: 800px;  /* Prevent vertical compression */
   background: white;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  transform: scale(0.97);  /* 97% scale factor - matches back card */
+  /* No transform applied at desktop - prevents distortion */
   transform-origin: top center;
+  flex-shrink: 0;  /* Prevent flexbox compression */
+  box-sizing: border-box;
 }
 
 /* Top section with sidebar and photo */
@@ -1799,6 +2040,8 @@ input::placeholder {
 .id-card-back {
   width: 512px;
   height: 800px;
+  min-width: 512px;  /* Prevent horizontal compression */
+  min-height: 800px;  /* Prevent vertical compression */
   background: #0b3969;
   border-radius: 16px;  /* Match front card rounded corners */
   overflow: hidden;
@@ -1807,8 +2050,10 @@ input::placeholder {
   position: relative;
   border-left: 8px solid white;
   border-right: 8px solid white;
-  transform: scale(0.97);  /* 97% scale factor */
+  /* No transform applied at desktop - prevents distortion */
   transform-origin: top center;
+  flex-shrink: 0;  /* Prevent flexbox compression */
+  box-sizing: border-box;
 }
 
 /* Overlay pattern for the lower section */
@@ -2579,6 +2824,8 @@ input::placeholder {
 .id-card-field-office {
   width: 512px;
   height: 319px;
+  min-width: 512px;  /* Prevent horizontal compression */
+  min-height: 319px;  /* Prevent vertical compression */
   background-image: url('/static/images/3.png');
   background-size: cover;
   background-position: center;
@@ -2588,8 +2835,10 @@ input::placeholder {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   position: relative;
-  transform: scale(0.97);
+  /* No transform applied at desktop - prevents distortion */
   transform-origin: top center;
+  flex-shrink: 0;  /* Prevent flexbox compression */
+  box-sizing: border-box;
 }
 
 /* Field Office ID Card Inner Layout */
@@ -2603,54 +2852,42 @@ input::placeholder {
 /* Photo Section - Left side with Philippine flag stamp and company badge */
 .id-fo-photo-section {
   position: absolute;
-  top: 70px;
-  left: 28px;
-  width: 130px;
+  top: 68px;
+  left: 26px;
+  width: 134px;
   display: flex;
   flex-direction: column;
   align-items: center;
   z-index: 10;
 }
 
-/* Photo Container with border */
+/* Photo Container - sized to match white container in background */
 .id-fo-photo-container {
-  width: 120px;
-  height: 140px;
-  background: #e5e7eb;
-  border: 3px solid #87CEEB;
+  width: 124px;
+  height: 124px;
+  aspect-ratio: 1 / 1;
+  background: transparent;
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   position: relative;
-  /* Checkered pattern for transparency */
-  background-image: 
-    linear-gradient(45deg, #d1d5db 25%, transparent 25%),
-    linear-gradient(-45deg, #d1d5db 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #d1d5db 75%),
-    linear-gradient(-45deg, transparent 75%, #d1d5db 75%);
-  background-size: 16px 16px;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
-  background-color: #f5f5f5;
 }
 
 .id-fo-photo-container.has-image {
-  background-image: none;
-  background-color: transparent;
+  background: transparent;
 }
 
 .id-fo-photo-container img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center top;
+  object-position: center;
 }
 
 .id-fo-photo-placeholder {
-  color: #9ca3af;
-  font-size: 11px;
-  font-weight: 500;
-  text-align: center;
+  display: none; /* Hide placeholder text */
 }
 
 /* Signature Section - Below photo */
@@ -2675,8 +2912,8 @@ input::placeholder {
 .id-fo-signature-container {
   width: 120px;
   height: 50px;
-  background: rgba(255, 255, 255, 0.7);
-  border-bottom: 2px solid #003366;
+  background: transparent;
+  border-bottom: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2695,9 +2932,7 @@ input::placeholder {
 }
 
 .id-fo-signature-placeholder {
-  color: #9ca3af;
-  font-size: 10px;
-  font-style: italic;
+  display: none; /* Hide placeholder text */
 }
 
 /* Employee Name - Large text in center-right */
@@ -2781,6 +3016,8 @@ input::placeholder {
 .id-card-field-office-back {
   width: 512px;
   height: 319px;
+  min-width: 512px;  /* Prevent horizontal compression */
+  min-height: 319px;  /* Prevent vertical compression */
   background-image: url('/static/images/4.png');
   background-size: cover;
   background-position: center;
@@ -2789,8 +3026,10 @@ input::placeholder {
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   position: relative;
-  transform: scale(0.97);
+  /* No transform applied at desktop - prevents distortion */
   transform-origin: top center;
+  flex-shrink: 0;  /* Prevent flexbox compression */
+  box-sizing: border-box;
 }
 
 /* ============================================
@@ -2824,5 +3063,128 @@ input::placeholder {
     transform: scale(0.48);
     transform-origin: top center;
     margin-bottom: -166px;
+  }
+}
+
+/* ============================================
+   Dual Template Preview (Reprocessor Mode)
+   VERTICAL STACK layout to prevent cut-off
+   ============================================ */
+
+.dual-template-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  width: 100%;
+  align-items: center;
+}
+
+.dual-template-card {
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 600px;
+  /* Tighter container - reduce extra white space */
+  overflow: hidden;
+}
+
+.dual-template-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin-bottom: var(--spacing-sm);
+  text-align: center;
+}
+
+.dual-flip-toggle {
+  margin-bottom: var(--spacing-sm);
+}
+
+.dual-flip-toggle .flip-btn {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.8rem;
+}
+
+.dual-preview-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  /* Tighter fit - no extra space below templates */
+  overflow: hidden;
+}
+
+/* Portrait ID card (512x800) scaling - calculate proper margin */
+.dual-preview-wrapper .id-card,
+.dual-preview-wrapper .id-card-back {
+  transform: scale(0.65);
+  transform-origin: top center;
+  /* At 0.65 scale: 800px * 0.65 = 520px actual height
+     Hidden space: 800px - 520px = 280px, need to offset */
+  margin-bottom: -280px;
+}
+
+/* Landscape ID card (512x319) scaling - calculate proper margin */
+.dual-preview-wrapper .id-card-field-office,
+.dual-preview-wrapper .id-card-field-office-back {
+  transform: scale(0.75);
+  transform-origin: top center;
+  /* At 0.75 scale: 319px * 0.75 = 239px actual height
+     Hidden space: 319px - 239px = 80px, need to offset */
+  margin-bottom: -80px;
+}
+
+/* Mobile responsiveness for dual template */
+@media (max-width: 768px) {
+  .dual-preview-wrapper .id-card,
+  .dual-preview-wrapper .id-card-back {
+    transform: scale(0.55);
+    /* At 0.55 scale: 800px * 0.55 = 440px actual height
+       Hidden space: 800px - 440px = 360px */
+    margin-bottom: -360px;
+  }
+  
+  .dual-preview-wrapper .id-card-field-office,
+  .dual-preview-wrapper .id-card-field-office-back {
+    transform: scale(0.65);
+    /* At 0.65 scale: 319px * 0.65 = 207px actual height
+       Hidden space: 319px - 207px = 112px */
+    margin-bottom: -112px;
+  }
+  
+  .dual-template-card {
+    padding: var(--spacing-sm);
+  }
+}
+
+@media (max-width: 480px) {
+  .dual-preview-wrapper .id-card,
+  .dual-preview-wrapper .id-card-back {
+    transform: scale(0.45);
+    /* At 0.45 scale: 800px * 0.45 = 360px actual height
+       Hidden space: 800px - 360px = 440px */
+    margin-bottom: -440px;
+  }
+  
+  .dual-preview-wrapper .id-card-field-office,
+  .dual-preview-wrapper .id-card-field-office-back {
+    transform: scale(0.55);
+    /* At 0.55 scale: 319px * 0.55 = 175px actual height
+       Hidden space: 319px - 175px = 144px */
+    margin-bottom: -144px;
+  }
+  
+  .dual-template-title {
+    font-size: 0.9rem;
+  }
+  
+  .dual-flip-toggle .flip-btn {
+    padding: 4px 8px;
+    font-size: 0.75rem;
   }
 }

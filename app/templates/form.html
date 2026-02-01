@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employee ID Registration</title>
   <meta name="description" content="Employee ID Registration System - Submit your details for company ID card">
-  <link rel="stylesheet" href="/static/styles.css?v=6">
+  <link rel="stylesheet" href="/static/styles.css?v=7">
   <style>
     /* User Info Bar Styles */
     .user-info-bar {
@@ -292,6 +292,7 @@
                 <option value="II">II</option>
                 <option value="III">III</option>
                 <option value="IV">IV</option>
+                <option value="V">V</option>
                 <option value="Other">Other</option>
               </select>
             </div>
@@ -316,88 +317,6 @@
               <input type="text" id="id_number" name="id_number" required placeholder="e.g., EMP-001"
                      value="{{ prefill.employee_no if prefill else '' }}"
                      class="{% if prefill and prefill.employee_no %}prefilled{% endif %}">
-            </div>
-            <div class="form-group full-width">
-              <label>Photo <span class="required">*</span></label>
-              <div class="file-upload">
-                <div class="file-upload-area" id="photoUploadArea">
-                  <span class="icon">📷</span>
-                  <p>Click to upload or drag and drop</p>
-                  <p style="font-size: 0.75rem;">PNG, JPG up to 5MB</p>
-                </div>
-                <input type="file" id="photo" name="photo" accept="image/png, image/jpeg, image/jpg" required>
-              </div>
-              <!-- Photo Preview: Raw + AI Generated side by side -->
-              <div class="photo-comparison" id="photoComparison" style="display: none;">
-                <div class="photo-comparison-item">
-                  <label>Original Photo</label>
-                  <div class="file-preview active">
-                    <img id="photoPreviewImg" src="" alt="Original photo">
-                  </div>
-                </div>
-                <div class="photo-comparison-item">
-                  <label>AI Enhanced Preview <span style="font-weight: normal; font-size: 0.75rem;">(click to view full size)</span></label>
-                  <div class="file-preview active ai-preview-container" id="aiPreviewContainer">
-                    <div class="ai-loading" id="aiLoading">
-                      <div class="spinner"></div>
-                      <p id="aiLoadingText">Generating professional headshot...</p>
-                    </div>
-                    <img id="aiPreviewImg" class="ai-clickable" src="" alt="AI generated headshot" style="display: none;" onclick="openLightbox(this.src)">
-                    <p class="ai-error" id="aiError" style="display: none;">AI generation unavailable</p>
-                  </div>
-                  <!-- Regenerate Dropdown - Multiple AI style options -->
-                  <div class="ai-actions" id="aiActions" style="display: none; margin-top: 12px;">
-                    <!-- Simple Regenerate Button -->
-                    <button type="button" class="btn-regenerate-simple" id="simpleRegenerateBtn" onclick="simpleRegenerateAI()">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 4v6h6"/>
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                      </svg>
-                      <span>Regenerate</span>
-                    </button>
-                    
-                    <!-- Change Style Dropdown -->
-                    <div class="regenerate-dropdown" id="regenerateDropdown">
-                      <button type="button" class="btn-regenerate dropdown-toggle" id="regenerateBtn" onclick="toggleRegenerateDropdown(event)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M1 4v6h6"/>
-                          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                        </svg>
-                        <span id="regenerateBtnText">Change Style</span>
-                        <svg class="dropdown-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M6 9l6 6 6-6"/>
-                        </svg>
-                      </button>
-                      <div class="regenerate-dropdown-menu" id="regenerateDropdownMenu">
-                        <!-- Male Styles Section -->
-                        <div class="dropdown-section-header">Male Styles</div>
-                        <button type="button" class="dropdown-item" onclick="regenerateAIImage('male_1')">
-                          <span class="item-icon">👔</span>
-                          <span class="item-text">Navy Blazer</span>
-                        </button>
-                        <button type="button" class="dropdown-item" onclick="regenerateAIImage('male_2')">
-                          <span class="item-icon">🎩</span>
-                          <span class="item-text">Gray Blazer</span>
-                        </button>
-                        
-                        <!-- Female Styles Section -->
-                        <div class="dropdown-section-header">Female Styles</div>
-                        <button type="button" class="dropdown-item" onclick="regenerateAIImage('female_1')">
-                          <span class="item-icon">👗</span>
-                          <span class="item-text">Navy Blazer</span>
-                        </button>
-                        <button type="button" class="dropdown-item" onclick="regenerateAIImage('female_2')">
-                          <span class="item-icon">👠</span>
-                          <span class="item-text">Teal Blazer</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <!-- Hidden legacy preview for compatibility -->
-              <div class="file-preview" id="photoPreview" style="display: none;">
-              </div>
             </div>
           </div>
         </section>
@@ -446,282 +365,271 @@
 
             <!-- Field Officer Details Section (only visible when Field Officer is selected) -->
             <div id="field_officer_details" class="field-officer-details-section" style="display: none;">
-              <div class="form-grid">
-                <div class="form-group">
+              <div class="fo-fields-grid">
+                <div class="form-group fo-field">
                   <label for="field_clearance">Field Clearance</label>
                   <input type="text" id="field_clearance" name="field_clearance" value="Level 5" readonly class="readonly-field">
                 </div>
-                <div class="form-group">
+                <div class="form-group fo-field">
                   <label for="fo_division">Division <span class="required">*</span></label>
-                  <div class="searchable-dropdown" id="division_dropdown">
-                    <input type="text" id="fo_division_search" class="dropdown-search" placeholder="Search division..." autocomplete="off">
-                    <input type="hidden" id="fo_division" name="fo_division">
-                    <div class="dropdown-options" id="division_options">
-                      <div class="dropdown-option" data-value="Operations - Contact Center">Operations - Contact Center</div>
-                      <div class="dropdown-option" data-value="Operations - Field Operations">Operations - Field Operations</div>
-                      <div class="dropdown-option" data-value="Operations - Legal Operations">Operations - Legal Operations</div>
-                      <div class="dropdown-option" data-value="Solutions">Solutions</div>
-                      <div class="dropdown-option" data-value="Solutions - Business Development">Solutions - Business Development</div>
-                      <div class="dropdown-option" data-value="Support - Security Guard">Support - Security Guard</div>
-                    </div>
-                  </div>
+                  <select id="fo_division" name="fo_division">
+                    <option value="" disabled selected>Select division...</option>
+                    <option value="Operations - Contact Center">Operations - Contact Center</option>
+                    <option value="Operations - Field Operations">Operations - Field Operations</option>
+                    <option value="Operations - Legal Operations">Operations - Legal Operations</option>
+                    <option value="Solutions">Solutions</option>
+                    <option value="Solutions - Business Development">Solutions - Business Development</option>
+                    <option value="Support - Security Guard">Support - Security Guard</option>
+                  </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group fo-field">
                   <label for="fo_department">Department <span class="required">*</span></label>
-                  <div class="searchable-dropdown" id="department_dropdown">
-                    <input type="text" id="fo_department_search" class="dropdown-search" placeholder="Search department..." autocomplete="off">
-                    <input type="hidden" id="fo_department" name="fo_department">
-                    <div class="dropdown-options" id="department_options">
-                      <!-- Unique departments sorted alphabetically -->
-                      <div class="dropdown-option" data-value="MC1 - Audit and Compliance">MC1 - Audit and Compliance</div>
-                      <div class="dropdown-option" data-value="MC1 - Consultant">MC1 - Consultant</div>
-                      <div class="dropdown-option" data-value="MC1 - Data Management">MC1 - Data Management</div>
-                      <div class="dropdown-option" data-value="MC1 - Executive Management">MC1 - Executive Management</div>
-                      <div class="dropdown-option" data-value="MC1 - Finance & Accounting">MC1 - Finance & Accounting</div>
-                      <div class="dropdown-option" data-value="MC1 - Founder">MC1 - Founder</div>
-                      <div class="dropdown-option" data-value="MC1 - Quality Risk Management">MC1 - Quality Risk Management</div>
-                      <div class="dropdown-option" data-value="MC1 - Sales & Marketing">MC1 - Sales & Marketing</div>
-                      <div class="dropdown-option" data-value="MC1 - Systems & Infrastructures">MC1 - Systems & Infrastructures</div>
-                      <div class="dropdown-option" data-value="MC1 - Workplace Management">MC1 - Workplace Management</div>
-                      <div class="dropdown-option" data-value="MC10 - Field Operations">MC10 - Field Operations</div>
-                      <div class="dropdown-option" data-value="MC10 - Sector C">MC10 - Sector C</div>
-                      <div class="dropdown-option" data-value="MC11 - Sector C">MC11 - Sector C</div>
-                      <div class="dropdown-option" data-value="MC12 - Field Operations">MC12 - Field Operations</div>
-                      <div class="dropdown-option" data-value="MC12 - Legal Collections">MC12 - Legal Collections</div>
-                      <div class="dropdown-option" data-value="MC12 - Legal Operations">MC12 - Legal Operations</div>
-                      <div class="dropdown-option" data-value="MC13 - Field as a C.I.">MC13 - Field as a C.I.</div>
-                      <div class="dropdown-option" data-value="MC13 - Field Operations">MC13 - Field Operations</div>
-                      <div class="dropdown-option" data-value="MC13 - Field Solutions">MC13 - Field Solutions</div>
-                      <div class="dropdown-option" data-value="MC14 - Employee Engagement">MC14 - Employee Engagement</div>
-                      <div class="dropdown-option" data-value="MC14 - People Support">MC14 - People Support</div>
-                      <div class="dropdown-option" data-value="MC14 - Talent Acquisition">MC14 - Talent Acquisition</div>
-                      <div class="dropdown-option" data-value="MC15 - Innovation Factory">MC15 - Innovation Factory</div>
-                      <div class="dropdown-option" data-value="MC16 - Sector D">MC16 - Sector D</div>
-                      <div class="dropdown-option" data-value="MC17 - Sector X">MC17 - Sector X</div>
-                      <div class="dropdown-option" data-value="MC18 - Sector D">MC18 - Sector D</div>
-                      <div class="dropdown-option" data-value="MC19 - Kapedad">MC19 - Kapedad</div>
-                      <div class="dropdown-option" data-value="MC2 - Field Operations">MC2 - Field Operations</div>
-                      <div class="dropdown-option" data-value="MC2 - Sector A">MC2 - Sector A</div>
-                      <div class="dropdown-option" data-value="MC20 - Interns">MC20 - Interns</div>
-                      <div class="dropdown-option" data-value="MC21 - Field Operations">MC21 - Field Operations</div>
-                      <div class="dropdown-option" data-value="MC21 - Sector X">MC21 - Sector X</div>
-                      <div class="dropdown-option" data-value="MC22 - Sector D">MC22 - Sector D</div>
-                      <div class="dropdown-option" data-value="MC3 - Sector A">MC3 - Sector A</div>
-                      <div class="dropdown-option" data-value="MC4 - Field Operations">MC4 - Field Operations</div>
-                      <div class="dropdown-option" data-value="MC4 - Sector A">MC4 - Sector A</div>
-                      <div class="dropdown-option" data-value="MC5 - Field Operations">MC5 - Field Operations</div>
-                      <div class="dropdown-option" data-value="MC5 - Sector A">MC5 - Sector A</div>
-                      <div class="dropdown-option" data-value="MC6 - Sector A">MC6 - Sector A</div>
-                      <div class="dropdown-option" data-value="MC7 - Sector B">MC7 - Sector B</div>
-                      <div class="dropdown-option" data-value="MC8 - Sector C">MC8 - Sector C</div>
-                      <div class="dropdown-option" data-value="MC9 - Sector C">MC9 - Sector C</div>
-                      <div class="dropdown-option" data-value="Support - Security Guard">Support - Security Guard</div>
-                    </div>
-                  </div>
+                  <select id="fo_department" name="fo_department">
+                    <option value="" disabled selected>Select department...</option>
+                    <option value="MC1 - Audit and Compliance">MC1 - Audit and Compliance</option>
+                    <option value="MC1 - Consultant">MC1 - Consultant</option>
+                    <option value="MC1 - Data Management">MC1 - Data Management</option>
+                    <option value="MC1 - Executive Management">MC1 - Executive Management</option>
+                    <option value="MC1 - Finance & Accounting">MC1 - Finance & Accounting</option>
+                    <option value="MC1 - Founder">MC1 - Founder</option>
+                    <option value="MC1 - Quality Risk Management">MC1 - Quality Risk Management</option>
+                    <option value="MC1 - Sales & Marketing">MC1 - Sales & Marketing</option>
+                    <option value="MC1 - Systems & Infrastructures">MC1 - Systems & Infrastructures</option>
+                    <option value="MC1 - Workplace Management">MC1 - Workplace Management</option>
+                    <option value="MC10 - Field Operations">MC10 - Field Operations</option>
+                    <option value="MC10 - Sector C">MC10 - Sector C</option>
+                    <option value="MC11 - Sector C">MC11 - Sector C</option>
+                    <option value="MC12 - Field Operations">MC12 - Field Operations</option>
+                    <option value="MC12 - Legal Collections">MC12 - Legal Collections</option>
+                    <option value="MC12 - Legal Operations">MC12 - Legal Operations</option>
+                    <option value="MC13 - Field as a C.I.">MC13 - Field as a C.I.</option>
+                    <option value="MC13 - Field Operations">MC13 - Field Operations</option>
+                    <option value="MC13 - Field Solutions">MC13 - Field Solutions</option>
+                    <option value="MC14 - Employee Engagement">MC14 - Employee Engagement</option>
+                    <option value="MC14 - People Support">MC14 - People Support</option>
+                    <option value="MC14 - Talent Acquisition">MC14 - Talent Acquisition</option>
+                    <option value="MC15 - Innovation Factory">MC15 - Innovation Factory</option>
+                    <option value="MC16 - Sector D">MC16 - Sector D</option>
+                    <option value="MC17 - Sector X">MC17 - Sector X</option>
+                    <option value="MC18 - Sector D">MC18 - Sector D</option>
+                    <option value="MC19 - Kapedad">MC19 - Kapedad</option>
+                    <option value="MC2 - Field Operations">MC2 - Field Operations</option>
+                    <option value="MC2 - Sector A">MC2 - Sector A</option>
+                    <option value="MC20 - Interns">MC20 - Interns</option>
+                    <option value="MC21 - Field Operations">MC21 - Field Operations</option>
+                    <option value="MC21 - Sector X">MC21 - Sector X</option>
+                    <option value="MC22 - Sector D">MC22 - Sector D</option>
+                    <option value="MC3 - Sector A">MC3 - Sector A</option>
+                    <option value="MC4 - Field Operations">MC4 - Field Operations</option>
+                    <option value="MC4 - Sector A">MC4 - Sector A</option>
+                    <option value="MC5 - Field Operations">MC5 - Field Operations</option>
+                    <option value="MC5 - Sector A">MC5 - Sector A</option>
+                    <option value="MC6 - Sector A">MC6 - Sector A</option>
+                    <option value="MC7 - Sector B">MC7 - Sector B</option>
+                    <option value="MC8 - Sector C">MC8 - Sector C</option>
+                    <option value="MC9 - Sector C">MC9 - Sector C</option>
+                    <option value="Support - Security Guard">Support - Security Guard</option>
+                  </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group fo-field">
                   <label for="fo_campaign">Campaign <span class="required">*</span></label>
-                  <div class="searchable-dropdown" id="campaign_dropdown">
-                    <input type="text" id="fo_campaign_search" class="dropdown-search" placeholder="Search campaign..." autocomplete="off">
-                    <input type="hidden" id="fo_campaign" name="fo_campaign">
-                    <div class="dropdown-options" id="campaign_options">
-                      <!-- Unique campaigns sorted alphabetically -->
-                      <div class="dropdown-option" data-value="Aiqon">Aiqon</div>
-                      <div class="dropdown-option" data-value="Audit and Compliance">Audit and Compliance</div>
-                      <div class="dropdown-option" data-value="BDO AUTO LOAN">BDO AUTO LOAN</div>
-                      <div class="dropdown-option" data-value="BDO Auto Loan Skip">BDO Auto Loan Skip</div>
-                      <div class="dropdown-option" data-value="BDO Auto RMU">BDO Auto RMU</div>
-                      <div class="dropdown-option" data-value="BDO Cards 30 DPD">BDO Cards 30 DPD</div>
-                      <div class="dropdown-option" data-value="BDO Cards PRU">BDO Cards PRU</div>
-                      <div class="dropdown-option" data-value="BDO Cards RECOV">BDO Cards RECOV</div>
-                      <div class="dropdown-option" data-value="BDO Home Loan">BDO Home Loan</div>
-                      <div class="dropdown-option" data-value="BDO Homeloan Skip">BDO Homeloan Skip</div>
-                      <div class="dropdown-option" data-value="BDO Insurance">BDO Insurance</div>
-                      <div class="dropdown-option" data-value="BMI Motor Loan">BMI Motor Loan</div>
-                      <div class="dropdown-option" data-value="BNB MSME NWO">BNB MSME NWO</div>
-                      <div class="dropdown-option" data-value="BNB MSME WO">BNB MSME WO</div>
-                      <div class="dropdown-option" data-value="BNB Salary Loan">BNB Salary Loan</div>
-                      <div class="dropdown-option" data-value="BPI Auto Curing SL">BPI Auto Curing SL</div>
-                      <div class="dropdown-option" data-value="BPI Auto Loan">BPI Auto Loan</div>
-                      <div class="dropdown-option" data-value="BPI BanKo PL 30-90DPD">BPI BanKo PL 30-90DPD</div>
-                      <div class="dropdown-option" data-value="BPI BanKo PWO 90-180DPD">BPI BanKo PWO 90-180DPD</div>
-                      <div class="dropdown-option" data-value="BPI BanKo SL">BPI BanKo SL</div>
-                      <div class="dropdown-option" data-value="BPI BanKo Write-off">BPI BanKo Write-off</div>
-                      <div class="dropdown-option" data-value="BPI BL Early BL">BPI BL Early BL</div>
-                      <div class="dropdown-option" data-value="BPI BL Remedial BL">BPI BL Remedial BL</div>
-                      <div class="dropdown-option" data-value="BPI Cards 30DPD SL">BPI Cards 30DPD SL</div>
-                      <div class="dropdown-option" data-value="BPI Cards Proj Rev Luz CC">BPI Cards Proj Rev Luz CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards Proj Rev Min CC">BPI Cards Proj Rev Min CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards Proj Rev Vis CC">BPI Cards Proj Rev Vis CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards PWO 120 Luz CC">BPI Cards PWO 120 Luz CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards PWO 120 Min CC">BPI Cards PWO 120 Min CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards PWO 120 Vis CC">BPI Cards PWO 120 Vis CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards PWO 150 Luz CC">BPI Cards PWO 150 Luz CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards PWO 180 Luz CC">BPI Cards PWO 180 Luz CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards PWO 180 Min CC">BPI Cards PWO 180 Min CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards Reco Luz CC">BPI Cards Reco Luz CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards Reco Min CC">BPI Cards Reco Min CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards Reco Vis CC">BPI Cards Reco Vis CC</div>
-                      <div class="dropdown-option" data-value="BPI Cards Xdays SL">BPI Cards Xdays SL</div>
-                      <div class="dropdown-option" data-value="BPI Insurance">BPI Insurance</div>
-                      <div class="dropdown-option" data-value="BPI PL 30DPD SL">BPI PL 30DPD SL</div>
-                      <div class="dropdown-option" data-value="BPI PL 60DPD SL">BPI PL 60DPD SL</div>
-                      <div class="dropdown-option" data-value="BPI PL Proj Rev Luz PL">BPI PL Proj Rev Luz PL</div>
-                      <div class="dropdown-option" data-value="BPI PL PWO 120 Luz PL">BPI PL PWO 120 Luz PL</div>
-                      <div class="dropdown-option" data-value="BPI PL PWO 120 Min PL">BPI PL PWO 120 Min PL</div>
-                      <div class="dropdown-option" data-value="BPI PL PWO 150 Luz PL">BPI PL PWO 150 Luz PL</div>
-                      <div class="dropdown-option" data-value="BPI PL PWO 180 Luz PL">BPI PL PWO 180 Luz PL</div>
-                      <div class="dropdown-option" data-value="BPI PL PWO 180 Min PL">BPI PL PWO 180 Min PL</div>
-                      <div class="dropdown-option" data-value="BPI PL Reco Luz PL">BPI PL Reco Luz PL</div>
-                      <div class="dropdown-option" data-value="BPI PL Reco Min PL">BPI PL Reco Min PL</div>
-                      <div class="dropdown-option" data-value="BPI PL Reco Vis PL">BPI PL Reco Vis PL</div>
-                      <div class="dropdown-option" data-value="BPI PL Xdays SL">BPI PL Xdays SL</div>
-                      <div class="dropdown-option" data-value="BPI Rbank Cards 30DPD SL">BPI Rbank Cards 30DPD SL</div>
-                      <div class="dropdown-option" data-value="BPI Rbank CC">BPI Rbank CC</div>
-                      <div class="dropdown-option" data-value="BPI Rbank Instabale">BPI Rbank Instabale</div>
-                      <div class="dropdown-option" data-value="BPI Rbank Instabale SL">BPI Rbank Instabale SL</div>
-                      <div class="dropdown-option" data-value="BPI Rbank PL">BPI Rbank PL</div>
-                      <div class="dropdown-option" data-value="BPI Rbank PL 30DPD SL">BPI Rbank PL 30DPD SL</div>
-                      <div class="dropdown-option" data-value="BPI Rbank PL 60DPD SL">BPI Rbank PL 60DPD SL</div>
-                      <div class="dropdown-option" data-value="BPI Special Project PL">BPI Special Project PL</div>
-                      <div class="dropdown-option" data-value="CBC Cards">CBC Cards</div>
-                      <div class="dropdown-option" data-value="CBS Auto Loan">CBS Auto Loan</div>
-                      <div class="dropdown-option" data-value="CBS Housing Loan">CBS Housing Loan</div>
-                      <div class="dropdown-option" data-value="CBS Personal Loan">CBS Personal Loan</div>
-                      <div class="dropdown-option" data-value="CIMB">CIMB</div>
-                      <div class="dropdown-option" data-value="COLL Debt Auto Loan">COLL Debt Auto Loan</div>
-                      <div class="dropdown-option" data-value="COLL Debt Purchase">COLL Debt Purchase</div>
-                      <div class="dropdown-option" data-value="Consultant">Consultant</div>
-                      <div class="dropdown-option" data-value="CSB Motor Loan">CSB Motor Loan</div>
-                      <div class="dropdown-option" data-value="CSB Personal Loan">CSB Personal Loan</div>
-                      <div class="dropdown-option" data-value="Data Management">Data Management</div>
-                      <div class="dropdown-option" data-value="Emirates Islamic">Emirates Islamic</div>
-                      <div class="dropdown-option" data-value="Emirates NBD">Emirates NBD</div>
-                      <div class="dropdown-option" data-value="Employee Engagement">Employee Engagement</div>
-                      <div class="dropdown-option" data-value="EWB Auto Loan Curing">EWB Auto Loan Curing</div>
-                      <div class="dropdown-option" data-value="EWB Auto Loan Recov">EWB Auto Loan Recov</div>
-                      <div class="dropdown-option" data-value="EWB Cards">EWB Cards</div>
-                      <div class="dropdown-option" data-value="EWB Cards L4">EWB Cards L4</div>
-                      <div class="dropdown-option" data-value="EWB Early">EWB Early</div>
-                      <div class="dropdown-option" data-value="EWB Personal Loan">EWB Personal Loan</div>
-                      <div class="dropdown-option" data-value="Executive Management">Executive Management</div>
-                      <div class="dropdown-option" data-value="Farm Top">Farm Top</div>
-                      <div class="dropdown-option" data-value="Field Operations">Field Operations</div>
-                      <div class="dropdown-option" data-value="Field Solutions">Field Solutions</div>
-                      <div class="dropdown-option" data-value="Finance & Accounting">Finance & Accounting</div>
-                      <div class="dropdown-option" data-value="Founder">Founder</div>
-                      <div class="dropdown-option" data-value="FUSE FinTech">FUSE FinTech</div>
-                      <div class="dropdown-option" data-value="FUSE Fintech SL">FUSE Fintech SL</div>
-                      <div class="dropdown-option" data-value="Garnet Fintech">Garnet Fintech</div>
-                      <div class="dropdown-option" data-value="Globe Digital Loan">Globe Digital Loan</div>
-                      <div class="dropdown-option" data-value="HomeCredit">HomeCredit</div>
-                      <div class="dropdown-option" data-value="HSBC Bahrain">HSBC Bahrain</div>
-                      <div class="dropdown-option" data-value="HSBC Cards">HSBC Cards</div>
-                      <div class="dropdown-option" data-value="HSBC Qatar">HSBC Qatar</div>
-                      <div class="dropdown-option" data-value="HSBC UAE Cards">HSBC UAE Cards</div>
-                      <div class="dropdown-option" data-value="Innovation Factory">Innovation Factory</div>
-                      <div class="dropdown-option" data-value="Interns">Interns</div>
-                      <div class="dropdown-option" data-value="Kapedad">Kapedad</div>
-                      <div class="dropdown-option" data-value="Legal BDO">Legal BDO</div>
-                      <div class="dropdown-option" data-value="Legal BMI MCL">Legal BMI MCL</div>
-                      <div class="dropdown-option" data-value="Legal BNB MSME">Legal BNB MSME</div>
-                      <div class="dropdown-option" data-value="Legal BNB SL">Legal BNB SL</div>
-                      <div class="dropdown-option" data-value="Legal BPI">Legal BPI</div>
-                      <div class="dropdown-option" data-value="Legal CSB DEPED">Legal CSB DEPED</div>
-                      <div class="dropdown-option" data-value="Legal HSBC">Legal HSBC</div>
-                      <div class="dropdown-option" data-value="Legal Jia">Legal Jia</div>
-                      <div class="dropdown-option" data-value="Legal PNB">Legal PNB</div>
-                      <div class="dropdown-option" data-value="Legal RCBC">Legal RCBC</div>
-                      <div class="dropdown-option" data-value="Legal SBC">Legal SBC</div>
-                      <div class="dropdown-option" data-value="Legal SBF">Legal SBF</div>
-                      <div class="dropdown-option" data-value="Legal Service">Legal Service</div>
-                      <div class="dropdown-option" data-value="Legal UBP">Legal UBP</div>
-                      <div class="dropdown-option" data-value="Manulife">Manulife</div>
-                      <div class="dropdown-option" data-value="Maya Recovery">Maya Recovery</div>
-                      <div class="dropdown-option" data-value="MAYA FinTech">MAYA FinTech</div>
-                      <div class="dropdown-option" data-value="MBA Debt Purchase">MBA Debt Purchase</div>
-                      <div class="dropdown-option" data-value="MBTC Cards 30DPD">MBTC Cards 30DPD</div>
-                      <div class="dropdown-option" data-value="MBTC Cards EPA">MBTC Cards EPA</div>
-                      <div class="dropdown-option" data-value="MBTC Cards P150">MBTC Cards P150</div>
-                      <div class="dropdown-option" data-value="MBTC Cards P2">MBTC Cards P2</div>
-                      <div class="dropdown-option" data-value="MBTC Cards P360">MBTC Cards P360</div>
-                      <div class="dropdown-option" data-value="MBTC Cards P4">MBTC Cards P4</div>
-                      <div class="dropdown-option" data-value="MBTC Cards P90">MBTC Cards P90</div>
-                      <div class="dropdown-option" data-value="MBTC Cards Rest">MBTC Cards Rest</div>
-                      <div class="dropdown-option" data-value="MBTC Cards SPL">MBTC Cards SPL</div>
-                      <div class="dropdown-option" data-value="MSB Auto Loan">MSB Auto Loan</div>
-                      <div class="dropdown-option" data-value="MSB Motor Loan">MSB Motor Loan</div>
-                      <div class="dropdown-option" data-value="MSB Personal Loan">MSB Personal Loan</div>
-                      <div class="dropdown-option" data-value="One Mega Skip">One Mega Skip</div>
-                      <div class="dropdown-option" data-value="OneLot Financing">OneLot Financing</div>
-                      <div class="dropdown-option" data-value="Orico Auto Loan">Orico Auto Loan</div>
-                      <div class="dropdown-option" data-value="People Support">People Support</div>
-                      <div class="dropdown-option" data-value="Petron Finance & Accounting">Petron Finance & Accounting</div>
-                      <div class="dropdown-option" data-value="PIF Foreclosure">PIF Foreclosure</div>
-                      <div class="dropdown-option" data-value="PIF Home Loan">PIF Home Loan</div>
-                      <div class="dropdown-option" data-value="PIF Provident">PIF Provident</div>
-                      <div class="dropdown-option" data-value="PNB Auto Loan">PNB Auto Loan</div>
-                      <div class="dropdown-option" data-value="PNB Home Loan">PNB Home Loan</div>
-                      <div class="dropdown-option" data-value="PSB Auto Curing">PSB Auto Curing</div>
-                      <div class="dropdown-option" data-value="PSB Auto Loan">PSB Auto Loan</div>
-                      <div class="dropdown-option" data-value="PSB Personal Loan Fresh">PSB Personal Loan Fresh</div>
-                      <div class="dropdown-option" data-value="PSB Personal Loan Rem17">PSB Personal Loan Rem17</div>
-                      <div class="dropdown-option" data-value="Quality Risk Management">Quality Risk Management</div>
-                      <div class="dropdown-option" data-value="RCBC Auto Loan">RCBC Auto Loan</div>
-                      <div class="dropdown-option" data-value="RCBC Auto Loan Skip">RCBC Auto Loan Skip</div>
-                      <div class="dropdown-option" data-value="RCBC Cards PWO">RCBC Cards PWO</div>
-                      <div class="dropdown-option" data-value="RCBC Cards WO">RCBC Cards WO</div>
-                      <div class="dropdown-option" data-value="RCBC PL">RCBC PL</div>
-                      <div class="dropdown-option" data-value="ROB Auto Loan">ROB Auto Loan</div>
-                      <div class="dropdown-option" data-value="ROB Motor Loan">ROB Motor Loan</div>
-                      <div class="dropdown-option" data-value="Robinsons Auto Skips">Robinsons Auto Skips</div>
-                      <div class="dropdown-option" data-value="Robinsons Homeloan">Robinsons Homeloan</div>
-                      <div class="dropdown-option" data-value="Sales & Marketing">Sales & Marketing</div>
-                      <div class="dropdown-option" data-value="SAVii">SAVii</div>
-                      <div class="dropdown-option" data-value="SBC Auto Loan Curing">SBC Auto Loan Curing</div>
-                      <div class="dropdown-option" data-value="SBC B2">SBC B2</div>
-                      <div class="dropdown-option" data-value="SBC B4">SBC B4</div>
-                      <div class="dropdown-option" data-value="SBC Business Loan">SBC Business Loan</div>
-                      <div class="dropdown-option" data-value="SBC Housing Loan">SBC Housing Loan</div>
-                      <div class="dropdown-option" data-value="SBC Insurance">SBC Insurance</div>
-                      <div class="dropdown-option" data-value="SBC L1">SBC L1</div>
-                      <div class="dropdown-option" data-value="SBC L6">SBC L6</div>
-                      <div class="dropdown-option" data-value="SBC Personal Loan Curing">SBC Personal Loan Curing</div>
-                      <div class="dropdown-option" data-value="SBF Mortgage">SBF Mortgage</div>
-                      <div class="dropdown-option" data-value="SBF Personal Loan">SBF Personal Loan</div>
-                      <div class="dropdown-option" data-value="SBF Salad">SBF Salad</div>
-                      <div class="dropdown-option" data-value="SBF SKip">SBF SKip</div>
-                      <div class="dropdown-option" data-value="Security Guard">Security Guard</div>
-                      <div class="dropdown-option" data-value="SUM Motor Loan">SUM Motor Loan</div>
-                      <div class="dropdown-option" data-value="Systems & Infrastructures">Systems & Infrastructures</div>
-                      <div class="dropdown-option" data-value="TALA EDC">TALA EDC</div>
-                      <div class="dropdown-option" data-value="TALA FPC">TALA FPC</div>
-                      <div class="dropdown-option" data-value="Talent Acquisition">Talent Acquisition</div>
-                      <div class="dropdown-option" data-value="Tendo Fintech">Tendo Fintech</div>
-                      <div class="dropdown-option" data-value="TFS Auto Loan LVL 2">TFS Auto Loan LVL 2</div>
-                      <div class="dropdown-option" data-value="TFS Auto Loan LVL 3">TFS Auto Loan LVL 3</div>
-                      <div class="dropdown-option" data-value="TFS Auto Loan Skip">TFS Auto Loan Skip</div>
-                      <div class="dropdown-option" data-value="Tonik Fintech">Tonik Fintech</div>
-                      <div class="dropdown-option" data-value="Training & Development">Training & Development</div>
-                      <div class="dropdown-option" data-value="UBP Commbank">UBP Commbank</div>
-                      <div class="dropdown-option" data-value="UBP Home Mortgage">UBP Home Mortgage</div>
-                      <div class="dropdown-option" data-value="UBP PreWrite Blue">UBP PreWrite Blue</div>
-                      <div class="dropdown-option" data-value="UBP PreWrite NTB">UBP PreWrite NTB</div>
-                      <div class="dropdown-option" data-value="UBP PreWrite Orange">UBP PreWrite Orange</div>
-                      <div class="dropdown-option" data-value="UBP PreWrite PLBIF">UBP PreWrite PLBIF</div>
-                      <div class="dropdown-option" data-value="UBP Recov Blue">UBP Recov Blue</div>
-                      <div class="dropdown-option" data-value="UBP Recov Newly">UBP Recov Newly</div>
-                      <div class="dropdown-option" data-value="UBP Recov OLD 1">UBP Recov OLD 1</div>
-                      <div class="dropdown-option" data-value="UBP Recov OLD 2">UBP Recov OLD 2</div>
-                      <div class="dropdown-option" data-value="UBP Recov PL">UBP Recov PL</div>
-                      <div class="dropdown-option" data-value="UBP Recov YM">UBP Recov YM</div>
-                      <div class="dropdown-option" data-value="UBP Seekcap">UBP Seekcap</div>
-                      <div class="dropdown-option" data-value="UBP SF Eca">UBP SF Eca</div>
-                      <div class="dropdown-option" data-value="UBP SF Recov">UBP SF Recov</div>
-                      <div class="dropdown-option" data-value="Uno Bank">Uno Bank</div>
-                      <div class="dropdown-option" data-value="Workplace Management">Workplace Management</div>
-                    </div>
-                  </div>
+                  <select id="fo_campaign" name="fo_campaign">
+                    <option value="" disabled selected>Select campaign...</option>
+                    <option value="Aiqon">Aiqon</option>
+                    <option value="Audit and Compliance">Audit and Compliance</option>
+                    <option value="BDO AUTO LOAN">BDO AUTO LOAN</option>
+                    <option value="BDO Auto Loan Skip">BDO Auto Loan Skip</option>
+                    <option value="BDO Auto RMU">BDO Auto RMU</option>
+                    <option value="BDO Cards 30 DPD">BDO Cards 30 DPD</option>
+                    <option value="BDO Cards PRU">BDO Cards PRU</option>
+                    <option value="BDO Cards RECOV">BDO Cards RECOV</option>
+                    <option value="BDO Home Loan">BDO Home Loan</option>
+                    <option value="BDO Homeloan Skip">BDO Homeloan Skip</option>
+                    <option value="BDO Insurance">BDO Insurance</option>
+                    <option value="BMI Motor Loan">BMI Motor Loan</option>
+                    <option value="BNB MSME NWO">BNB MSME NWO</option>
+                    <option value="BNB MSME WO">BNB MSME WO</option>
+                    <option value="BNB Salary Loan">BNB Salary Loan</option>
+                    <option value="BPI Auto Curing SL">BPI Auto Curing SL</option>
+                    <option value="BPI Auto Loan">BPI Auto Loan</option>
+                    <option value="BPI BanKo PL 30-90DPD">BPI BanKo PL 30-90DPD</option>
+                    <option value="BPI BanKo PWO 90-180DPD">BPI BanKo PWO 90-180DPD</option>
+                    <option value="BPI BanKo SL">BPI BanKo SL</option>
+                    <option value="BPI BanKo Write-off">BPI BanKo Write-off</option>
+                    <option value="BPI BL Early BL">BPI BL Early BL</option>
+                    <option value="BPI BL Remedial BL">BPI BL Remedial BL</option>
+                    <option value="BPI Cards 30DPD SL">BPI Cards 30DPD SL</option>
+                    <option value="BPI Cards Proj Rev Luz CC">BPI Cards Proj Rev Luz CC</option>
+                    <option value="BPI Cards Proj Rev Min CC">BPI Cards Proj Rev Min CC</option>
+                    <option value="BPI Cards Proj Rev Vis CC">BPI Cards Proj Rev Vis CC</option>
+                    <option value="BPI Cards PWO 120 Luz CC">BPI Cards PWO 120 Luz CC</option>
+                    <option value="BPI Cards PWO 120 Min CC">BPI Cards PWO 120 Min CC</option>
+                    <option value="BPI Cards PWO 120 Vis CC">BPI Cards PWO 120 Vis CC</option>
+                    <option value="BPI Cards PWO 150 Luz CC">BPI Cards PWO 150 Luz CC</option>
+                    <option value="BPI Cards PWO 180 Luz CC">BPI Cards PWO 180 Luz CC</option>
+                    <option value="BPI Cards PWO 180 Min CC">BPI Cards PWO 180 Min CC</option>
+                    <option value="BPI Cards Reco Luz CC">BPI Cards Reco Luz CC</option>
+                    <option value="BPI Cards Reco Min CC">BPI Cards Reco Min CC</option>
+                    <option value="BPI Cards Reco Vis CC">BPI Cards Reco Vis CC</option>
+                    <option value="BPI Cards Xdays SL">BPI Cards Xdays SL</option>
+                    <option value="BPI Insurance">BPI Insurance</option>
+                    <option value="BPI PL 30DPD SL">BPI PL 30DPD SL</option>
+                    <option value="BPI PL 60DPD SL">BPI PL 60DPD SL</option>
+                    <option value="BPI PL Proj Rev Luz PL">BPI PL Proj Rev Luz PL</option>
+                    <option value="BPI PL PWO 120 Luz PL">BPI PL PWO 120 Luz PL</option>
+                    <option value="BPI PL PWO 120 Min PL">BPI PL PWO 120 Min PL</option>
+                    <option value="BPI PL PWO 150 Luz PL">BPI PL PWO 150 Luz PL</option>
+                    <option value="BPI PL PWO 180 Luz PL">BPI PL PWO 180 Luz PL</option>
+                    <option value="BPI PL PWO 180 Min PL">BPI PL PWO 180 Min PL</option>
+                    <option value="BPI PL Reco Luz PL">BPI PL Reco Luz PL</option>
+                    <option value="BPI PL Reco Min PL">BPI PL Reco Min PL</option>
+                    <option value="BPI PL Reco Vis PL">BPI PL Reco Vis PL</option>
+                    <option value="BPI PL Xdays SL">BPI PL Xdays SL</option>
+                    <option value="BPI Rbank Cards 30DPD SL">BPI Rbank Cards 30DPD SL</option>
+                    <option value="BPI Rbank CC">BPI Rbank CC</option>
+                    <option value="BPI Rbank Instabale">BPI Rbank Instabale</option>
+                    <option value="BPI Rbank Instabale SL">BPI Rbank Instabale SL</option>
+                    <option value="BPI Rbank PL">BPI Rbank PL</option>
+                    <option value="BPI Rbank PL 30DPD SL">BPI Rbank PL 30DPD SL</option>
+                    <option value="BPI Rbank PL 60DPD SL">BPI Rbank PL 60DPD SL</option>
+                    <option value="BPI Special Project PL">BPI Special Project PL</option>
+                    <option value="CBC Cards">CBC Cards</option>
+                    <option value="CBS Auto Loan">CBS Auto Loan</option>
+                    <option value="CBS Housing Loan">CBS Housing Loan</option>
+                    <option value="CBS Personal Loan">CBS Personal Loan</option>
+                    <option value="CIMB">CIMB</option>
+                    <option value="COLL Debt Auto Loan">COLL Debt Auto Loan</option>
+                    <option value="COLL Debt Purchase">COLL Debt Purchase</option>
+                    <option value="Consultant">Consultant</option>
+                    <option value="CSB Motor Loan">CSB Motor Loan</option>
+                    <option value="CSB Personal Loan">CSB Personal Loan</option>
+                    <option value="Data Management">Data Management</option>
+                    <option value="Emirates Islamic">Emirates Islamic</option>
+                    <option value="Emirates NBD">Emirates NBD</option>
+                    <option value="Employee Engagement">Employee Engagement</option>
+                    <option value="EWB Auto Loan Curing">EWB Auto Loan Curing</option>
+                    <option value="EWB Auto Loan Recov">EWB Auto Loan Recov</option>
+                    <option value="EWB Cards">EWB Cards</option>
+                    <option value="EWB Cards L4">EWB Cards L4</option>
+                    <option value="EWB Early">EWB Early</option>
+                    <option value="EWB Personal Loan">EWB Personal Loan</option>
+                    <option value="Executive Management">Executive Management</option>
+                    <option value="Farm Top">Farm Top</option>
+                    <option value="Field Operations">Field Operations</option>
+                    <option value="Field Solutions">Field Solutions</option>
+                    <option value="Finance & Accounting">Finance & Accounting</option>
+                    <option value="Founder">Founder</option>
+                    <option value="FUSE FinTech">FUSE FinTech</option>
+                    <option value="FUSE Fintech SL">FUSE Fintech SL</option>
+                    <option value="Garnet Fintech">Garnet Fintech</option>
+                    <option value="Globe Digital Loan">Globe Digital Loan</option>
+                    <option value="HomeCredit">HomeCredit</option>
+                    <option value="HSBC Bahrain">HSBC Bahrain</option>
+                    <option value="HSBC Cards">HSBC Cards</option>
+                    <option value="HSBC Qatar">HSBC Qatar</option>
+                    <option value="HSBC UAE Cards">HSBC UAE Cards</option>
+                    <option value="Innovation Factory">Innovation Factory</option>
+                    <option value="Interns">Interns</option>
+                    <option value="Kapedad">Kapedad</option>
+                    <option value="Legal BDO">Legal BDO</option>
+                    <option value="Legal BMI MCL">Legal BMI MCL</option>
+                    <option value="Legal BNB MSME">Legal BNB MSME</option>
+                    <option value="Legal BNB SL">Legal BNB SL</option>
+                    <option value="Legal BPI">Legal BPI</option>
+                    <option value="Legal CSB DEPED">Legal CSB DEPED</option>
+                    <option value="Legal HSBC">Legal HSBC</option>
+                    <option value="Legal Jia">Legal Jia</option>
+                    <option value="Legal PNB">Legal PNB</option>
+                    <option value="Legal RCBC">Legal RCBC</option>
+                    <option value="Legal SBC">Legal SBC</option>
+                    <option value="Legal SBF">Legal SBF</option>
+                    <option value="Legal Service">Legal Service</option>
+                    <option value="Legal UBP">Legal UBP</option>
+                    <option value="Manulife">Manulife</option>
+                    <option value="Maya Recovery">Maya Recovery</option>
+                    <option value="MAYA FinTech">MAYA FinTech</option>
+                    <option value="MBA Debt Purchase">MBA Debt Purchase</option>
+                    <option value="MBTC Cards 30DPD">MBTC Cards 30DPD</option>
+                    <option value="MBTC Cards EPA">MBTC Cards EPA</option>
+                    <option value="MBTC Cards P150">MBTC Cards P150</option>
+                    <option value="MBTC Cards P2">MBTC Cards P2</option>
+                    <option value="MBTC Cards P360">MBTC Cards P360</option>
+                    <option value="MBTC Cards P4">MBTC Cards P4</option>
+                    <option value="MBTC Cards P90">MBTC Cards P90</option>
+                    <option value="MBTC Cards Rest">MBTC Cards Rest</option>
+                    <option value="MBTC Cards SPL">MBTC Cards SPL</option>
+                    <option value="MSB Auto Loan">MSB Auto Loan</option>
+                    <option value="MSB Motor Loan">MSB Motor Loan</option>
+                    <option value="MSB Personal Loan">MSB Personal Loan</option>
+                    <option value="One Mega Skip">One Mega Skip</option>
+                    <option value="OneLot Financing">OneLot Financing</option>
+                    <option value="Orico Auto Loan">Orico Auto Loan</option>
+                    <option value="People Support">People Support</option>
+                    <option value="Petron Finance & Accounting">Petron Finance & Accounting</option>
+                    <option value="PIF Foreclosure">PIF Foreclosure</option>
+                    <option value="PIF Home Loan">PIF Home Loan</option>
+                    <option value="PIF Provident">PIF Provident</option>
+                    <option value="PNB Auto Loan">PNB Auto Loan</option>
+                    <option value="PNB Home Loan">PNB Home Loan</option>
+                    <option value="PSB Auto Curing">PSB Auto Curing</option>
+                    <option value="PSB Auto Loan">PSB Auto Loan</option>
+                    <option value="PSB Personal Loan Fresh">PSB Personal Loan Fresh</option>
+                    <option value="PSB Personal Loan Rem17">PSB Personal Loan Rem17</option>
+                    <option value="Quality Risk Management">Quality Risk Management</option>
+                    <option value="RCBC Auto Loan">RCBC Auto Loan</option>
+                    <option value="RCBC Auto Loan Skip">RCBC Auto Loan Skip</option>
+                    <option value="RCBC Cards PWO">RCBC Cards PWO</option>
+                    <option value="RCBC Cards WO">RCBC Cards WO</option>
+                    <option value="RCBC PL">RCBC PL</option>
+                    <option value="ROB Auto Loan">ROB Auto Loan</option>
+                    <option value="ROB Motor Loan">ROB Motor Loan</option>
+                    <option value="Robinsons Auto Skips">Robinsons Auto Skips</option>
+                    <option value="Robinsons Homeloan">Robinsons Homeloan</option>
+                    <option value="Sales & Marketing">Sales & Marketing</option>
+                    <option value="SAVii">SAVii</option>
+                    <option value="SBC Auto Loan Curing">SBC Auto Loan Curing</option>
+                    <option value="SBC B2">SBC B2</option>
+                    <option value="SBC B4">SBC B4</option>
+                    <option value="SBC Business Loan">SBC Business Loan</option>
+                    <option value="SBC Housing Loan">SBC Housing Loan</option>
+                    <option value="SBC Insurance">SBC Insurance</option>
+                    <option value="SBC L1">SBC L1</option>
+                    <option value="SBC L6">SBC L6</option>
+                    <option value="SBC Personal Loan Curing">SBC Personal Loan Curing</option>
+                    <option value="SBF Mortgage">SBF Mortgage</option>
+                    <option value="SBF Personal Loan">SBF Personal Loan</option>
+                    <option value="SBF Salad">SBF Salad</option>
+                    <option value="SBF SKip">SBF SKip</option>
+                    <option value="Security Guard">Security Guard</option>
+                    <option value="SUM Motor Loan">SUM Motor Loan</option>
+                    <option value="Systems & Infrastructures">Systems & Infrastructures</option>
+                    <option value="TALA EDC">TALA EDC</option>
+                    <option value="TALA FPC">TALA FPC</option>
+                    <option value="Talent Acquisition">Talent Acquisition</option>
+                    <option value="Tendo Fintech">Tendo Fintech</option>
+                    <option value="TFS Auto Loan LVL 2">TFS Auto Loan LVL 2</option>
+                    <option value="TFS Auto Loan LVL 3">TFS Auto Loan LVL 3</option>
+                    <option value="TFS Auto Loan Skip">TFS Auto Loan Skip</option>
+                    <option value="Tonik Fintech">Tonik Fintech</option>
+                    <option value="Training & Development">Training & Development</option>
+                    <option value="UBP Commbank">UBP Commbank</option>
+                    <option value="UBP Home Mortgage">UBP Home Mortgage</option>
+                    <option value="UBP PreWrite Blue">UBP PreWrite Blue</option>
+                    <option value="UBP PreWrite NTB">UBP PreWrite NTB</option>
+                    <option value="UBP PreWrite Orange">UBP PreWrite Orange</option>
+                    <option value="UBP PreWrite PLBIF">UBP PreWrite PLBIF</option>
+                    <option value="UBP Recov Blue">UBP Recov Blue</option>
+                    <option value="UBP Recov Newly">UBP Recov Newly</option>
+                    <option value="UBP Recov OLD 1">UBP Recov OLD 1</option>
+                    <option value="UBP Recov OLD 2">UBP Recov OLD 2</option>
+                    <option value="UBP Recov PL">UBP Recov PL</option>
+                    <option value="UBP Recov YM">UBP Recov YM</option>
+                    <option value="UBP Seekcap">UBP Seekcap</option>
+                    <option value="UBP SF Eca">UBP SF Eca</option>
+                    <option value="UBP SF Recov">UBP SF Recov</option>
+                    <option value="Uno Bank">Uno Bank</option>
+                    <option value="Workplace Management">Workplace Management</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -808,6 +716,71 @@
           </div>
         </section>
 
+        <!-- Photo Upload Section -->
+        <section class="form-section">
+          <h2 class="section-title">Photo Upload</h2>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label>Photo <span class="required">*</span></label>
+              <div class="file-upload">
+                <div class="file-upload-area" id="photoUploadArea">
+                  <span class="icon">📷</span>
+                  <p>Click to upload or drag and drop</p>
+                  <p style="font-size: 0.75rem;">PNG, JPG up to 5MB</p>
+                </div>
+                <input type="file" id="photo" name="photo" accept="image/png, image/jpeg, image/jpg" required>
+              </div>
+              
+              <!-- Photo Comparison Container (Original vs AI) -->
+              <div id="photoComparison" class="photo-comparison-grid" style="display: none;">
+                <!-- Original Photo Preview -->
+                <div id="photoPreview" class="photo-preview-card">
+                  <div class="preview-label">Original Photo</div>
+                  <div class="preview-image-container">
+                    <img id="photoPreviewImg" src="" alt="Original Photo">
+                  </div>
+                </div>
+                
+                <!-- AI Processed Photo Preview -->
+                <div class="photo-preview-card ai-preview-card">
+                  <div class="preview-label">AI Enhanced</div>
+                  <div class="preview-image-container">
+                    <img id="aiPreviewImg" src="" alt="AI Enhanced Photo" style="display: none;">
+                    <div id="aiLoading" class="ai-loading" style="display: none;">
+                      <div class="loading-spinner"></div>
+                      <p id="aiLoadingText">Generating AI headshot...</p>
+                    </div>
+                    <div id="aiError" class="ai-error" style="display: none;">AI preview unavailable</div>
+                  </div>
+                  <!-- AI Actions (Regenerate with Outfit Options) -->
+                  <div id="aiActions" class="ai-actions" style="display: none;">
+                    <!-- Outfit Selector Dropdown -->
+                    <div class="outfit-selector">
+                      <label for="outfitSelect">Outfit:</label>
+                      <select id="outfitSelect" class="outfit-dropdown">
+                        <option value="male_1">Male 1</option>
+                        <option value="male_2">Male 2</option>
+                        <option value="female_1">Female 1</option>
+                        <option value="female_2">Female 2</option>
+                      </select>
+                    </div>
+                    <!-- Regenerate Button -->
+                    <button type="button" id="regenerateBtn" class="btn-secondary btn-sm" onclick="regenerateWithOutfit()">
+                      🔄 Regenerate
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Hidden inputs for photo data -->
+              <input type="hidden" id="finalPhotoUrl" name="final_photo_url">
+              <input type="hidden" id="originalPhotoUrl" name="original_photo_url">
+              <input type="hidden" id="processedPhotoUrl" name="processed_photo_url">
+              <input type="hidden" id="aiServiceUsed" name="ai_service_used" value="">
+            </div>
+          </div>
+        </section>
+
         <!-- Signature Section -->
         <section class="form-section">
           <h2 class="section-title">Digital Signature</h2>
@@ -828,27 +801,29 @@
           <h2 class="section-title">ID Card Preview</h2>
           <p class="review-subtitle">Live preview of your ID card. Fill in the form to see changes.</p>
           
-          <!-- Flip Toggle Button -->
-          <div class="id-flip-toggle">
-            <button type="button" class="flip-btn active" data-side="front" onclick="showCardSide('front')">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="9" cy="10" r="2"/>
-                <path d="M15 8h2M15 12h2M7 16h10"/>
-              </svg>
-              Front
-            </button>
-            <button type="button" class="flip-btn" data-side="back" onclick="showCardSide('back')">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <path d="M7 7h10v10H7z"/>
-                <path d="M12 11v4M12 7v1"/>
-              </svg>
-              Back
-            </button>
-          </div>
-          
-          <div class="id-preview-wrapper">
+          <!-- Single Template Container (for non-Reprocessor) -->
+          <div id="singleTemplateContainer">
+            <!-- Flip Toggle Button -->
+            <div class="id-flip-toggle">
+              <button type="button" class="flip-btn active" data-side="front" onclick="showCardSide('front')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <circle cx="9" cy="10" r="2"/>
+                  <path d="M15 8h2M15 12h2M7 16h10"/>
+                </svg>
+                Front
+              </button>
+              <button type="button" class="flip-btn" data-side="back" onclick="showCardSide('back')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <path d="M7 7h10v10H7z"/>
+                  <path d="M12 11v4M12 7v1"/>
+                </svg>
+                Back
+              </button>
+            </div>
+            
+            <div class="id-preview-wrapper">
             <!-- FRONT SIDE -->
             <div class="id-card" id="idCardFront">
               <!-- Photo Section with Blue Sidebar -->
@@ -1020,7 +995,6 @@
 
                 <!-- Signature Section - Below photo -->
                 <div class="id-fo-signature-section">
-                  <span class="id-fo-signature-label">Signature:</span>
                   <div class="id-fo-signature-container" id="id_fo_signature_container">
                     <img id="id_fo_preview_signature" src="" alt="Signature" style="display: none;">
                     <span class="id-fo-signature-placeholder" id="id_fo_signature_placeholder"></span>
@@ -1053,6 +1027,210 @@
             <!-- FIELD OFFICE BACK SIDE - Static image, no edits -->
             <div class="id-card-field-office-back" id="idCardFieldOfficeBack" style="display: none;">
               <!-- Back side uses 4.png as background - no editable content -->
+            </div>
+          </div>
+          </div><!-- End of singleTemplateContainer -->
+          
+          <!-- Dual Template Container (for Reprocessor - shows both Original and Reprocessor templates side-by-side) -->
+          <div id="dualTemplateContainer" style="display: none;">
+            <div class="dual-template-grid">
+              <!-- Original Template -->
+              <div class="dual-template-card">
+                <h3 class="dual-template-title">Original Template</h3>
+                <div class="id-flip-toggle dual-flip-toggle">
+                  <button type="button" class="flip-btn active" data-side="front" data-template="original" onclick="showDualCardSide('original', 'front')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <circle cx="9" cy="10" r="2"/>
+                      <path d="M15 8h2M15 12h2M7 16h10"/>
+                    </svg>
+                    Front
+                  </button>
+                  <button type="button" class="flip-btn" data-side="back" data-template="original" onclick="showDualCardSide('original', 'back')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <path d="M7 7h10v10H7z"/>
+                      <path d="M12 11v4M12 7v1"/>
+                    </svg>
+                    Back
+                  </button>
+                </div>
+                <div class="id-preview-wrapper dual-preview-wrapper">
+                  <!-- Original Template Front (copy of regular ID card) -->
+                  <div class="id-card" id="dualOriginalFront">
+                    <div class="id-card-top">
+                      <div class="id-sidebar">
+                        <span class="id-nickname-vertical" id="dual_original_nickname">Ian</span>
+                      </div>
+                      <div class="id-photo-section">
+                        <div class="id-header">
+                          <img src="/static/images/SPM%20Logo%201.png" alt="SPM Logo" class="id-logo-image">
+                        </div>
+                        <div class="id-photo-container">
+                          <img id="dual_original_photo" src="" alt="Employee photo" style="display: none;">
+                          <span class="id-photo-placeholder" id="dual_original_photo_placeholder">AI Image</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="id-card-bottom">
+                      <div class="id-info-container">
+                        <div class="id-info-left">
+                          <h1 class="id-fullname" id="dual_original_fullname">Bonifacio M. Aguinaldo</h1>
+                          <div class="id-position-dept">
+                            <span id="dual_original_position">Field Officer - Reprocessor</span>
+                          </div>
+                          <div class="id-barcode-area">
+                            <div class="id-barcode-placeholder"><span>Barcode</span></div>
+                            <p class="id-number-text" id="dual_original_idnumber">012402-081</p>
+                          </div>
+                        </div>
+                        <div class="id-signature-area">
+                          <img id="dual_original_signature" src="" alt="Signature" style="display: none;">
+                          <span class="id-signature-placeholder" id="dual_original_signature_placeholder">Signature</span>
+                        </div>
+                      </div>
+                      <div class="id-website-strip">
+                        <p class="id-website-url">www.spmadrid.com</p>
+                        <svg class="id-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="2" y1="12" x2="22" y2="12"></line>
+                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Original Template Back -->
+                  <div class="id-card id-card-back" id="dualOriginalBack" style="display: none;">
+                    <div class="id-back-overlay"></div>
+                    <div class="id-back-header">
+                      <div class="id-back-header-content">
+                        <div class="id-back-logo-row">
+                          <img src="/static/images/Logo.png" alt="SPM Logo" class="id-back-spm-logo">
+                        </div>
+                        <div class="id-back-address">
+                          17th Floor Chatham House Valero, Cor V.A. Rufino<br>
+                          St. Lgry, Makati City Metro Manila
+                        </div>
+                      </div>
+                    </div>
+                    <div class="id-back-qr-section">
+                      <div class="id-back-qr-code"><span>QR Code Here</span></div>
+                      <div class="id-back-vcard-row">
+                        <div class="id-back-vcard-icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                          </svg>
+                        </div>
+                        <span class="id-back-vcard-label" id="dual_original_contact_label">'s Contact</span>
+                      </div>
+                    </div>
+                    <div class="id-back-emergency-card">
+                      <div class="id-back-emergency-title">In case of emergency:</div>
+                      <div class="id-back-emergency-list">
+                        <div class="id-back-emergency-row">
+                          <div class="id-back-emergency-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                              <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                          </div>
+                          <span class="id-back-emergency-value" id="dual_original_emergency_name">Emergency Contact Name</span>
+                        </div>
+                        <div class="id-back-emergency-row">
+                          <div class="id-back-emergency-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                          </div>
+                          <span class="id-back-emergency-value" id="dual_original_emergency_contact">+63 XXX XXX XXXX</span>
+                        </div>
+                        <div class="id-back-emergency-row address-row">
+                          <div class="id-back-emergency-icon address-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                          </div>
+                          <span class="id-back-emergency-value" id="dual_original_emergency_address">Contact Address</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="id-back-bottom">
+                      <div class="id-back-bottom-qr"><span>QR Code Here</span></div>
+                      <div class="id-back-website-row">
+                        <div class="id-back-website-icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                          </svg>
+                        </div>
+                        <span class="id-back-website-url">www.okpo.com/spm/</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Reprocessor Template -->
+              <div class="dual-template-card">
+                <h3 class="dual-template-title">Reprocessor Template</h3>
+                <div class="id-flip-toggle dual-flip-toggle">
+                  <button type="button" class="flip-btn active" data-side="front" data-template="reprocessor" onclick="showDualCardSide('reprocessor', 'front')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <circle cx="9" cy="10" r="2"/>
+                      <path d="M15 8h2M15 12h2M7 16h10"/>
+                    </svg>
+                    Front
+                  </button>
+                  <button type="button" class="flip-btn" data-side="back" data-template="reprocessor" onclick="showDualCardSide('reprocessor', 'back')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <path d="M7 7h10v10H7z"/>
+                      <path d="M12 11v4M12 7v1"/>
+                    </svg>
+                    Back
+                  </button>
+                </div>
+                <div class="id-preview-wrapper dual-preview-wrapper">
+                  <!-- Reprocessor Template Front (Field Office style) -->
+                  <div class="id-card-field-office" id="dualReprocessorFront">
+                    <div class="id-field-office-content">
+                      <div class="id-fo-photo-section">
+                        <div class="id-fo-photo-container">
+                          <img id="dual_reprocessor_photo" src="" alt="Employee photo" style="display: none;">
+                          <span class="id-fo-photo-placeholder" id="dual_reprocessor_photo_placeholder">Photo</span>
+                        </div>
+                      </div>
+                      <div class="id-fo-signature-section">
+                        <div class="id-fo-signature-container">
+                          <img id="dual_reprocessor_signature" src="" alt="Signature" style="display: none;">
+                          <span class="id-fo-signature-placeholder" id="dual_reprocessor_signature_placeholder"></span>
+                        </div>
+                      </div>
+                      <div class="id-fo-name-section">
+                        <h1 class="id-fo-name" id="dual_reprocessor_name">Name<br>Placeholder</h1>
+                      </div>
+                      <div class="id-fo-position-section">
+                        <span class="id-fo-position" id="dual_reprocessor_position">REPROCESSOR</span>
+                      </div>
+                      <div class="id-fo-clearance-section">
+                        <span class="id-fo-clearance-label">FIELD CLEARANCE:</span>
+                        <span class="id-fo-clearance-level" id="dual_reprocessor_clearance">Level 5</span>
+                      </div>
+                      <div class="id-fo-idnumber-section">
+                        <span class="id-fo-idnumber" id="dual_reprocessor_idnumber">ID Number Placeholder</span>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Reprocessor Template Back -->
+                  <div class="id-card-field-office-back" id="dualReprocessorBack" style="display: none;">
+                    <!-- Back side uses 4.png as background - no editable content -->
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>

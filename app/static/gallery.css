@@ -819,3 +819,171 @@
     min-width: 512px;
   }
 }
+
+/* ============================================
+   Field Officer ID Card Styles for Gallery
+   ============================================ */
+
+/* Field Office ID Card in Gallery Grid */
+.id-card-image-wrapper .id-card-field-office.gallery-id-card-field-office {
+  transform: scale(0.35);
+  transform-origin: center center;
+  margin: 0;
+}
+
+/* Field Office ID Card in Preview Modal */
+.id-preview-wrapper .id-card-field-office,
+.id-preview-wrapper .id-card-field-office-back,
+.id-preview-wrapper .gallery-id-card-field-office,
+.id-preview-wrapper .gallery-id-card-field-office-back {
+  transform: scale(0.55);
+  transform-origin: top center;
+  margin-bottom: -180px;
+}
+
+/* Field Office Back Template */
+.gallery-id-card-field-office-back {
+  width: 512px;
+  height: 800px;
+  background: url('/static/images/4.png') center center / cover no-repeat;
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+}
+
+/* ============================================
+   Dual Template Grid for Gallery (Reprocessor)
+   ============================================ */
+
+/* Gallery dual template uses VERTICAL STACK - scrollable container */
+.gallery-dual-template-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  width: 100%;
+  margin-bottom: var(--spacing-lg);
+  align-items: center;
+  /* Enable vertical scrolling for dual templates */
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+}
+
+.gallery-dual-template-grid .dual-template-card {
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 450px;
+  flex-shrink: 0;
+  /* Tighter container - reduce extra white space */
+  overflow: hidden;
+}
+
+.gallery-dual-template-grid .dual-template-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin-bottom: var(--spacing-sm);
+  text-align: center;
+}
+
+.gallery-dual-template-grid .dual-flip-toggle {
+  margin-bottom: var(--spacing-sm);
+}
+
+.gallery-dual-template-grid .dual-flip-toggle .flip-btn {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.8rem;
+}
+
+.gallery-dual-template-grid .dual-preview-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Portrait ID card (512x800) scaling for gallery */
+.gallery-dual-template-grid .dual-preview-wrapper .id-card,
+.gallery-dual-template-grid .dual-preview-wrapper .id-card-back {
+  transform: scale(0.55);
+  transform-origin: top center;
+  /* At 0.55 scale: 800px * 0.55 = 440px actual height
+     Hidden space: 800px - 440px = 360px, need to offset */
+  margin-bottom: -360px;
+}
+
+/* Landscape ID card (512x319) scaling for gallery */
+.gallery-dual-template-grid .dual-preview-wrapper .id-card-field-office,
+.gallery-dual-template-grid .dual-preview-wrapper .id-card-field-office-back {
+  transform: scale(0.65);
+  transform-origin: top center;
+  /* At 0.65 scale: 319px * 0.65 = 207px actual height
+     Hidden space: 319px - 207px = 112px, need to offset */
+  margin-bottom: -112px;
+}
+
+/* Mobile responsiveness for dual template */
+@media (max-width: 768px) {
+  .gallery-dual-template-grid .dual-template-card {
+    padding: var(--spacing-sm);
+  }
+  
+  /* Portrait cards on mobile */
+  .gallery-dual-template-grid .dual-preview-wrapper .id-card,
+  .gallery-dual-template-grid .dual-preview-wrapper .id-card-back {
+    transform: scale(0.45);
+    /* At 0.45 scale: 800px * 0.45 = 360px actual height
+       Hidden space: 800px - 360px = 440px */
+    margin-bottom: -440px;
+  }
+  
+  /* Landscape cards on mobile */
+  .gallery-dual-template-grid .dual-preview-wrapper .id-card-field-office,
+  .gallery-dual-template-grid .dual-preview-wrapper .id-card-field-office-back {
+    transform: scale(0.55);
+    /* At 0.55 scale: 319px * 0.55 = 175px actual height
+       Hidden space: 319px - 175px = 144px */
+    margin-bottom: -144px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Portrait cards on small mobile */
+  .gallery-dual-template-grid .dual-preview-wrapper .id-card,
+  .gallery-dual-template-grid .dual-preview-wrapper .id-card-back {
+    transform: scale(0.35);
+    /* At 0.35 scale: 800px * 0.35 = 280px actual height
+       Hidden space: 800px - 280px = 520px */
+    margin-bottom: -520px;
+  }
+  
+  /* Landscape cards on small mobile */
+  .gallery-dual-template-grid .dual-preview-wrapper .id-card-field-office,
+  .gallery-dual-template-grid .dual-preview-wrapper .id-card-field-office-back {
+    transform: scale(0.45);
+    /* At 0.45 scale: 319px * 0.45 = 144px actual height
+       Hidden space: 319px - 144px = 175px */
+    margin-bottom: -175px;
+  }
+  
+  .gallery-dual-template-grid .dual-template-title {
+    font-size: 0.9rem;
+  }
+  
+  .gallery-dual-template-grid .dual-flip-toggle .flip-btn {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+  }
+  
+  .id-card-image-wrapper .id-card-field-office.gallery-id-card-field-office {
+    transform: scale(0.28);
+    transform-origin: center center;
+    margin: 0;
+  }
+}
