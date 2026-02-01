@@ -353,6 +353,62 @@ input[readonly]:focus {
   padding: 0.5rem 1rem !important;
 }
 
+/* ============================================
+   SEARCHABLE DROPDOWNS IN FO-FIELDS-GRID
+   ============================================ */
+/* Ensure searchable dropdown containers fill the grid cell */
+.fo-fields-grid .searchable-dropdown {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Style the search input within fo-fields-grid */
+.fo-fields-grid .searchable-dropdown .dropdown-search {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  font-size: 1rem;
+  padding: 0.5rem 2.5rem 0.5rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 1rem center;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.fo-fields-grid .searchable-dropdown .dropdown-search:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  cursor: text;
+}
+
+.fo-fields-grid .searchable-dropdown .dropdown-search.has-value {
+  background-color: #f0fdf4;
+  border-color: #22c55e;
+}
+
+/* Dropdown options container positioning */
+.fo-fields-grid .searchable-dropdown .dropdown-options {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--color-card);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: none;
+}
+
+.fo-fields-grid .searchable-dropdown.active .dropdown-options {
+  display: block;
+}
+
 /* Tablet: 2 columns */
 @media (max-width: 768px) {
   .fo-fields-grid {

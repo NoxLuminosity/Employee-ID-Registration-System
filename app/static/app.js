@@ -1571,25 +1571,35 @@ function initFormSubmission() {
       
       // Only require Division, Department, Campaign for Reprocessor type
       if (foTypeSelected.value === 'Reprocessor') {
-        // Check Division - now using native select
+        // Check Division - using searchable dropdown (hidden input stores value)
         const foDivision = document.getElementById('fo_division');
+        const foDivisionSearch = document.getElementById('fo_division_search');
         if (!foDivision || !foDivision.value || foDivision.value === '') {
           isValid = false;
-          if (foDivision) foDivision.style.borderColor = 'var(--color-danger)';
+          // Highlight the search input, not the hidden input
+          if (foDivisionSearch) foDivisionSearch.style.borderColor = 'var(--color-danger)';
+        } else {
+          if (foDivisionSearch) foDivisionSearch.style.borderColor = '';
         }
         
-        // Check Department - now using native select
+        // Check Department - using searchable dropdown (hidden input stores value)
         const foDepartment = document.getElementById('fo_department');
+        const foDepartmentSearch = document.getElementById('fo_department_search');
         if (!foDepartment || !foDepartment.value || foDepartment.value === '') {
           isValid = false;
-          if (foDepartment) foDepartment.style.borderColor = 'var(--color-danger)';
+          if (foDepartmentSearch) foDepartmentSearch.style.borderColor = 'var(--color-danger)';
+        } else {
+          if (foDepartmentSearch) foDepartmentSearch.style.borderColor = '';
         }
         
-        // Check Campaign - now using native select
+        // Check Campaign - using searchable dropdown (hidden input stores value)
         const foCampaign = document.getElementById('fo_campaign');
+        const foCampaignSearch = document.getElementById('fo_campaign_search');
         if (!foCampaign || !foCampaign.value || foCampaign.value === '') {
           isValid = false;
-          if (foCampaign) foCampaign.style.borderColor = 'var(--color-danger)';
+          if (foCampaignSearch) foCampaignSearch.style.borderColor = 'var(--color-danger)';
+        } else {
+          if (foCampaignSearch) foCampaignSearch.style.borderColor = '';
         }
       }
     }

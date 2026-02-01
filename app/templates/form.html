@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employee ID Registration</title>
   <meta name="description" content="Employee ID Registration System - Submit your details for company ID card">
-  <link rel="stylesheet" href="/static/styles.css?v=7">
+  <link rel="stylesheet" href="/static/styles.css?v=8">
   <style>
     /* User Info Bar Styles */
     .user-info-bar {
@@ -363,273 +363,324 @@
               </div>
             </div>
 
-            <!-- Field Officer Details Section (only visible when Field Officer is selected) -->
+            <!-- ============================================
+                 FIELD OFFICER DETAILS SECTION
+                 ============================================
+                 This section contains the Field Officer specific fields:
+                 - Field Clearance: Read-only field (always "Level 5")
+                 - Division: Searchable dropdown with 6 options
+                 - Department: Searchable dropdown with 43 options
+                 - Campaign: Searchable dropdown with 190+ options
+                 
+                 All dropdowns support:
+                 - Type-to-search filtering
+                 - Click to open/close
+                 - Keyboard navigation (arrows, enter, escape)
+                 - Accessibility with ARIA attributes
+            ============================================ -->
             <div id="field_officer_details" class="field-officer-details-section" style="display: none;">
               <div class="fo-fields-grid">
+                <!-- Field Clearance - Read-only field showing clearance level -->
                 <div class="form-group fo-field">
                   <label for="field_clearance">Field Clearance</label>
-                  <input type="text" id="field_clearance" name="field_clearance" value="Level 5" readonly class="readonly-field">
+                  <input type="text" id="field_clearance" name="field_clearance" value="Level 5" readonly class="readonly-field" aria-readonly="true">
                 </div>
+
+                <!-- Division - Searchable Dropdown -->
                 <div class="form-group fo-field">
-                  <label for="fo_division">Division <span class="required">*</span></label>
-                  <select id="fo_division" name="fo_division">
-                    <option value="" disabled selected>Select division...</option>
-                    <option value="Operations - Contact Center">Operations - Contact Center</option>
-                    <option value="Operations - Field Operations">Operations - Field Operations</option>
-                    <option value="Operations - Legal Operations">Operations - Legal Operations</option>
-                    <option value="Solutions">Solutions</option>
-                    <option value="Solutions - Business Development">Solutions - Business Development</option>
-                    <option value="Support - Security Guard">Support - Security Guard</option>
-                  </select>
+                  <label for="fo_division_search">Division <span class="required">*</span></label>
+                  <div class="searchable-dropdown" id="fo_division_dropdown" role="combobox" aria-expanded="false" aria-haspopup="listbox">
+                    <input type="text" 
+                           id="fo_division_search" 
+                           class="dropdown-search" 
+                           placeholder="Type to search division..." 
+                           autocomplete="off"
+                           aria-autocomplete="list"
+                           aria-controls="fo_division_options">
+                    <input type="hidden" id="fo_division" name="fo_division">
+                    <div class="dropdown-options" id="fo_division_options" role="listbox">
+                      <div class="dropdown-option" data-value="Operations - Contact Center" role="option">Operations - Contact Center</div>
+                      <div class="dropdown-option" data-value="Operations - Field Operations" role="option">Operations - Field Operations</div>
+                      <div class="dropdown-option" data-value="Operations - Legal Operations" role="option">Operations - Legal Operations</div>
+                      <div class="dropdown-option" data-value="Solutions" role="option">Solutions</div>
+                      <div class="dropdown-option" data-value="Solutions - Business Development" role="option">Solutions - Business Development</div>
+                      <div class="dropdown-option" data-value="Support - Security Guard" role="option">Support - Security Guard</div>
+                      <div class="no-results" style="display: none;">No matching divisions found</div>
+                    </div>
+                  </div>
                 </div>
+
+                <!-- Department - Searchable Dropdown -->
                 <div class="form-group fo-field">
-                  <label for="fo_department">Department <span class="required">*</span></label>
-                  <select id="fo_department" name="fo_department">
-                    <option value="" disabled selected>Select department...</option>
-                    <option value="MC1 - Audit and Compliance">MC1 - Audit and Compliance</option>
-                    <option value="MC1 - Consultant">MC1 - Consultant</option>
-                    <option value="MC1 - Data Management">MC1 - Data Management</option>
-                    <option value="MC1 - Executive Management">MC1 - Executive Management</option>
-                    <option value="MC1 - Finance & Accounting">MC1 - Finance & Accounting</option>
-                    <option value="MC1 - Founder">MC1 - Founder</option>
-                    <option value="MC1 - Quality Risk Management">MC1 - Quality Risk Management</option>
-                    <option value="MC1 - Sales & Marketing">MC1 - Sales & Marketing</option>
-                    <option value="MC1 - Systems & Infrastructures">MC1 - Systems & Infrastructures</option>
-                    <option value="MC1 - Workplace Management">MC1 - Workplace Management</option>
-                    <option value="MC10 - Field Operations">MC10 - Field Operations</option>
-                    <option value="MC10 - Sector C">MC10 - Sector C</option>
-                    <option value="MC11 - Sector C">MC11 - Sector C</option>
-                    <option value="MC12 - Field Operations">MC12 - Field Operations</option>
-                    <option value="MC12 - Legal Collections">MC12 - Legal Collections</option>
-                    <option value="MC12 - Legal Operations">MC12 - Legal Operations</option>
-                    <option value="MC13 - Field as a C.I.">MC13 - Field as a C.I.</option>
-                    <option value="MC13 - Field Operations">MC13 - Field Operations</option>
-                    <option value="MC13 - Field Solutions">MC13 - Field Solutions</option>
-                    <option value="MC14 - Employee Engagement">MC14 - Employee Engagement</option>
-                    <option value="MC14 - People Support">MC14 - People Support</option>
-                    <option value="MC14 - Talent Acquisition">MC14 - Talent Acquisition</option>
-                    <option value="MC15 - Innovation Factory">MC15 - Innovation Factory</option>
-                    <option value="MC16 - Sector D">MC16 - Sector D</option>
-                    <option value="MC17 - Sector X">MC17 - Sector X</option>
-                    <option value="MC18 - Sector D">MC18 - Sector D</option>
-                    <option value="MC19 - Kapedad">MC19 - Kapedad</option>
-                    <option value="MC2 - Field Operations">MC2 - Field Operations</option>
-                    <option value="MC2 - Sector A">MC2 - Sector A</option>
-                    <option value="MC20 - Interns">MC20 - Interns</option>
-                    <option value="MC21 - Field Operations">MC21 - Field Operations</option>
-                    <option value="MC21 - Sector X">MC21 - Sector X</option>
-                    <option value="MC22 - Sector D">MC22 - Sector D</option>
-                    <option value="MC3 - Sector A">MC3 - Sector A</option>
-                    <option value="MC4 - Field Operations">MC4 - Field Operations</option>
-                    <option value="MC4 - Sector A">MC4 - Sector A</option>
-                    <option value="MC5 - Field Operations">MC5 - Field Operations</option>
-                    <option value="MC5 - Sector A">MC5 - Sector A</option>
-                    <option value="MC6 - Sector A">MC6 - Sector A</option>
-                    <option value="MC7 - Sector B">MC7 - Sector B</option>
-                    <option value="MC8 - Sector C">MC8 - Sector C</option>
-                    <option value="MC9 - Sector C">MC9 - Sector C</option>
-                    <option value="Support - Security Guard">Support - Security Guard</option>
-                  </select>
+                  <label for="fo_department_search">Department <span class="required">*</span></label>
+                  <div class="searchable-dropdown" id="fo_department_dropdown" role="combobox" aria-expanded="false" aria-haspopup="listbox">
+                    <input type="text" 
+                           id="fo_department_search" 
+                           class="dropdown-search" 
+                           placeholder="Type to search department..." 
+                           autocomplete="off"
+                           aria-autocomplete="list"
+                           aria-controls="fo_department_options">
+                    <input type="hidden" id="fo_department" name="fo_department">
+                    <div class="dropdown-options" id="fo_department_options" role="listbox">
+                      <div class="dropdown-option" data-value="MC1 - Audit and Compliance" role="option">MC1 - Audit and Compliance</div>
+                      <div class="dropdown-option" data-value="MC1 - Consultant" role="option">MC1 - Consultant</div>
+                      <div class="dropdown-option" data-value="MC1 - Data Management" role="option">MC1 - Data Management</div>
+                      <div class="dropdown-option" data-value="MC1 - Executive Management" role="option">MC1 - Executive Management</div>
+                      <div class="dropdown-option" data-value="MC1 - Finance & Accounting" role="option">MC1 - Finance & Accounting</div>
+                      <div class="dropdown-option" data-value="MC1 - Founder" role="option">MC1 - Founder</div>
+                      <div class="dropdown-option" data-value="MC1 - Quality Risk Management" role="option">MC1 - Quality Risk Management</div>
+                      <div class="dropdown-option" data-value="MC1 - Sales & Marketing" role="option">MC1 - Sales & Marketing</div>
+                      <div class="dropdown-option" data-value="MC1 - Systems & Infrastructures" role="option">MC1 - Systems & Infrastructures</div>
+                      <div class="dropdown-option" data-value="MC1 - Workplace Management" role="option">MC1 - Workplace Management</div>
+                      <div class="dropdown-option" data-value="MC10 - Field Operations" role="option">MC10 - Field Operations</div>
+                      <div class="dropdown-option" data-value="MC10 - Sector C" role="option">MC10 - Sector C</div>
+                      <div class="dropdown-option" data-value="MC11 - Sector C" role="option">MC11 - Sector C</div>
+                      <div class="dropdown-option" data-value="MC12 - Field Operations" role="option">MC12 - Field Operations</div>
+                      <div class="dropdown-option" data-value="MC12 - Legal Collections" role="option">MC12 - Legal Collections</div>
+                      <div class="dropdown-option" data-value="MC12 - Legal Operations" role="option">MC12 - Legal Operations</div>
+                      <div class="dropdown-option" data-value="MC13 - Field as a C.I." role="option">MC13 - Field as a C.I.</div>
+                      <div class="dropdown-option" data-value="MC13 - Field Operations" role="option">MC13 - Field Operations</div>
+                      <div class="dropdown-option" data-value="MC13 - Field Solutions" role="option">MC13 - Field Solutions</div>
+                      <div class="dropdown-option" data-value="MC14 - Employee Engagement" role="option">MC14 - Employee Engagement</div>
+                      <div class="dropdown-option" data-value="MC14 - People Support" role="option">MC14 - People Support</div>
+                      <div class="dropdown-option" data-value="MC14 - Talent Acquisition" role="option">MC14 - Talent Acquisition</div>
+                      <div class="dropdown-option" data-value="MC15 - Innovation Factory" role="option">MC15 - Innovation Factory</div>
+                      <div class="dropdown-option" data-value="MC16 - Sector D" role="option">MC16 - Sector D</div>
+                      <div class="dropdown-option" data-value="MC17 - Sector X" role="option">MC17 - Sector X</div>
+                      <div class="dropdown-option" data-value="MC18 - Sector D" role="option">MC18 - Sector D</div>
+                      <div class="dropdown-option" data-value="MC19 - Kapedad" role="option">MC19 - Kapedad</div>
+                      <div class="dropdown-option" data-value="MC2 - Field Operations" role="option">MC2 - Field Operations</div>
+                      <div class="dropdown-option" data-value="MC2 - Sector A" role="option">MC2 - Sector A</div>
+                      <div class="dropdown-option" data-value="MC20 - Interns" role="option">MC20 - Interns</div>
+                      <div class="dropdown-option" data-value="MC21 - Field Operations" role="option">MC21 - Field Operations</div>
+                      <div class="dropdown-option" data-value="MC21 - Sector X" role="option">MC21 - Sector X</div>
+                      <div class="dropdown-option" data-value="MC22 - Sector D" role="option">MC22 - Sector D</div>
+                      <div class="dropdown-option" data-value="MC3 - Sector A" role="option">MC3 - Sector A</div>
+                      <div class="dropdown-option" data-value="MC4 - Field Operations" role="option">MC4 - Field Operations</div>
+                      <div class="dropdown-option" data-value="MC4 - Sector A" role="option">MC4 - Sector A</div>
+                      <div class="dropdown-option" data-value="MC5 - Field Operations" role="option">MC5 - Field Operations</div>
+                      <div class="dropdown-option" data-value="MC5 - Sector A" role="option">MC5 - Sector A</div>
+                      <div class="dropdown-option" data-value="MC6 - Sector A" role="option">MC6 - Sector A</div>
+                      <div class="dropdown-option" data-value="MC7 - Sector B" role="option">MC7 - Sector B</div>
+                      <div class="dropdown-option" data-value="MC8 - Sector C" role="option">MC8 - Sector C</div>
+                      <div class="dropdown-option" data-value="MC9 - Sector C" role="option">MC9 - Sector C</div>
+                      <div class="dropdown-option" data-value="Support - Security Guard" role="option">Support - Security Guard</div>
+                      <div class="no-results" style="display: none;">No matching departments found</div>
+                    </div>
+                  </div>
                 </div>
+
+                <!-- Campaign - Searchable Dropdown -->
                 <div class="form-group fo-field">
-                  <label for="fo_campaign">Campaign <span class="required">*</span></label>
-                  <select id="fo_campaign" name="fo_campaign">
-                    <option value="" disabled selected>Select campaign...</option>
-                    <option value="Aiqon">Aiqon</option>
-                    <option value="Audit and Compliance">Audit and Compliance</option>
-                    <option value="BDO AUTO LOAN">BDO AUTO LOAN</option>
-                    <option value="BDO Auto Loan Skip">BDO Auto Loan Skip</option>
-                    <option value="BDO Auto RMU">BDO Auto RMU</option>
-                    <option value="BDO Cards 30 DPD">BDO Cards 30 DPD</option>
-                    <option value="BDO Cards PRU">BDO Cards PRU</option>
-                    <option value="BDO Cards RECOV">BDO Cards RECOV</option>
-                    <option value="BDO Home Loan">BDO Home Loan</option>
-                    <option value="BDO Homeloan Skip">BDO Homeloan Skip</option>
-                    <option value="BDO Insurance">BDO Insurance</option>
-                    <option value="BMI Motor Loan">BMI Motor Loan</option>
-                    <option value="BNB MSME NWO">BNB MSME NWO</option>
-                    <option value="BNB MSME WO">BNB MSME WO</option>
-                    <option value="BNB Salary Loan">BNB Salary Loan</option>
-                    <option value="BPI Auto Curing SL">BPI Auto Curing SL</option>
-                    <option value="BPI Auto Loan">BPI Auto Loan</option>
-                    <option value="BPI BanKo PL 30-90DPD">BPI BanKo PL 30-90DPD</option>
-                    <option value="BPI BanKo PWO 90-180DPD">BPI BanKo PWO 90-180DPD</option>
-                    <option value="BPI BanKo SL">BPI BanKo SL</option>
-                    <option value="BPI BanKo Write-off">BPI BanKo Write-off</option>
-                    <option value="BPI BL Early BL">BPI BL Early BL</option>
-                    <option value="BPI BL Remedial BL">BPI BL Remedial BL</option>
-                    <option value="BPI Cards 30DPD SL">BPI Cards 30DPD SL</option>
-                    <option value="BPI Cards Proj Rev Luz CC">BPI Cards Proj Rev Luz CC</option>
-                    <option value="BPI Cards Proj Rev Min CC">BPI Cards Proj Rev Min CC</option>
-                    <option value="BPI Cards Proj Rev Vis CC">BPI Cards Proj Rev Vis CC</option>
-                    <option value="BPI Cards PWO 120 Luz CC">BPI Cards PWO 120 Luz CC</option>
-                    <option value="BPI Cards PWO 120 Min CC">BPI Cards PWO 120 Min CC</option>
-                    <option value="BPI Cards PWO 120 Vis CC">BPI Cards PWO 120 Vis CC</option>
-                    <option value="BPI Cards PWO 150 Luz CC">BPI Cards PWO 150 Luz CC</option>
-                    <option value="BPI Cards PWO 180 Luz CC">BPI Cards PWO 180 Luz CC</option>
-                    <option value="BPI Cards PWO 180 Min CC">BPI Cards PWO 180 Min CC</option>
-                    <option value="BPI Cards Reco Luz CC">BPI Cards Reco Luz CC</option>
-                    <option value="BPI Cards Reco Min CC">BPI Cards Reco Min CC</option>
-                    <option value="BPI Cards Reco Vis CC">BPI Cards Reco Vis CC</option>
-                    <option value="BPI Cards Xdays SL">BPI Cards Xdays SL</option>
-                    <option value="BPI Insurance">BPI Insurance</option>
-                    <option value="BPI PL 30DPD SL">BPI PL 30DPD SL</option>
-                    <option value="BPI PL 60DPD SL">BPI PL 60DPD SL</option>
-                    <option value="BPI PL Proj Rev Luz PL">BPI PL Proj Rev Luz PL</option>
-                    <option value="BPI PL PWO 120 Luz PL">BPI PL PWO 120 Luz PL</option>
-                    <option value="BPI PL PWO 120 Min PL">BPI PL PWO 120 Min PL</option>
-                    <option value="BPI PL PWO 150 Luz PL">BPI PL PWO 150 Luz PL</option>
-                    <option value="BPI PL PWO 180 Luz PL">BPI PL PWO 180 Luz PL</option>
-                    <option value="BPI PL PWO 180 Min PL">BPI PL PWO 180 Min PL</option>
-                    <option value="BPI PL Reco Luz PL">BPI PL Reco Luz PL</option>
-                    <option value="BPI PL Reco Min PL">BPI PL Reco Min PL</option>
-                    <option value="BPI PL Reco Vis PL">BPI PL Reco Vis PL</option>
-                    <option value="BPI PL Xdays SL">BPI PL Xdays SL</option>
-                    <option value="BPI Rbank Cards 30DPD SL">BPI Rbank Cards 30DPD SL</option>
-                    <option value="BPI Rbank CC">BPI Rbank CC</option>
-                    <option value="BPI Rbank Instabale">BPI Rbank Instabale</option>
-                    <option value="BPI Rbank Instabale SL">BPI Rbank Instabale SL</option>
-                    <option value="BPI Rbank PL">BPI Rbank PL</option>
-                    <option value="BPI Rbank PL 30DPD SL">BPI Rbank PL 30DPD SL</option>
-                    <option value="BPI Rbank PL 60DPD SL">BPI Rbank PL 60DPD SL</option>
-                    <option value="BPI Special Project PL">BPI Special Project PL</option>
-                    <option value="CBC Cards">CBC Cards</option>
-                    <option value="CBS Auto Loan">CBS Auto Loan</option>
-                    <option value="CBS Housing Loan">CBS Housing Loan</option>
-                    <option value="CBS Personal Loan">CBS Personal Loan</option>
-                    <option value="CIMB">CIMB</option>
-                    <option value="COLL Debt Auto Loan">COLL Debt Auto Loan</option>
-                    <option value="COLL Debt Purchase">COLL Debt Purchase</option>
-                    <option value="Consultant">Consultant</option>
-                    <option value="CSB Motor Loan">CSB Motor Loan</option>
-                    <option value="CSB Personal Loan">CSB Personal Loan</option>
-                    <option value="Data Management">Data Management</option>
-                    <option value="Emirates Islamic">Emirates Islamic</option>
-                    <option value="Emirates NBD">Emirates NBD</option>
-                    <option value="Employee Engagement">Employee Engagement</option>
-                    <option value="EWB Auto Loan Curing">EWB Auto Loan Curing</option>
-                    <option value="EWB Auto Loan Recov">EWB Auto Loan Recov</option>
-                    <option value="EWB Cards">EWB Cards</option>
-                    <option value="EWB Cards L4">EWB Cards L4</option>
-                    <option value="EWB Early">EWB Early</option>
-                    <option value="EWB Personal Loan">EWB Personal Loan</option>
-                    <option value="Executive Management">Executive Management</option>
-                    <option value="Farm Top">Farm Top</option>
-                    <option value="Field Operations">Field Operations</option>
-                    <option value="Field Solutions">Field Solutions</option>
-                    <option value="Finance & Accounting">Finance & Accounting</option>
-                    <option value="Founder">Founder</option>
-                    <option value="FUSE FinTech">FUSE FinTech</option>
-                    <option value="FUSE Fintech SL">FUSE Fintech SL</option>
-                    <option value="Garnet Fintech">Garnet Fintech</option>
-                    <option value="Globe Digital Loan">Globe Digital Loan</option>
-                    <option value="HomeCredit">HomeCredit</option>
-                    <option value="HSBC Bahrain">HSBC Bahrain</option>
-                    <option value="HSBC Cards">HSBC Cards</option>
-                    <option value="HSBC Qatar">HSBC Qatar</option>
-                    <option value="HSBC UAE Cards">HSBC UAE Cards</option>
-                    <option value="Innovation Factory">Innovation Factory</option>
-                    <option value="Interns">Interns</option>
-                    <option value="Kapedad">Kapedad</option>
-                    <option value="Legal BDO">Legal BDO</option>
-                    <option value="Legal BMI MCL">Legal BMI MCL</option>
-                    <option value="Legal BNB MSME">Legal BNB MSME</option>
-                    <option value="Legal BNB SL">Legal BNB SL</option>
-                    <option value="Legal BPI">Legal BPI</option>
-                    <option value="Legal CSB DEPED">Legal CSB DEPED</option>
-                    <option value="Legal HSBC">Legal HSBC</option>
-                    <option value="Legal Jia">Legal Jia</option>
-                    <option value="Legal PNB">Legal PNB</option>
-                    <option value="Legal RCBC">Legal RCBC</option>
-                    <option value="Legal SBC">Legal SBC</option>
-                    <option value="Legal SBF">Legal SBF</option>
-                    <option value="Legal Service">Legal Service</option>
-                    <option value="Legal UBP">Legal UBP</option>
-                    <option value="Manulife">Manulife</option>
-                    <option value="Maya Recovery">Maya Recovery</option>
-                    <option value="MAYA FinTech">MAYA FinTech</option>
-                    <option value="MBA Debt Purchase">MBA Debt Purchase</option>
-                    <option value="MBTC Cards 30DPD">MBTC Cards 30DPD</option>
-                    <option value="MBTC Cards EPA">MBTC Cards EPA</option>
-                    <option value="MBTC Cards P150">MBTC Cards P150</option>
-                    <option value="MBTC Cards P2">MBTC Cards P2</option>
-                    <option value="MBTC Cards P360">MBTC Cards P360</option>
-                    <option value="MBTC Cards P4">MBTC Cards P4</option>
-                    <option value="MBTC Cards P90">MBTC Cards P90</option>
-                    <option value="MBTC Cards Rest">MBTC Cards Rest</option>
-                    <option value="MBTC Cards SPL">MBTC Cards SPL</option>
-                    <option value="MSB Auto Loan">MSB Auto Loan</option>
-                    <option value="MSB Motor Loan">MSB Motor Loan</option>
-                    <option value="MSB Personal Loan">MSB Personal Loan</option>
-                    <option value="One Mega Skip">One Mega Skip</option>
-                    <option value="OneLot Financing">OneLot Financing</option>
-                    <option value="Orico Auto Loan">Orico Auto Loan</option>
-                    <option value="People Support">People Support</option>
-                    <option value="Petron Finance & Accounting">Petron Finance & Accounting</option>
-                    <option value="PIF Foreclosure">PIF Foreclosure</option>
-                    <option value="PIF Home Loan">PIF Home Loan</option>
-                    <option value="PIF Provident">PIF Provident</option>
-                    <option value="PNB Auto Loan">PNB Auto Loan</option>
-                    <option value="PNB Home Loan">PNB Home Loan</option>
-                    <option value="PSB Auto Curing">PSB Auto Curing</option>
-                    <option value="PSB Auto Loan">PSB Auto Loan</option>
-                    <option value="PSB Personal Loan Fresh">PSB Personal Loan Fresh</option>
-                    <option value="PSB Personal Loan Rem17">PSB Personal Loan Rem17</option>
-                    <option value="Quality Risk Management">Quality Risk Management</option>
-                    <option value="RCBC Auto Loan">RCBC Auto Loan</option>
-                    <option value="RCBC Auto Loan Skip">RCBC Auto Loan Skip</option>
-                    <option value="RCBC Cards PWO">RCBC Cards PWO</option>
-                    <option value="RCBC Cards WO">RCBC Cards WO</option>
-                    <option value="RCBC PL">RCBC PL</option>
-                    <option value="ROB Auto Loan">ROB Auto Loan</option>
-                    <option value="ROB Motor Loan">ROB Motor Loan</option>
-                    <option value="Robinsons Auto Skips">Robinsons Auto Skips</option>
-                    <option value="Robinsons Homeloan">Robinsons Homeloan</option>
-                    <option value="Sales & Marketing">Sales & Marketing</option>
-                    <option value="SAVii">SAVii</option>
-                    <option value="SBC Auto Loan Curing">SBC Auto Loan Curing</option>
-                    <option value="SBC B2">SBC B2</option>
-                    <option value="SBC B4">SBC B4</option>
-                    <option value="SBC Business Loan">SBC Business Loan</option>
-                    <option value="SBC Housing Loan">SBC Housing Loan</option>
-                    <option value="SBC Insurance">SBC Insurance</option>
-                    <option value="SBC L1">SBC L1</option>
-                    <option value="SBC L6">SBC L6</option>
-                    <option value="SBC Personal Loan Curing">SBC Personal Loan Curing</option>
-                    <option value="SBF Mortgage">SBF Mortgage</option>
-                    <option value="SBF Personal Loan">SBF Personal Loan</option>
-                    <option value="SBF Salad">SBF Salad</option>
-                    <option value="SBF SKip">SBF SKip</option>
-                    <option value="Security Guard">Security Guard</option>
-                    <option value="SUM Motor Loan">SUM Motor Loan</option>
-                    <option value="Systems & Infrastructures">Systems & Infrastructures</option>
-                    <option value="TALA EDC">TALA EDC</option>
-                    <option value="TALA FPC">TALA FPC</option>
-                    <option value="Talent Acquisition">Talent Acquisition</option>
-                    <option value="Tendo Fintech">Tendo Fintech</option>
-                    <option value="TFS Auto Loan LVL 2">TFS Auto Loan LVL 2</option>
-                    <option value="TFS Auto Loan LVL 3">TFS Auto Loan LVL 3</option>
-                    <option value="TFS Auto Loan Skip">TFS Auto Loan Skip</option>
-                    <option value="Tonik Fintech">Tonik Fintech</option>
-                    <option value="Training & Development">Training & Development</option>
-                    <option value="UBP Commbank">UBP Commbank</option>
-                    <option value="UBP Home Mortgage">UBP Home Mortgage</option>
-                    <option value="UBP PreWrite Blue">UBP PreWrite Blue</option>
-                    <option value="UBP PreWrite NTB">UBP PreWrite NTB</option>
-                    <option value="UBP PreWrite Orange">UBP PreWrite Orange</option>
-                    <option value="UBP PreWrite PLBIF">UBP PreWrite PLBIF</option>
-                    <option value="UBP Recov Blue">UBP Recov Blue</option>
-                    <option value="UBP Recov Newly">UBP Recov Newly</option>
-                    <option value="UBP Recov OLD 1">UBP Recov OLD 1</option>
-                    <option value="UBP Recov OLD 2">UBP Recov OLD 2</option>
-                    <option value="UBP Recov PL">UBP Recov PL</option>
-                    <option value="UBP Recov YM">UBP Recov YM</option>
-                    <option value="UBP Seekcap">UBP Seekcap</option>
-                    <option value="UBP SF Eca">UBP SF Eca</option>
-                    <option value="UBP SF Recov">UBP SF Recov</option>
-                    <option value="Uno Bank">Uno Bank</option>
-                    <option value="Workplace Management">Workplace Management</option>
-                  </select>
+                  <label for="fo_campaign_search">Campaign <span class="required">*</span></label>
+                  <div class="searchable-dropdown" id="fo_campaign_dropdown" role="combobox" aria-expanded="false" aria-haspopup="listbox">
+                    <input type="text" 
+                           id="fo_campaign_search" 
+                           class="dropdown-search" 
+                           placeholder="Type to search campaign..." 
+                           autocomplete="off"
+                           aria-autocomplete="list"
+                           aria-controls="fo_campaign_options">
+                    <input type="hidden" id="fo_campaign" name="fo_campaign">
+                    <div class="dropdown-options" id="fo_campaign_options" role="listbox">
+                      <div class="dropdown-option" data-value="Aiqon" role="option">Aiqon</div>
+                      <div class="dropdown-option" data-value="Audit and Compliance" role="option">Audit and Compliance</div>
+                      <div class="dropdown-option" data-value="BDO AUTO LOAN" role="option">BDO AUTO LOAN</div>
+                      <div class="dropdown-option" data-value="BDO Auto Loan Skip" role="option">BDO Auto Loan Skip</div>
+                      <div class="dropdown-option" data-value="BDO Auto RMU" role="option">BDO Auto RMU</div>
+                      <div class="dropdown-option" data-value="BDO Cards 30 DPD" role="option">BDO Cards 30 DPD</div>
+                      <div class="dropdown-option" data-value="BDO Cards PRU" role="option">BDO Cards PRU</div>
+                      <div class="dropdown-option" data-value="BDO Cards RECOV" role="option">BDO Cards RECOV</div>
+                      <div class="dropdown-option" data-value="BDO Home Loan" role="option">BDO Home Loan</div>
+                      <div class="dropdown-option" data-value="BDO Homeloan Skip" role="option">BDO Homeloan Skip</div>
+                      <div class="dropdown-option" data-value="BDO Insurance" role="option">BDO Insurance</div>
+                      <div class="dropdown-option" data-value="BMI Motor Loan" role="option">BMI Motor Loan</div>
+                      <div class="dropdown-option" data-value="BNB MSME NWO" role="option">BNB MSME NWO</div>
+                      <div class="dropdown-option" data-value="BNB MSME WO" role="option">BNB MSME WO</div>
+                      <div class="dropdown-option" data-value="BNB Salary Loan" role="option">BNB Salary Loan</div>
+                      <div class="dropdown-option" data-value="BPI Auto Curing SL" role="option">BPI Auto Curing SL</div>
+                      <div class="dropdown-option" data-value="BPI Auto Loan" role="option">BPI Auto Loan</div>
+                      <div class="dropdown-option" data-value="BPI BanKo PL 30-90DPD" role="option">BPI BanKo PL 30-90DPD</div>
+                      <div class="dropdown-option" data-value="BPI BanKo PWO 90-180DPD" role="option">BPI BanKo PWO 90-180DPD</div>
+                      <div class="dropdown-option" data-value="BPI BanKo SL" role="option">BPI BanKo SL</div>
+                      <div class="dropdown-option" data-value="BPI BanKo Write-off" role="option">BPI BanKo Write-off</div>
+                      <div class="dropdown-option" data-value="BPI BL Early BL" role="option">BPI BL Early BL</div>
+                      <div class="dropdown-option" data-value="BPI BL Remedial BL" role="option">BPI BL Remedial BL</div>
+                      <div class="dropdown-option" data-value="BPI Cards 30DPD SL" role="option">BPI Cards 30DPD SL</div>
+                      <div class="dropdown-option" data-value="BPI Cards Proj Rev Luz CC" role="option">BPI Cards Proj Rev Luz CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards Proj Rev Min CC" role="option">BPI Cards Proj Rev Min CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards Proj Rev Vis CC" role="option">BPI Cards Proj Rev Vis CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards PWO 120 Luz CC" role="option">BPI Cards PWO 120 Luz CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards PWO 120 Min CC" role="option">BPI Cards PWO 120 Min CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards PWO 120 Vis CC" role="option">BPI Cards PWO 120 Vis CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards PWO 150 Luz CC" role="option">BPI Cards PWO 150 Luz CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards PWO 180 Luz CC" role="option">BPI Cards PWO 180 Luz CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards PWO 180 Min CC" role="option">BPI Cards PWO 180 Min CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards Reco Luz CC" role="option">BPI Cards Reco Luz CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards Reco Min CC" role="option">BPI Cards Reco Min CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards Reco Vis CC" role="option">BPI Cards Reco Vis CC</div>
+                      <div class="dropdown-option" data-value="BPI Cards Xdays SL" role="option">BPI Cards Xdays SL</div>
+                      <div class="dropdown-option" data-value="BPI Insurance" role="option">BPI Insurance</div>
+                      <div class="dropdown-option" data-value="BPI PL 30DPD SL" role="option">BPI PL 30DPD SL</div>
+                      <div class="dropdown-option" data-value="BPI PL 60DPD SL" role="option">BPI PL 60DPD SL</div>
+                      <div class="dropdown-option" data-value="BPI PL Proj Rev Luz PL" role="option">BPI PL Proj Rev Luz PL</div>
+                      <div class="dropdown-option" data-value="BPI PL PWO 120 Luz PL" role="option">BPI PL PWO 120 Luz PL</div>
+                      <div class="dropdown-option" data-value="BPI PL PWO 120 Min PL" role="option">BPI PL PWO 120 Min PL</div>
+                      <div class="dropdown-option" data-value="BPI PL PWO 150 Luz PL" role="option">BPI PL PWO 150 Luz PL</div>
+                      <div class="dropdown-option" data-value="BPI PL PWO 180 Luz PL" role="option">BPI PL PWO 180 Luz PL</div>
+                      <div class="dropdown-option" data-value="BPI PL PWO 180 Min PL" role="option">BPI PL PWO 180 Min PL</div>
+                      <div class="dropdown-option" data-value="BPI PL Reco Luz PL" role="option">BPI PL Reco Luz PL</div>
+                      <div class="dropdown-option" data-value="BPI PL Reco Min PL" role="option">BPI PL Reco Min PL</div>
+                      <div class="dropdown-option" data-value="BPI PL Reco Vis PL" role="option">BPI PL Reco Vis PL</div>
+                      <div class="dropdown-option" data-value="BPI PL Xdays SL" role="option">BPI PL Xdays SL</div>
+                      <div class="dropdown-option" data-value="BPI Rbank Cards 30DPD SL" role="option">BPI Rbank Cards 30DPD SL</div>
+                      <div class="dropdown-option" data-value="BPI Rbank CC" role="option">BPI Rbank CC</div>
+                      <div class="dropdown-option" data-value="BPI Rbank Instabale" role="option">BPI Rbank Instabale</div>
+                      <div class="dropdown-option" data-value="BPI Rbank Instabale SL" role="option">BPI Rbank Instabale SL</div>
+                      <div class="dropdown-option" data-value="BPI Rbank PL" role="option">BPI Rbank PL</div>
+                      <div class="dropdown-option" data-value="BPI Rbank PL 30DPD SL" role="option">BPI Rbank PL 30DPD SL</div>
+                      <div class="dropdown-option" data-value="BPI Rbank PL 60DPD SL" role="option">BPI Rbank PL 60DPD SL</div>
+                      <div class="dropdown-option" data-value="BPI Special Project PL" role="option">BPI Special Project PL</div>
+                      <div class="dropdown-option" data-value="CBC Cards" role="option">CBC Cards</div>
+                      <div class="dropdown-option" data-value="CBS Auto Loan" role="option">CBS Auto Loan</div>
+                      <div class="dropdown-option" data-value="CBS Housing Loan" role="option">CBS Housing Loan</div>
+                      <div class="dropdown-option" data-value="CBS Personal Loan" role="option">CBS Personal Loan</div>
+                      <div class="dropdown-option" data-value="CIMB" role="option">CIMB</div>
+                      <div class="dropdown-option" data-value="COLL Debt Auto Loan" role="option">COLL Debt Auto Loan</div>
+                      <div class="dropdown-option" data-value="COLL Debt Purchase" role="option">COLL Debt Purchase</div>
+                      <div class="dropdown-option" data-value="Consultant" role="option">Consultant</div>
+                      <div class="dropdown-option" data-value="CSB Motor Loan" role="option">CSB Motor Loan</div>
+                      <div class="dropdown-option" data-value="CSB Personal Loan" role="option">CSB Personal Loan</div>
+                      <div class="dropdown-option" data-value="Data Management" role="option">Data Management</div>
+                      <div class="dropdown-option" data-value="Emirates Islamic" role="option">Emirates Islamic</div>
+                      <div class="dropdown-option" data-value="Emirates NBD" role="option">Emirates NBD</div>
+                      <div class="dropdown-option" data-value="Employee Engagement" role="option">Employee Engagement</div>
+                      <div class="dropdown-option" data-value="EWB Auto Loan Curing" role="option">EWB Auto Loan Curing</div>
+                      <div class="dropdown-option" data-value="EWB Auto Loan Recov" role="option">EWB Auto Loan Recov</div>
+                      <div class="dropdown-option" data-value="EWB Cards" role="option">EWB Cards</div>
+                      <div class="dropdown-option" data-value="EWB Cards L4" role="option">EWB Cards L4</div>
+                      <div class="dropdown-option" data-value="EWB Early" role="option">EWB Early</div>
+                      <div class="dropdown-option" data-value="EWB Personal Loan" role="option">EWB Personal Loan</div>
+                      <div class="dropdown-option" data-value="Executive Management" role="option">Executive Management</div>
+                      <div class="dropdown-option" data-value="Farm Top" role="option">Farm Top</div>
+                      <div class="dropdown-option" data-value="Field Operations" role="option">Field Operations</div>
+                      <div class="dropdown-option" data-value="Field Solutions" role="option">Field Solutions</div>
+                      <div class="dropdown-option" data-value="Finance & Accounting" role="option">Finance & Accounting</div>
+                      <div class="dropdown-option" data-value="Founder" role="option">Founder</div>
+                      <div class="dropdown-option" data-value="FUSE FinTech" role="option">FUSE FinTech</div>
+                      <div class="dropdown-option" data-value="FUSE Fintech SL" role="option">FUSE Fintech SL</div>
+                      <div class="dropdown-option" data-value="Garnet Fintech" role="option">Garnet Fintech</div>
+                      <div class="dropdown-option" data-value="Globe Digital Loan" role="option">Globe Digital Loan</div>
+                      <div class="dropdown-option" data-value="HomeCredit" role="option">HomeCredit</div>
+                      <div class="dropdown-option" data-value="HSBC Bahrain" role="option">HSBC Bahrain</div>
+                      <div class="dropdown-option" data-value="HSBC Cards" role="option">HSBC Cards</div>
+                      <div class="dropdown-option" data-value="HSBC Qatar" role="option">HSBC Qatar</div>
+                      <div class="dropdown-option" data-value="HSBC UAE Cards" role="option">HSBC UAE Cards</div>
+                      <div class="dropdown-option" data-value="Innovation Factory" role="option">Innovation Factory</div>
+                      <div class="dropdown-option" data-value="Interns" role="option">Interns</div>
+                      <div class="dropdown-option" data-value="Kapedad" role="option">Kapedad</div>
+                      <div class="dropdown-option" data-value="Legal BDO" role="option">Legal BDO</div>
+                      <div class="dropdown-option" data-value="Legal BMI MCL" role="option">Legal BMI MCL</div>
+                      <div class="dropdown-option" data-value="Legal BNB MSME" role="option">Legal BNB MSME</div>
+                      <div class="dropdown-option" data-value="Legal BNB SL" role="option">Legal BNB SL</div>
+                      <div class="dropdown-option" data-value="Legal BPI" role="option">Legal BPI</div>
+                      <div class="dropdown-option" data-value="Legal CSB DEPED" role="option">Legal CSB DEPED</div>
+                      <div class="dropdown-option" data-value="Legal HSBC" role="option">Legal HSBC</div>
+                      <div class="dropdown-option" data-value="Legal Jia" role="option">Legal Jia</div>
+                      <div class="dropdown-option" data-value="Legal PNB" role="option">Legal PNB</div>
+                      <div class="dropdown-option" data-value="Legal RCBC" role="option">Legal RCBC</div>
+                      <div class="dropdown-option" data-value="Legal SBC" role="option">Legal SBC</div>
+                      <div class="dropdown-option" data-value="Legal SBF" role="option">Legal SBF</div>
+                      <div class="dropdown-option" data-value="Legal Service" role="option">Legal Service</div>
+                      <div class="dropdown-option" data-value="Legal UBP" role="option">Legal UBP</div>
+                      <div class="dropdown-option" data-value="Manulife" role="option">Manulife</div>
+                      <div class="dropdown-option" data-value="Maya Recovery" role="option">Maya Recovery</div>
+                      <div class="dropdown-option" data-value="MAYA FinTech" role="option">MAYA FinTech</div>
+                      <div class="dropdown-option" data-value="MBA Debt Purchase" role="option">MBA Debt Purchase</div>
+                      <div class="dropdown-option" data-value="MBTC Cards 30DPD" role="option">MBTC Cards 30DPD</div>
+                      <div class="dropdown-option" data-value="MBTC Cards EPA" role="option">MBTC Cards EPA</div>
+                      <div class="dropdown-option" data-value="MBTC Cards P150" role="option">MBTC Cards P150</div>
+                      <div class="dropdown-option" data-value="MBTC Cards P2" role="option">MBTC Cards P2</div>
+                      <div class="dropdown-option" data-value="MBTC Cards P360" role="option">MBTC Cards P360</div>
+                      <div class="dropdown-option" data-value="MBTC Cards P4" role="option">MBTC Cards P4</div>
+                      <div class="dropdown-option" data-value="MBTC Cards P90" role="option">MBTC Cards P90</div>
+                      <div class="dropdown-option" data-value="MBTC Cards Rest" role="option">MBTC Cards Rest</div>
+                      <div class="dropdown-option" data-value="MBTC Cards SPL" role="option">MBTC Cards SPL</div>
+                      <div class="dropdown-option" data-value="MSB Auto Loan" role="option">MSB Auto Loan</div>
+                      <div class="dropdown-option" data-value="MSB Motor Loan" role="option">MSB Motor Loan</div>
+                      <div class="dropdown-option" data-value="MSB Personal Loan" role="option">MSB Personal Loan</div>
+                      <div class="dropdown-option" data-value="One Mega Skip" role="option">One Mega Skip</div>
+                      <div class="dropdown-option" data-value="OneLot Financing" role="option">OneLot Financing</div>
+                      <div class="dropdown-option" data-value="Orico Auto Loan" role="option">Orico Auto Loan</div>
+                      <div class="dropdown-option" data-value="People Support" role="option">People Support</div>
+                      <div class="dropdown-option" data-value="Petron Finance & Accounting" role="option">Petron Finance & Accounting</div>
+                      <div class="dropdown-option" data-value="PIF Foreclosure" role="option">PIF Foreclosure</div>
+                      <div class="dropdown-option" data-value="PIF Home Loan" role="option">PIF Home Loan</div>
+                      <div class="dropdown-option" data-value="PIF Provident" role="option">PIF Provident</div>
+                      <div class="dropdown-option" data-value="PNB Auto Loan" role="option">PNB Auto Loan</div>
+                      <div class="dropdown-option" data-value="PNB Home Loan" role="option">PNB Home Loan</div>
+                      <div class="dropdown-option" data-value="PSB Auto Curing" role="option">PSB Auto Curing</div>
+                      <div class="dropdown-option" data-value="PSB Auto Loan" role="option">PSB Auto Loan</div>
+                      <div class="dropdown-option" data-value="PSB Personal Loan Fresh" role="option">PSB Personal Loan Fresh</div>
+                      <div class="dropdown-option" data-value="PSB Personal Loan Rem17" role="option">PSB Personal Loan Rem17</div>
+                      <div class="dropdown-option" data-value="Quality Risk Management" role="option">Quality Risk Management</div>
+                      <div class="dropdown-option" data-value="RCBC Auto Loan" role="option">RCBC Auto Loan</div>
+                      <div class="dropdown-option" data-value="RCBC Auto Loan Skip" role="option">RCBC Auto Loan Skip</div>
+                      <div class="dropdown-option" data-value="RCBC Cards PWO" role="option">RCBC Cards PWO</div>
+                      <div class="dropdown-option" data-value="RCBC Cards WO" role="option">RCBC Cards WO</div>
+                      <div class="dropdown-option" data-value="RCBC PL" role="option">RCBC PL</div>
+                      <div class="dropdown-option" data-value="ROB Auto Loan" role="option">ROB Auto Loan</div>
+                      <div class="dropdown-option" data-value="ROB Motor Loan" role="option">ROB Motor Loan</div>
+                      <div class="dropdown-option" data-value="Robinsons Auto Skips" role="option">Robinsons Auto Skips</div>
+                      <div class="dropdown-option" data-value="Robinsons Homeloan" role="option">Robinsons Homeloan</div>
+                      <div class="dropdown-option" data-value="Sales & Marketing" role="option">Sales & Marketing</div>
+                      <div class="dropdown-option" data-value="SAVii" role="option">SAVii</div>
+                      <div class="dropdown-option" data-value="SBC Auto Loan Curing" role="option">SBC Auto Loan Curing</div>
+                      <div class="dropdown-option" data-value="SBC B2" role="option">SBC B2</div>
+                      <div class="dropdown-option" data-value="SBC B4" role="option">SBC B4</div>
+                      <div class="dropdown-option" data-value="SBC Business Loan" role="option">SBC Business Loan</div>
+                      <div class="dropdown-option" data-value="SBC Housing Loan" role="option">SBC Housing Loan</div>
+                      <div class="dropdown-option" data-value="SBC Insurance" role="option">SBC Insurance</div>
+                      <div class="dropdown-option" data-value="SBC L1" role="option">SBC L1</div>
+                      <div class="dropdown-option" data-value="SBC L6" role="option">SBC L6</div>
+                      <div class="dropdown-option" data-value="SBC Personal Loan Curing" role="option">SBC Personal Loan Curing</div>
+                      <div class="dropdown-option" data-value="SBF Mortgage" role="option">SBF Mortgage</div>
+                      <div class="dropdown-option" data-value="SBF Personal Loan" role="option">SBF Personal Loan</div>
+                      <div class="dropdown-option" data-value="SBF Salad" role="option">SBF Salad</div>
+                      <div class="dropdown-option" data-value="SBF SKip" role="option">SBF SKip</div>
+                      <div class="dropdown-option" data-value="Security Guard" role="option">Security Guard</div>
+                      <div class="dropdown-option" data-value="SUM Motor Loan" role="option">SUM Motor Loan</div>
+                      <div class="dropdown-option" data-value="Systems & Infrastructures" role="option">Systems & Infrastructures</div>
+                      <div class="dropdown-option" data-value="TALA EDC" role="option">TALA EDC</div>
+                      <div class="dropdown-option" data-value="TALA FPC" role="option">TALA FPC</div>
+                      <div class="dropdown-option" data-value="Talent Acquisition" role="option">Talent Acquisition</div>
+                      <div class="dropdown-option" data-value="Tendo Fintech" role="option">Tendo Fintech</div>
+                      <div class="dropdown-option" data-value="TFS Auto Loan LVL 2" role="option">TFS Auto Loan LVL 2</div>
+                      <div class="dropdown-option" data-value="TFS Auto Loan LVL 3" role="option">TFS Auto Loan LVL 3</div>
+                      <div class="dropdown-option" data-value="TFS Auto Loan Skip" role="option">TFS Auto Loan Skip</div>
+                      <div class="dropdown-option" data-value="Tonik Fintech" role="option">Tonik Fintech</div>
+                      <div class="dropdown-option" data-value="Training & Development" role="option">Training & Development</div>
+                      <div class="dropdown-option" data-value="UBP Commbank" role="option">UBP Commbank</div>
+                      <div class="dropdown-option" data-value="UBP Home Mortgage" role="option">UBP Home Mortgage</div>
+                      <div class="dropdown-option" data-value="UBP PreWrite Blue" role="option">UBP PreWrite Blue</div>
+                      <div class="dropdown-option" data-value="UBP PreWrite NTB" role="option">UBP PreWrite NTB</div>
+                      <div class="dropdown-option" data-value="UBP PreWrite Orange" role="option">UBP PreWrite Orange</div>
+                      <div class="dropdown-option" data-value="UBP PreWrite PLBIF" role="option">UBP PreWrite PLBIF</div>
+                      <div class="dropdown-option" data-value="UBP Recov Blue" role="option">UBP Recov Blue</div>
+                      <div class="dropdown-option" data-value="UBP Recov Newly" role="option">UBP Recov Newly</div>
+                      <div class="dropdown-option" data-value="UBP Recov OLD 1" role="option">UBP Recov OLD 1</div>
+                      <div class="dropdown-option" data-value="UBP Recov OLD 2" role="option">UBP Recov OLD 2</div>
+                      <div class="dropdown-option" data-value="UBP Recov PL" role="option">UBP Recov PL</div>
+                      <div class="dropdown-option" data-value="UBP Recov YM" role="option">UBP Recov YM</div>
+                      <div class="dropdown-option" data-value="UBP Seekcap" role="option">UBP Seekcap</div>
+                      <div class="dropdown-option" data-value="UBP SF Eca" role="option">UBP SF Eca</div>
+                      <div class="dropdown-option" data-value="UBP SF Recov" role="option">UBP SF Recov</div>
+                      <div class="dropdown-option" data-value="Uno Bank" role="option">Uno Bank</div>
+                      <div class="dropdown-option" data-value="Workplace Management" role="option">Workplace Management</div>
+                      <div class="no-results" style="display: none;">No matching campaigns found</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
