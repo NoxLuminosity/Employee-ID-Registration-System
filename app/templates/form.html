@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employee ID Registration</title>
   <meta name="description" content="Employee ID Registration System - Submit your details for company ID card">
-  <link rel="stylesheet" href="/static/styles.css?v=8">
+  <link rel="stylesheet" href="/static/styles.css?v=11">
   <style>
     /* User Info Bar Styles */
     .user-info-bar {
@@ -147,6 +147,80 @@
       width: 24px;
       height: 24px;
       flex-shrink: 0;
+    }
+    
+    /* Mobile Responsive Styles for Inline Elements */
+    @media (max-width: 768px) {
+      .user-info-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem;
+      }
+      .user-info-left {
+        flex-wrap: wrap;
+        width: 100%;
+      }
+      .user-badge {
+        margin-left: auto;
+      }
+      .logout-btn {
+        width: 100%;
+        justify-content: center;
+      }
+      .toast {
+        left: 10px;
+        right: 10px;
+        min-width: auto;
+        max-width: none;
+        transform: translateY(-100px);
+      }
+      .toast.show {
+        transform: translateY(0);
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .user-info-bar {
+        padding: 0.5rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+      }
+      .user-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 0.85rem;
+      }
+      .user-name {
+        font-size: 0.85rem;
+      }
+      .user-email {
+        font-size: 0.75rem;
+      }
+      .user-badge {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.5rem;
+      }
+      .logout-btn {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.625rem;
+      }
+      .prefilled-indicator {
+        display: block;
+        margin-left: 0;
+        margin-top: 0.25rem;
+      }
+      .toast {
+        top: 10px;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+      }
+      .toast-title {
+        font-size: 0.85rem;
+      }
+      .toast-message {
+        font-size: 0.8rem;
+      }
     }
     .toast.success .toast-icon {
       color: #10b981;
