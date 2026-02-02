@@ -348,6 +348,128 @@ def build_attachment_from_url(url: str, filename: str = None) -> Optional[List[D
 # ============================================
 
 
+def update_record_in_bitable(app_token: str, table_id: str, record_id: str, fields: Dict[str, Any], token: Optional[str] = None) -> bool:
+    """Update a record in Lark Bitable table.
+    
+    Args:
+        app_token: Lark Bitable app token (base ID)
+        table_id: Table ID within the app
+        record_id: The record ID to update
+        fields: Dictionary of field values to update
+        token: Optional pre-obtained access token (if None, will get default token)
+    """
+    logger.info(f"🔵 Updating record in Lark Bitable...")
+    logger.info(f"   App Token: {app_token[:10]}...{app_token[-4:]}")
+    logger.info(f"   Table ID: {table_id}")
+    logger.info(f"   Record ID: {record_id}")
+    logger.info(f"   Fields count: {len(fields)}")
+    
+    # Use provided token or get default
+    if token is None:
+        token = get_tenant_access_token()
+        if not token:
+            logger.error("❌ Failed to get tenant access token")
+            return False
+    
+    logger.info(f"✅ Got tenant access token: {token[:10]}...")
+    
+    try:
+        url = f"{LARK_BITABLE_RECORD_URL.format(app_token=app_token, table_id=table_id)}/{record_id}"
+        logger.info(f"📡 PUT URL: {url}")
+        
+        payload = {"fields": fields}
+        logger.info(f"📦 Payload field names: {list(fields.keys())}")
+        
+        response = _make_request(url, method="PUT", 
+            headers={"Authorization": f"Bearer {token}"},
+            data=payload
+        )
+        
+        logger.info(f"📥 Lark API Response: {json.dumps(response)[:500]}")
+        
+        if response.get("code") != 0:
+            error_msg = response.get('msg') or response.get('message') or 'Unknown error'
+            logger.error(f"❌ Lark Bitable update error (code {response.get('code')}): {error_msg}")
+            return False
+        
+        logger.info(f"✅ Successfully updated Lark Bitable record (record_id: {record_id})")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Exception in update_record_in_bitable: {str(e)}", exc_info=True)
+        return False
+
+
+def log_status_transition(id_number: str, old_status: str, new_status: str, source: str = "HR System") -> None:
+    """Log status transition with timestamp for traceability.
+    
+    Args:
+        id_number: Employee ID number
+        old_status: Previous status value
+        new_status: New status value
+        source: Source of the status change (e.g., "HR System", "PDF Download")
+    """
+    from datetime import datetime
+    timestamp = datetime.now().isoformat()
+    logger.info("=" * 60)
+    logger.info(f"📊 STATUS TRANSITION LOG")
+    logger.info(f"   Timestamp: {timestamp}")
+    logger.info(f"   Employee ID: {id_number}")
+    logger.info(f"   Transition: {old_status} → {new_status}")
+    logger.info(f"   Source: {source}")
+    logger.info("=" * 60)
+
+
+def find_and_update_employee_status(id_number: str, new_status: str, old_status: str = None, source: str = "HR System") -> bool:
+    """Find an employee by ID number and update their status in Lark Bitable.
+    
+    Args:
+        id_number: The employee's ID number to search for
+        new_status: The new status value (e.g., "Approved", "Completed")
+        old_status: Previous status for logging (optional)
+        source: Source of the status change for logging
+    
+    Returns:
+        True if update was successful, False otherwise
+    """
+    logger.info(f"🔍 Finding employee {id_number} in Lark Bitable to update status to '{new_status}'")
+    
+    # Log the status transition
+    log_status_transition(id_number, old_status or "Unknown", new_status, source)
+    
+    app_token = LARK_BITABLE_ID or os.environ.get('LARK_BITABLE_APP_TOKEN')
+    table_id = LARK_TABLE_ID or os.environ.get('LARK_BITABLE_TABLE_ID')
+    
+    if not app_token or not table_id:
+        logger.error("❌ Lark Bitable credentials not configured")
+        return False
+    
+    # Get all records and find the one with matching id_number
+    records = get_bitable_records(app_token, table_id, filter_formula=f'CurrentValue.[id_number]="{id_number}"')
+    
+    if not records:
+        logger.warning(f"⚠️ Employee {id_number} not found in Lark Bitable")
+        return False
+    
+    # Update the first matching record
+    record = records[0]
+    record_id = record.get("record_id")
+    
+    if not record_id:
+        logger.error(f"❌ No record_id found for employee {id_number}")
+        return False
+    
+    # Update just the status field
+    success = update_record_in_bitable(app_token, table_id, record_id, {"status": new_status})
+    
+    if success:
+        logger.info(f"✅ Larkbase status synced: {id_number} → {new_status}")
+    else:
+        logger.error(f"❌ Failed to sync Larkbase status for {id_number}")
+    
+    return success
+
+
 def append_record_to_bitable(app_token: str, table_id: str, fields: Dict[str, Any], token: Optional[str] = None) -> bool:
     """Append a record to Lark Bitable table.
     
@@ -602,14 +724,14 @@ def append_employee_submission(
         "position": position,
         "location_branch": location_branch or "",
         "email": email,
-        "personal number": phone_number,  # Number field - send as int
+        "personal_number": phone_number,  # Number field - send as int
         "status": status,
-        # Field Officer specific fields (only populated if Field Officer is selected)
+        # Field Officer specific fields - use column names matching Larkbase table
         "field_officer_type": field_officer_type or "",
         "field_clearance": field_clearance or "",
-        "fo_division": fo_division or "",
-        "fo_department": department or "",
-        "fo_campaign": fo_campaign or "",
+        "division": fo_division or "",  # Maps to 'division' column in Larkbase
+        "department": department or "",  # Maps to 'department' column in Larkbase
+        "campaign": fo_campaign or "",   # Maps to 'campaign' column in Larkbase
     }
     
     print(f"\\n[DEBUG] Fields being sent to Lark:")
@@ -651,11 +773,6 @@ def append_employee_submission(
         logger.info(f"✅ Signature URL added for {safe_id}")
     else:
         logger.info(f"ℹ️ No signature URL provided for {safe_id}")
-    
-    # Render URL (if provided) - Lark URL field format
-    if render_url:
-        fields["render_url"] = {"link": render_url, "text": "Render"}
-        logger.info(f"✅ Render URL added for {safe_id}")
     
     # =========================================
     # Step 3: Log final payload and append to Bitable

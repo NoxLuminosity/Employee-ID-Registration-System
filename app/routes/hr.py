@@ -610,8 +610,32 @@ def api_approve_employee(employee_id: int, hr_session: str = Cookie(None)):
                 content={"success": False, "error": "Failed to update employee"}
             )
 
-        logger.info(f"Employee {employee_id} approved")
-        return JSONResponse(content={"success": True, "message": "Application approved"})
+        # Sync status to Lark Bitable (one-way authoritative from HR side)
+        lark_synced = False
+        try:
+            from app.services.lark_service import find_and_update_employee_status
+            id_number = row.get("id_number")
+            old_status = row.get("status")
+            if id_number:
+                lark_synced = find_and_update_employee_status(
+                    id_number, 
+                    "Approved",
+                    old_status=old_status,
+                    source="HR Approval"
+                )
+                if lark_synced:
+                    logger.info(f"✅ Lark Bitable status synced to 'Approved' for employee {id_number}")
+                else:
+                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Approved' for employee {id_number}")
+        except Exception as lark_e:
+            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+
+        logger.info(f"Employee {employee_id} approved (Lark synced: {lark_synced})")
+        return JSONResponse(content={
+            "success": True, 
+            "message": "Application approved",
+            "lark_synced": lark_synced
+        })
 
     except Exception as e:
         logger.error(f"Error approving employee {employee_id}: {str(e)}")
@@ -789,7 +813,7 @@ def api_remove_background(employee_id: int, hr_session: str = Cookie(None)):
 
 @router.post("/api/employees/{employee_id}/complete")
 def api_complete_employee(employee_id: int, hr_session: str = Cookie(None)):
-    """Mark an employee's ID as completed (after download)"""
+    """Mark an employee's ID as completed (after PDF download) - syncs to Larkbase"""
     if not get_session(hr_session):
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     try:
@@ -802,10 +826,11 @@ def api_complete_employee(employee_id: int, hr_session: str = Cookie(None)):
                 content={"success": False, "error": "Employee not found"}
             )
 
-        if row.get("status") not in ["Approved", "Completed"]:
+        old_status = row.get("status")
+        if old_status not in ["Approved", "Completed"]:
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": f"Cannot mark as complete. Current status: {row.get('status')}"}
+                content={"success": False, "error": f"Cannot mark as complete. Current status: {old_status}"}
             )
 
         # Update status to Completed
@@ -821,8 +846,31 @@ def api_complete_employee(employee_id: int, hr_session: str = Cookie(None)):
                 content={"success": False, "error": "Failed to update employee"}
             )
 
-        logger.info(f"Employee {employee_id} marked as completed")
-        return JSONResponse(content={"success": True, "message": "ID marked as completed"})
+        # Sync status to Lark Bitable (one-way authoritative from HR side)
+        lark_synced = False
+        try:
+            from app.services.lark_service import find_and_update_employee_status
+            id_number = row.get("id_number")
+            if id_number:
+                lark_synced = find_and_update_employee_status(
+                    id_number, 
+                    "Completed", 
+                    old_status=old_status,
+                    source="PDF Download"
+                )
+                if lark_synced:
+                    logger.info(f"✅ Lark Bitable status synced to 'Completed' for employee {id_number}")
+                else:
+                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Completed' for employee {id_number}")
+        except Exception as lark_e:
+            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+
+        logger.info(f"Employee {employee_id} marked as completed (Lark synced: {lark_synced})")
+        return JSONResponse(content={
+            "success": True, 
+            "message": "ID marked as completed",
+            "lark_synced": lark_synced
+        })
 
     except Exception as e:
         logger.error(f"Error completing employee {employee_id}: {str(e)}")

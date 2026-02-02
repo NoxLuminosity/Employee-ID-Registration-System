@@ -120,8 +120,8 @@ const PDF_CONFIG_LANDSCAPE = {
   get RENDER_WIDTH_PX() { return Math.round(this.WIDTH_INCHES * this.PRINT_DPI); },  // 999px
   get RENDER_HEIGHT_PX() { return Math.round(this.HEIGHT_INCHES * this.PRINT_DPI); }, // 639px
   
-  // html2canvas scale factor (DPI ratio)
-  get CANVAS_SCALE() { return this.PRINT_DPI / this.SCREEN_DPI; }  // ~3.125
+  // html2canvas scale factor - use 4x for high quality PDF (matches portrait)
+  CANVAS_SCALE: 4
 };
 
 // Cache settings - MUST match dashboard.js for shared cache
@@ -995,7 +995,7 @@ function generateEmployeeInfoHtml(emp) {
   const foFieldsHtml = `
         <div class="preview-info-item">
           <span class="label">Field Clearance</span>
-          <span class="value">${escapeHtml(emp.field_clearance || '-')}</span>
+          <span class="value">${escapeHtml('Level 5')}</span>
         </div>
         <div class="preview-info-item">
           <span class="label">Division</span>
@@ -1007,7 +1007,7 @@ function generateEmployeeInfoHtml(emp) {
         </div>
         <div class="preview-info-item">
           <span class="label">Campaign</span>
-          <span class="value">${escapeHtml(emp.fo_campaign || '-')}</span>
+          <span class="value">${escapeHtml(formatCampaignValues(emp.fo_campaign))}</span>
         </div>
         ${isFieldOfficer ? `
         <div class="preview-info-item">
@@ -1646,6 +1646,13 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Format comma-separated campaign values with proper spacing
+function formatCampaignValues(campaigns) {
+  if (!campaigns || campaigns === '-') return '-';
+  // Split by comma, trim whitespace, and rejoin with ", "
+  return campaigns.split(',').map(c => c.trim()).filter(c => c).join(', ');
 }
 
 function debounce(func, wait) {

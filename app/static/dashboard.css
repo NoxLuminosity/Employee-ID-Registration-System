@@ -430,18 +430,15 @@
   color: var(--color-text-muted);
 }
 
-/* Campaign Cell - Handle multi-select values with truncation */
+/* Campaign Cell - Display multi-select values with proper formatting */
 .campaign-cell {
   display: inline-block;
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: help;
-}
+  max-width: 280px;
+  white-space: normal;
   word-break: break-word;
-}
-  color: var(--color-text-muted);
+  line-height: 1.4;
+  font-size: 0.85rem;
+  color: var(--color-text);
 }
 
 /* Status Badge */

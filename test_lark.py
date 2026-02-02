@@ -53,21 +53,31 @@ def test_lark_connection():
         print(f"   Check your LARK_APP_ID and LARK_APP_SECRET")
         return False
     
-    # Test appending a simple record using append_employee_submission
-    print(f"\n3. Testing Bitable Record Append...")
+    # Test appending a complete record using append_employee_submission with all fields
+    print(f"\n3. Testing Bitable Record Append with all fields...")
     success = append_employee_submission(
         employee_name="TEST USER - DELETE ME",
-        id_nickname="Test",
-        id_number="TEST-001",
-        position="Test Position",
-        department="Test Dept",
-        email="test@example.com",
-        personal_number="1234567890",
-        status="Reviewing",
-        date_last_modified="2026/01/30",  # Simple date format
         first_name="Test",
         middle_initial="T",
-        last_name="User"
+        last_name="User",
+        suffix="Jr.",
+        id_nickname="TestNick",
+        id_number="TEST-001",
+        personal_number="1234567890",
+        position="Test Position",
+        field_officer_type="Regular FO",
+        field_clearance="Level 5",
+        location_branch="Test Branch",
+        email="test@example.com",
+        fo_division="Test Division",
+        department="Test Department",
+        fo_campaign="Campaign A, Campaign B",
+        status="Reviewing",
+        date_last_modified="2026/01/30",
+        photo_url="https://example.com/photo.jpg",
+        ai_headshot_url="https://example.com/headshot.jpg",
+        signature_url="https://example.com/signature.jpg",
+        render_url="https://example.com/render.jpg"
     )
     
     if success:

@@ -409,8 +409,8 @@ function renderEmployeeTable() {
         <td>${escapeHtml(emp.location_branch || '-')}</td>
         <td>${escapeHtml(emp.fo_division || '-')}</td>
         <td>${escapeHtml(emp.fo_department || '-')}</td>
-        <td><span class="campaign-cell" title="${escapeHtml(emp.fo_campaign || '-')}">${escapeHtml(emp.fo_campaign || '-')}</span></td>
-        <td>${escapeHtml(emp.field_clearance || '-')}</td>
+        <td><span class="campaign-cell">${escapeHtml(formatCampaignValues(emp.fo_campaign))}</span></td>
+        <td>${escapeHtml('Level 5')}</td>
         <td><span class="status-badge ${statusClass}">${emp.status}</span></td>
         <td>${submittedDate}</td>
         <td>
@@ -808,6 +808,13 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Format comma-separated campaign values with proper spacing
+function formatCampaignValues(campaigns) {
+  if (!campaigns || campaigns === '-') return '-';
+  // Split by comma, trim whitespace, and rejoin with ", "
+  return campaigns.split(',').map(c => c.trim()).filter(c => c).join(', ');
 }
 
 function debounce(func, wait) {
