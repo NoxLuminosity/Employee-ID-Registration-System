@@ -471,17 +471,20 @@
                   </div>
                 </div>
 
-                <!-- Campaign - Searchable Dropdown -->
+                <!-- Campaign - Multi-Select Dropdown -->
                 <div class="form-group fo-field">
                   <label for="fo_campaign_search">Campaign <span class="required">*</span></label>
-                  <div class="searchable-dropdown" id="fo_campaign_dropdown" role="combobox" aria-expanded="false" aria-haspopup="listbox">
-                    <input type="text" 
-                           id="fo_campaign_search" 
-                           class="dropdown-search" 
-                           placeholder="Type to search campaign..." 
-                           autocomplete="off"
-                           aria-autocomplete="list"
-                           aria-controls="fo_campaign_options">
+                  <div class="multi-select-dropdown" id="fo_campaign_dropdown" role="combobox" aria-expanded="false" aria-haspopup="listbox">
+                    <div class="multi-select-container">
+                      <div class="selected-tags" id="fo_campaign_tags"></div>
+                      <input type="text" 
+                             id="fo_campaign_search" 
+                             class="dropdown-search multi-search" 
+                             placeholder="Type to search campaigns..." 
+                             autocomplete="off"
+                             aria-autocomplete="list"
+                             aria-controls="fo_campaign_options">
+                    </div>
                     <input type="hidden" id="fo_campaign" name="fo_campaign">
                     <div class="dropdown-options" id="fo_campaign_options" role="listbox">
                       <div class="dropdown-option" data-value="Aiqon" role="option">Aiqon</div>
@@ -895,6 +898,11 @@
                   <div class="id-photo-container">
                     <img id="id_preview_photo" src="" alt="Employee photo" style="display: none;">
                     <span class="id-photo-placeholder" id="id_preview_photo_placeholder">AI Image</span>
+                    <!-- Signature overlay at lower-right of photo -->
+                    <div class="id-signature-area">
+                      <img id="id_preview_signature" src="" alt="Signature" style="display: none;">
+                      <span class="id-signature-placeholder" id="id_preview_signature_placeholder">Signature</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -918,12 +926,6 @@
                       </div>
                       <p class="id-number-text" id="id_preview_idnumber">012402-081</p>
                     </div>
-                  </div>
-
-                  <!-- Right side - Signature (larger area with geometric background) -->
-                  <div class="id-signature-area">
-                    <img id="id_preview_signature" src="" alt="Signature" style="display: none;">
-                    <span class="id-signature-placeholder" id="id_preview_signature_placeholder">Signature</span>
                   </div>
                 </div>
 
@@ -1068,7 +1070,14 @@
                   <span class="id-fo-clearance-level" id="id_fo_preview_clearance">Level 5</span>
                 </div>
 
-                <!-- ID Number -->
+                <!-- Barcode - Above ID Number -->
+                <div class="id-fo-barcode-section">
+                  <div class="id-fo-barcode-placeholder">
+                    <span>Barcode</span>
+                  </div>
+                </div>
+
+                <!-- ID Number - Below Barcode -->
                 <div class="id-fo-idnumber-section">
                   <span class="id-fo-idnumber" id="id_fo_preview_idnumber">ID Number Placeholder</span>
                 </div>
@@ -1120,6 +1129,11 @@
                         <div class="id-photo-container">
                           <img id="dual_original_photo" src="" alt="Employee photo" style="display: none;">
                           <span class="id-photo-placeholder" id="dual_original_photo_placeholder">AI Image</span>
+                          <!-- Signature overlay at lower-right of photo -->
+                          <div class="id-signature-area">
+                            <img id="dual_original_signature" src="" alt="Signature" style="display: none;">
+                            <span class="id-signature-placeholder" id="dual_original_signature_placeholder">Signature</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1134,10 +1148,6 @@
                             <div class="id-barcode-placeholder"><span>Barcode</span></div>
                             <p class="id-number-text" id="dual_original_idnumber">012402-081</p>
                           </div>
-                        </div>
-                        <div class="id-signature-area">
-                          <img id="dual_original_signature" src="" alt="Signature" style="display: none;">
-                          <span class="id-signature-placeholder" id="dual_original_signature_placeholder">Signature</span>
                         </div>
                       </div>
                       <div class="id-website-strip">
@@ -1271,6 +1281,13 @@
                         <span class="id-fo-clearance-label">FIELD CLEARANCE:</span>
                         <span class="id-fo-clearance-level" id="dual_reprocessor_clearance">Level 5</span>
                       </div>
+                      <!-- Barcode - Above ID Number -->
+                      <div class="id-fo-barcode-section">
+                        <div class="id-fo-barcode-placeholder">
+                          <span>Barcode</span>
+                        </div>
+                      </div>
+                      <!-- ID Number - Below Barcode -->
                       <div class="id-fo-idnumber-section">
                         <span class="id-fo-idnumber" id="dual_reprocessor_idnumber">ID Number Placeholder</span>
                       </div>

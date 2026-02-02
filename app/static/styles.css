@@ -298,13 +298,15 @@ input[readonly]:focus {
 
 /* Removed duplicate - styles moved to .fo-fields-grid */
 
-/* Field Officer Fields Grid - clean horizontal layout matching form-grid */
-/* FIXED: Changed from 4 columns to 2 columns to prevent dropdown compression */
+/* Field Officer Fields Grid - Single column vertical layout
+   UPDATED: Changed to 1 column to match Location/Branch field width
+   Each field takes full width with consistent spacing */
 .fo-fields-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
-  gap: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
   width: 100%;
+  max-width: 100%;
   padding: 0;
 }
 
@@ -410,10 +412,9 @@ input[readonly]:focus {
   display: block;
 }
 
-/* Tablet: 2 columns */
+/* Tablet and below: maintain single column */
 @media (max-width: 768px) {
   .fo-fields-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--spacing-md);
   }
 }
@@ -538,6 +539,173 @@ input[readonly]:focus {
 }
 
 .searchable-dropdown .dropdown-options::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-hover);
+}
+
+/* Multi-Select Dropdown Styles */
+.multi-select-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.multi-select-dropdown .multi-select-container {
+  width: 100%;
+  min-height: 42px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  padding-right: 2.5rem;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: text;
+  transition: var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.multi-select-dropdown .multi-select-container:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.multi-select-dropdown .multi-select-container.has-value {
+  background: #e8f5e9;
+  border-color: var(--color-primary);
+}
+
+.multi-select-dropdown .selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.multi-select-dropdown .selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.multi-select-dropdown .selected-tag .remove-tag {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.multi-select-dropdown .selected-tag .remove-tag:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.multi-select-dropdown .dropdown-search.multi-search {
+  flex: 1;
+  min-width: 100px;
+  border: none;
+  outline: none;
+  padding: var(--spacing-xs);
+  font-size: 0.9rem;
+  background: transparent;
+  height: auto;
+  min-height: 28px;
+  box-shadow: none;
+}
+
+.multi-select-dropdown .dropdown-search.multi-search:focus {
+  box-shadow: none;
+}
+
+.multi-select-dropdown .dropdown-options {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--color-card);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: none;
+}
+
+.multi-select-dropdown.active .dropdown-options {
+  display: block;
+}
+
+.multi-select-dropdown .dropdown-option {
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-size: 0.9rem;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.multi-select-dropdown .dropdown-option:last-child {
+  border-bottom: none;
+}
+
+.multi-select-dropdown .dropdown-option:hover {
+  background: var(--color-primary-light);
+}
+
+.multi-select-dropdown .dropdown-option.selected-option {
+  background: #e8f5e9;
+  font-weight: 500;
+}
+
+.multi-select-dropdown .dropdown-option.selected-option::before {
+  content: "✓";
+  color: var(--color-primary);
+  font-weight: bold;
+}
+
+.multi-select-dropdown .dropdown-option.hidden {
+  display: none;
+}
+
+.multi-select-dropdown .no-results {
+  padding: var(--spacing-md);
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+/* Custom scrollbar for multi-select dropdown */
+.multi-select-dropdown .dropdown-options::-webkit-scrollbar {
+  width: 8px;
+}
+
+.multi-select-dropdown .dropdown-options::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.multi-select-dropdown .dropdown-options::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+
+.multi-select-dropdown .dropdown-options::-webkit-scrollbar-thumb:hover {
   background: var(--color-primary-hover);
 }
 
@@ -1831,52 +1999,49 @@ input::placeholder {
   margin-top: 4px;
 }
 
-/* Signature Area - Scaled for 512px card */
+/* Signature Area - White container overlapping AI photo at lower-right corner */
 .id-signature-area {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-top: 0;  /* Reset margin for middle alignment */
-  margin-right: 3px;
-  width: 240px;  /* Larger size as requested */
-  height: 120px;  /* Larger size as requested */
-  position: absolute;  /* Changed to absolute for precise positioning */
-  right: -30px;  /* Align with website strip */
-  top: 50%;  /* Center vertically */
-  transform: translateY(-50%);  /* Perfect vertical centering */
-  overflow: visible;
-  background-color: #f9fafb;
-  background-image: none;
+  width: 160px;
+  height: 70px;
+  position: absolute;
+  right: 16px;  /* Position at right side with padding */
+  bottom: 16px;  /* Position at bottom with padding */
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.92);  /* White with slight transparency */
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;  /* Rounded corners */
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);  /* Subtle shadow for depth */
+  z-index: 15;  /* Above photo but below nickname */
 }
 
-/* When signature image is present, hide the background pattern */
+/* When signature image is present, keep the white background */
 .id-signature-area.has-image {
-  background-image: none;
-  background-color: transparent;
+  background-color: rgba(255, 255, 255, 0.95);
 }
 
 .id-signature-area img {
   width: 100%;
   height: 100%;
-  object-fit: contain;  /* Contain ensures entire signature is visible and fits properly */
+  object-fit: contain;  /* Contain ensures entire signature is visible */
   object-position: center center;
   position: absolute;
   top: 0;
   left: 0;
   z-index: 1;
-  padding: 6px;  /* Proper padding for compact container */
+  padding: 8px;  /* Padding for signature */
   margin: 0;
   box-sizing: border-box;
-  filter: none;  /* No filters for better legibility */
+  filter: none;
 }
 
 .id-signature-placeholder {
   color: #9ca3af;
   font-weight: 400;
-  font-size: 13px;  /* Reduced */
+  font-size: 12px;
 }
 
 /* Website Strip */
@@ -2909,8 +3074,8 @@ input::placeholder {
 /* Photo Section - Left side with Philippine flag stamp and company badge */
 .id-fo-photo-section {
   position: absolute;
-  top: 68px;
-  left: 26px;
+  top: 95px;  /* Moved down 6px to better overlap with white background area */
+  left: 20px;
   width: 134px;
   display: flex;
   flex-direction: column;
@@ -3051,16 +3216,48 @@ input::placeholder {
   margin-left: 4px;
 }
 
-/* ID Number - Center bottom */
+/* Barcode Section - Above ID Number on landscape card */
+.id-fo-barcode-section {
+  position: absolute;
+  top: 210px;
+  left: 180px;
+  z-index: 10;
+}
+
+.id-fo-barcode-placeholder {
+  width: 140px;
+  height: 40px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-weight: 500;
+  font-size: 11px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.id-fo-barcode-placeholder.has-image {
+  background: transparent;
+}
+
+.id-fo-barcode-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ID Number - Below barcode on landscape card */
 .id-fo-idnumber-section {
   position: absolute;
-  top: 220px;
+  top: 255px;
   left: 180px;
   z-index: 10;
 }
 
 .id-fo-idnumber {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #1a1a1a;
 }

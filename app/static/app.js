@@ -365,6 +365,9 @@ function initPositionRadioButtons() {
   
   // Initialize searchable dropdowns
   initSearchableDropdowns();
+  
+  // Initialize multi-select dropdowns (Campaign field)
+  initMultiSelectDropdown();
 }
 
 // ============================================
@@ -726,6 +729,158 @@ function initSearchableDropdowns() {
         dropdown.classList.remove('active');
       }
     });
+  });
+}
+
+// ============================================
+// Multi-Select Dropdown Functionality (Campaign field)
+// ============================================
+function initMultiSelectDropdown() {
+  const dropdown = document.getElementById('fo_campaign_dropdown');
+  if (!dropdown || !dropdown.classList.contains('multi-select-dropdown')) return;
+  
+  const searchInput = dropdown.querySelector('.dropdown-search');
+  const hiddenInput = dropdown.querySelector('input[type="hidden"]');
+  const optionsContainer = dropdown.querySelector('.dropdown-options');
+  const options = dropdown.querySelectorAll('.dropdown-option');
+  const tagsContainer = dropdown.querySelector('.selected-tags');
+  const multiSelectContainer = dropdown.querySelector('.multi-select-container');
+  
+  if (!searchInput || !optionsContainer || !options.length || !tagsContainer) return;
+  
+  let selectedValues = [];
+  
+  // Function to update hidden input and tags display
+  function updateSelection() {
+    // Store as comma-separated values
+    hiddenInput.value = selectedValues.join(',');
+    
+    // Update tags display
+    tagsContainer.innerHTML = '';
+    selectedValues.forEach(value => {
+      const tag = document.createElement('span');
+      tag.className = 'selected-tag';
+      tag.innerHTML = `
+        ${value}
+        <span class="remove-tag" data-value="${value}">&times;</span>
+      `;
+      tagsContainer.appendChild(tag);
+    });
+    
+    // Update container styling
+    if (selectedValues.length > 0) {
+      multiSelectContainer.classList.add('has-value');
+    } else {
+      multiSelectContainer.classList.remove('has-value');
+    }
+    
+    // Update option selected state
+    options.forEach(option => {
+      if (selectedValues.includes(option.dataset.value)) {
+        option.classList.add('selected-option');
+      } else {
+        option.classList.remove('selected-option');
+      }
+    });
+    
+    // Trigger updates
+    updateReviewSection();
+    updateIdCardPreview();
+  }
+  
+  // Show dropdown on focus or click on container
+  multiSelectContainer.addEventListener('click', () => {
+    searchInput.focus();
+    dropdown.classList.add('active');
+  });
+  
+  searchInput.addEventListener('focus', () => {
+    dropdown.classList.add('active');
+  });
+  
+  // Filter options on input
+  searchInput.addEventListener('input', () => {
+    const searchTerm = searchInput.value.toLowerCase();
+    let hasVisibleOptions = false;
+    
+    options.forEach(option => {
+      const text = option.textContent.toLowerCase();
+      if (text.includes(searchTerm)) {
+        option.classList.remove('hidden');
+        hasVisibleOptions = true;
+      } else {
+        option.classList.add('hidden');
+      }
+    });
+    
+    // Show "no results" message if needed
+    let noResults = dropdown.querySelector('.no-results');
+    if (!hasVisibleOptions) {
+      if (!noResults) {
+        noResults = document.createElement('div');
+        noResults.className = 'no-results';
+        noResults.textContent = 'No matching campaigns';
+        optionsContainer.appendChild(noResults);
+      }
+      noResults.style.display = 'block';
+    } else if (noResults) {
+      noResults.style.display = 'none';
+    }
+    
+    dropdown.classList.add('active');
+  });
+  
+  // Handle option click (toggle selection)
+  options.forEach(option => {
+    option.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const value = option.dataset.value;
+      
+      if (selectedValues.includes(value)) {
+        // Remove from selection
+        selectedValues = selectedValues.filter(v => v !== value);
+      } else {
+        // Add to selection
+        selectedValues.push(value);
+      }
+      
+      updateSelection();
+      
+      // Clear search input and keep dropdown open for more selections
+      searchInput.value = '';
+      searchInput.focus();
+      
+      // Show all options again
+      options.forEach(o => o.classList.remove('hidden'));
+    });
+  });
+  
+  // Handle remove tag click
+  tagsContainer.addEventListener('click', (e) => {
+    if (e.target.classList.contains('remove-tag')) {
+      e.stopPropagation();
+      const value = e.target.dataset.value;
+      selectedValues = selectedValues.filter(v => v !== value);
+      updateSelection();
+    }
+  });
+  
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target)) {
+      dropdown.classList.remove('active');
+    }
+  });
+  
+  // Handle keyboard navigation
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      dropdown.classList.remove('active');
+    } else if (e.key === 'Backspace' && searchInput.value === '' && selectedValues.length > 0) {
+      // Remove last tag on backspace if search is empty
+      selectedValues.pop();
+      updateSelection();
+    }
   });
 }
 

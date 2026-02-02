@@ -500,21 +500,18 @@ function renderGallery() {
   const cards = employees.map(emp => {
     const statusClass = emp.status.toLowerCase();
     const isFieldOfficer = emp.position === 'Field Officer';
-    const isReprocessor = isFieldOfficer && emp.field_officer_type === 'Reprocessor';
-    const isFieldOfficerOthers = isFieldOfficer && !isReprocessor;
     
-    // Dual template badge for Reprocessor
-    const dualBadge = isReprocessor 
-      ? '<span class="dual-template-badge" title="This employee has 2 ID templates">2 Templates</span>' 
+    // Dual template badge for ALL Field Officers
+    const dualBadge = isFieldOfficer 
+      ? '<span class="dual-template-badge" title="This employee has 2 ID templates (Portrait + Landscape)">2 Templates</span>' 
       : '';
     
     // Determine wrapper class for proper scaling
-    const wrapperClass = isFieldOfficerOthers 
-      ? 'id-card-image-wrapper landscape-wrapper' 
-      : 'id-card-image-wrapper';
+    // Show portrait template in gallery grid for all Field Officers
+    const wrapperClass = 'id-card-image-wrapper';
 
     return `
-      <div class="id-gallery-card${isReprocessor ? ' reprocessor-card' : ''}${isFieldOfficerOthers ? ' landscape-card' : ''}" data-id="${emp.id}">
+      <div class="id-gallery-card${isFieldOfficer ? ' field-officer-card' : ''}" data-id="${emp.id}">
         <div class="${wrapperClass}" onclick="window.previewID(${emp.id})">
           ${generateIDCardHtml(emp)}
         </div>
@@ -544,7 +541,7 @@ function renderGallery() {
                 <path d="M8 2v8M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M2 12v2h12v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              PDF${isReprocessor ? ' (4 pages)' : ''}
+              PDF${isFieldOfficer ? ' (4 pages)' : ''}
             </button>
           </div>
         </div>
@@ -632,6 +629,10 @@ function generateRegularIDCardHtml(emp) {
           <!-- Photo placeholder with geometric background -->
           <div class="id-photo-container ${photoHasImage}">
             ${photoHtml}
+            <!-- Signature overlay at lower-right of photo -->
+            <div class="id-signature-area ${signatureHasImage}">
+              ${signatureHtml}
+            </div>
           </div>
         </div>
       </div>
@@ -654,11 +655,6 @@ function generateRegularIDCardHtml(emp) {
               </div>
               <p class="id-number-text">${escapeHtml(emp.id_number)}</p>
             </div>
-          </div>
-
-          <!-- Right side - Signature -->
-          <div class="id-signature-area ${signatureHasImage}">
-            ${signatureHtml}
           </div>
         </div>
 
@@ -744,7 +740,14 @@ function generateFieldOfficeIDCardHtml(emp) {
           <span class="id-fo-clearance-level">${escapeHtml(clearanceLevel)}</span>
         </div>
 
-        <!-- ID Number -->
+        <!-- Barcode - Above ID Number -->
+        <div class="id-fo-barcode-section">
+          <div class="id-fo-barcode-placeholder">
+            <span>Barcode</span>
+          </div>
+        </div>
+
+        <!-- ID Number - Below Barcode -->
         <div class="id-fo-idnumber-section">
           <span class="id-fo-idnumber">${escapeHtml(emp.id_number)}</span>
         </div>
@@ -982,7 +985,37 @@ function generateDualTemplatePreviewHtml(emp) {
 }
 
 // Generate employee information HTML for preview modal
+// Shows all employee data including Field Officer fields for HR visibility
 function generateEmployeeInfoHtml(emp) {
+  // Determine if employee is Field Officer (for conditional display text)
+  const isFieldOfficer = emp.position === 'Field Officer';
+  
+  // Build the FO-specific fields section - show for ALL employees to allow HR to see source-of-truth data
+  // Display hyphen (-) when values are empty or not applicable
+  const foFieldsHtml = `
+        <div class="preview-info-item">
+          <span class="label">Field Clearance</span>
+          <span class="value">${escapeHtml(emp.field_clearance || '-')}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">Division</span>
+          <span class="value">${escapeHtml(emp.fo_division || '-')}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">Department</span>
+          <span class="value">${escapeHtml(emp.fo_department || '-')}</span>
+        </div>
+        <div class="preview-info-item">
+          <span class="label">Campaign</span>
+          <span class="value">${escapeHtml(emp.fo_campaign || '-')}</span>
+        </div>
+        ${isFieldOfficer ? `
+        <div class="preview-info-item">
+          <span class="label">FO Type</span>
+          <span class="value">${escapeHtml(emp.field_officer_type || '-')}</span>
+        </div>` : ''}
+  `;
+  
   return `
     <div class="id-preview-details">
       <h3>Employee Information</h3>
@@ -1003,6 +1036,7 @@ function generateEmployeeInfoHtml(emp) {
           <span class="label">Branch/Location</span>
           <span class="value">${escapeHtml(emp.location_branch || '-')}</span>
         </div>
+        ${foFieldsHtml}
         <div class="preview-info-item">
           <span class="label">Email</span>
           <span class="value">${escapeHtml(emp.email)}</span>
@@ -1097,18 +1131,17 @@ function previewID(id) {
     return;
   }
 
-  // Check if this is a Reprocessor (needs dual template display)
+  // Check if this is a Field Officer (needs dual template display - both portrait and landscape)
   const isFieldOfficer = emp.position === 'Field Officer';
-  const isReprocessor = isFieldOfficer && emp.field_officer_type === 'Reprocessor';
   
   // Generate the appropriate preview HTML
   let previewHtml = '';
   
-  if (isReprocessor) {
-    // Dual template preview for Reprocessor
+  if (isFieldOfficer) {
+    // Dual template preview for ALL Field Officers (shows both SPMC portrait + Field Office landscape)
     previewHtml = generateDualTemplatePreviewHtml(emp);
   } else {
-    // Single template preview for Others/non-Field Officers
+    // Single template preview for non-Field Officers (Freelancer, Intern, Others)
     previewHtml = generateSingleTemplatePreviewHtml(emp, isFieldOfficer);
   }
   
@@ -1223,10 +1256,10 @@ async function captureCardCanvas(tempContainer, cardHtml, designWidth, designHei
 
 // Download ID card as PDF using jsPDF and html2canvas - includes both front and back
 // PDF Dimensions: 2.13" × 3.33" (97% of 3.43" original) at 300 DPI
-// For Reprocessor: generates 4-page PDF (Original + Field Officer templates)
+// For ALL Field Officers: generates 4-page PDF (Portrait SPMC + Landscape Field Office templates)
 async function downloadIDPdf(emp) {
-  const isReprocessor = emp.position === 'Field Officer' && emp.field_officer_type === 'Reprocessor';
-  const pageCount = isReprocessor ? 4 : 2;
+  const isFieldOfficer = emp.position === 'Field Officer';
+  const pageCount = isFieldOfficer ? 4 : 2;
   
   showToast(`Generating ${pageCount}-page print-quality PDF (2.13" × 3.33" at 300 DPI)...`, 'success');
 
@@ -1238,7 +1271,7 @@ async function downloadIDPdf(emp) {
       renderPx: `${PDF_CONFIG.RENDER_WIDTH_PX}px × ${PDF_CONFIG.RENDER_HEIGHT_PX}px`,
       dpi: PDF_CONFIG.PRINT_DPI,
       scale: PDF_CONFIG.CANVAS_SCALE.toFixed(3),
-      isReprocessor: isReprocessor,
+      isFieldOfficer: isFieldOfficer,
       pageCount: pageCount
     });
 
@@ -1269,9 +1302,9 @@ async function downloadIDPdf(emp) {
       compress: true
     });
 
-    if (isReprocessor) {
-      // 4-page PDF for Reprocessor: Original (front/back) + Field Officer (front/back)
-      console.log('Generating 4-page PDF for Reprocessor...');
+    if (isFieldOfficer) {
+      // 4-page PDF for ALL Field Officers: Original Portrait (front/back) + Field Office Landscape (front/back)
+      console.log('Generating 4-page PDF for Field Officer...');
       
       // Page 1: Original template front
       console.log('Capturing Original template front...');
@@ -1337,68 +1370,9 @@ async function downloadIDPdf(emp) {
       pdf.addImage(foBackImgData, 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
       
     } else {
-      // Standard 2-page PDF for non-Reprocessor employees
-      // Field Officer (Others) uses landscape template, others use portrait
-      const isFieldOfficer = emp.position === 'Field Officer';
-      console.log('Generating 2-page PDF...', isFieldOfficer ? '(landscape for Field Officer)' : '(portrait)');
-      
-      if (isFieldOfficer) {
-        // Field Officer (Others) - Use landscape dimensions
-        const landscapeWidthMm = PDF_CONFIG_LANDSCAPE.WIDTH_MM;
-        const landscapeHeightMm = PDF_CONFIG_LANDSCAPE.HEIGHT_MM;
-        const landscapeDesignWidth = PDF_CONFIG_LANDSCAPE.PREVIEW_WIDTH_PX;
-        const landscapeDesignHeight = PDF_CONFIG_LANDSCAPE.PREVIEW_HEIGHT_PX;
-        const landscapeScale = PDF_CONFIG_LANDSCAPE.CANVAS_SCALE;
-        
-        // Create PDF with landscape format
-        const pdfLandscape = new jsPDF({
-          orientation: 'landscape',
-          unit: 'mm',
-          format: [landscapeWidthMm, landscapeHeightMm],
-          compress: true
-        });
-        
-        // Page 1: Front side (landscape Field Officer template)
-        console.log('Capturing Field Officer front side...');
-        const frontCanvas = await captureCardCanvas(
-          tempContainer, 
-          generateFieldOfficeIDCardHtml(emp), 
-          landscapeDesignWidth, 
-          landscapeDesignHeight, 
-          landscapeScale, 
-          1500
-        );
-        const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
-        pdfLandscape.addImage(frontImgData, 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
-        
-        // Page 2: Back side (landscape Field Officer template)
-        console.log('Capturing Field Officer back side...');
-        pdfLandscape.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
-        const backCanvas = await captureCardCanvas(
-          tempContainer, 
-          generateFieldOfficeIDCardBackHtml(emp), 
-          landscapeDesignWidth, 
-          landscapeDesignHeight, 
-          landscapeScale, 
-          1000
-        );
-        const backImgData = backCanvas.toDataURL('image/png', 1.0);
-        pdfLandscape.addImage(backImgData, 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
-        
-        // Cleanup and save
-        document.body.removeChild(tempContainer);
-        const fileName = `ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}_3.33x2.13in.pdf`;
-        pdfLandscape.save(fileName);
-        
-        console.log('PDF Output:', {
-          dimensions: `${landscapeWidthMm.toFixed(2)}mm × ${landscapeHeightMm.toFixed(2)}mm`,
-          inches: `${PDF_CONFIG_LANDSCAPE.WIDTH_INCHES}" × ${PDF_CONFIG_LANDSCAPE.HEIGHT_INCHES}"`,
-          pages: 2
-        });
-        
-        showToast(`PDF downloaded (${PDF_CONFIG_LANDSCAPE.WIDTH_INCHES}" × ${PDF_CONFIG_LANDSCAPE.HEIGHT_INCHES}" at ${PDF_CONFIG_LANDSCAPE.PRINT_DPI} DPI)`, 'success');
-        return; // Exit early for Field Officer case
-      }
+      // Standard 2-page PDF for non-Field Officer employees (Freelancer, Intern, Others)
+      // Uses portrait template only
+      console.log('Generating 2-page PDF (portrait)...');
       
       // Non-Field Officer - Use portrait dimensions
       // Page 1: Front side (uses position-aware template)
@@ -1437,7 +1411,7 @@ async function downloadIDPdf(emp) {
     });
     
     // Download the PDF with descriptive filename
-    const suffix = isReprocessor ? '_dual_templates' : '';
+    const suffix = isFieldOfficer ? '_dual_templates' : '';
     pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}${suffix}.pdf`);
 
     // Cleanup
@@ -1448,8 +1422,8 @@ async function downloadIDPdf(emp) {
       await markAsCompleted(emp.id);
     }
 
-    const message = isReprocessor 
-      ? `4-page PDF downloaded (Original + Field Officer templates at ${PDF_CONFIG.PRINT_DPI} DPI)`
+    const message = isFieldOfficer 
+      ? `4-page PDF downloaded (Portrait + Landscape templates at ${PDF_CONFIG.PRINT_DPI} DPI)`
       : `PDF downloaded (${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}" at ${PDF_CONFIG.PRINT_DPI} DPI)`;
     showToast(message, 'success');
   } catch (error) {
@@ -1459,7 +1433,7 @@ async function downloadIDPdf(emp) {
 }
 
 // Download all IDs as PDFs (front and back) - captures full content
-// For Reprocessor employees: generates 4-page PDFs (Original + Field Officer templates)
+// For ALL Field Officer employees: generates 4-page PDFs (Portrait + Landscape templates)
 async function downloadAllPdfs() {
   const employees = galleryState.filteredEmployees;
   
@@ -1468,15 +1442,15 @@ async function downloadAllPdfs() {
     return;
   }
 
-  // Count Reprocessor employees for accurate messaging
-  const reprocessorCount = employees.filter(emp => 
-    emp.position === 'Field Officer' && emp.field_officer_type === 'Reprocessor'
+  // Count Field Officer employees for accurate messaging
+  const fieldOfficerCount = employees.filter(emp => 
+    emp.position === 'Field Officer'
   ).length;
-  const regularCount = employees.length - reprocessorCount;
+  const regularCount = employees.length - fieldOfficerCount;
   
   let message = `Generating ${employees.length} print-quality PDFs`;
-  if (reprocessorCount > 0) {
-    message += ` (${reprocessorCount} dual-template, ${regularCount} standard)`;
+  if (fieldOfficerCount > 0) {
+    message += ` (${fieldOfficerCount} dual-template, ${regularCount} standard)`;
   }
   showToast(message + '...', 'success');
   
@@ -1511,7 +1485,7 @@ async function downloadAllPdfs() {
 
     for (let i = 0; i < employees.length; i++) {
       const emp = employees[i];
-      const isReprocessor = emp.position === 'Field Officer' && emp.field_officer_type === 'Reprocessor';
+      const isFieldOfficer = emp.position === 'Field Officer';
 
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -1527,11 +1501,8 @@ async function downloadAllPdfs() {
       const landscapeDesignHeight = PDF_CONFIG_LANDSCAPE.PREVIEW_HEIGHT_PX; // 319px
       const landscapeScale = PDF_CONFIG_LANDSCAPE.CANVAS_SCALE;
       
-      // Check if this is a Field Officer (Others) - needs landscape PDF
-      const isFieldOfficerOthers = emp.position === 'Field Officer' && emp.field_officer_type !== 'Reprocessor';
-      
-      if (isReprocessor) {
-        // 4-page PDF for Reprocessor: Original (front/back portrait) + Field Officer (front/back landscape)
+      if (isFieldOfficer) {
+        // 4-page PDF for ALL Field Officers: Portrait (front/back) + Landscape (front/back)
         
         // Page 1: Original template front (portrait 2.13" x 3.33")
         const originalFrontCanvas = await captureCardCanvas(
@@ -1582,41 +1553,6 @@ async function downloadAllPdfs() {
         
         pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}_dual_templates.pdf`);
         
-      } else if (isFieldOfficerOthers) {
-        // 2-page LANDSCAPE PDF for Field Officer (Others) - 3.33" x 2.13"
-        // Need to create a fresh PDF with landscape format
-        const pdfLandscape = new jsPDF({
-          orientation: 'landscape',
-          unit: 'mm',
-          format: [landscapeWidthMm, landscapeHeightMm],
-          compress: true
-        });
-        
-        // Page 1: Front side (landscape Field Officer template)
-        const frontCanvas = await captureCardCanvas(
-          tempContainer, 
-          generateFieldOfficeIDCardHtml(emp), 
-          landscapeDesignWidth, 
-          landscapeDesignHeight, 
-          landscapeScale, 
-          800
-        );
-        pdfLandscape.addImage(frontCanvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
-        
-        // Page 2: Back side (landscape Field Officer template)
-        pdfLandscape.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
-        const backCanvas = await captureCardCanvas(
-          tempContainer, 
-          generateFieldOfficeIDCardBackHtml(emp), 
-          landscapeDesignWidth, 
-          landscapeDesignHeight, 
-          landscapeScale, 
-          500
-        );
-        pdfLandscape.addImage(backCanvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
-        
-        pdfLandscape.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}_3.33x2.13in.pdf`);
-        
       } else {
         // Standard 2-page PORTRAIT PDF for Freelancer/Intern/Others - 2.13" x 3.33"
         
@@ -1652,8 +1588,8 @@ async function downloadAllPdfs() {
     document.body.removeChild(tempContainer);
     
     let successMessage = `Downloaded ${employees.length} PDFs`;
-    if (reprocessorCount > 0) {
-      successMessage += ` (${reprocessorCount} with dual templates)`;
+    if (fieldOfficerCount > 0) {
+      successMessage += ` (${fieldOfficerCount} with dual templates)`;
     }
     showToast(successMessage, 'success');
   } catch (error) {

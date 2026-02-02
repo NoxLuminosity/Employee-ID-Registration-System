@@ -473,7 +473,13 @@ def api_get_employees(request: Request, hr_session: str = Cookie(None)):
                 "render_url": row.get("render_url"),
                 "emergency_name": row.get("emergency_name"),
                 "emergency_contact": row.get("emergency_contact"),
-                "emergency_address": row.get("emergency_address")
+                "emergency_address": row.get("emergency_address"),
+                # Field Officer specific fields
+                "field_officer_type": row.get("field_officer_type"),
+                "field_clearance": row.get("field_clearance"),
+                "fo_division": row.get("fo_division"),
+                "fo_department": row.get("fo_department"),
+                "fo_campaign": row.get("fo_campaign")
             })
 
         logger.info(f"API /api/employees: Returning {len(employees)} employees")
@@ -522,6 +528,7 @@ def api_get_employee(employee_id: int, hr_session: str = Cookie(None)):
             "id_number": row.get("id_number"),
             "position": row.get("position"),
             "department": row.get("department"),
+            "location_branch": row.get("location_branch"),
             "email": row.get("email"),
             "personal_number": row.get("personal_number"),
             "photo_path": row.get("photo_path"),
@@ -537,7 +544,13 @@ def api_get_employee(employee_id: int, hr_session: str = Cookie(None)):
             "render_url": row.get("render_url"),
             "emergency_name": row.get("emergency_name"),
             "emergency_contact": row.get("emergency_contact"),
-            "emergency_address": row.get("emergency_address")
+            "emergency_address": row.get("emergency_address"),
+            # Field Officer specific fields
+            "field_officer_type": row.get("field_officer_type"),
+            "field_clearance": row.get("field_clearance"),
+            "fo_division": row.get("fo_division"),
+            "fo_department": row.get("fo_department"),
+            "fo_campaign": row.get("fo_campaign")
         }
 
         return JSONResponse(content={"success": True, "employee": employee})

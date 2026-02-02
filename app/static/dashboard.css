@@ -428,6 +428,17 @@
 .employee-email {
   font-size: 0.85rem;
   color: var(--color-text-muted);
+}
+
+/* Campaign Cell - Handle multi-select values with truncation */
+.campaign-cell {
+  display: inline-block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
   word-break: break-word;
 }
   color: var(--color-text-muted);
