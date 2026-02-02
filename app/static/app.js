@@ -559,9 +559,10 @@ function updateDualTemplatePreview() {
     reprocessorName.innerHTML = displayName;
   }
   
-  // Position
+  // Position - ALWAYS show "LEGAL OFFICER" regardless of field_officer_type
+  // The placeholder label should never change to "REPROCESSOR"
   const reprocessorPosition = document.getElementById('dual_reprocessor_position');
-  if (reprocessorPosition) reprocessorPosition.textContent = 'REPROCESSOR';
+  if (reprocessorPosition) reprocessorPosition.textContent = 'LEGAL OFFICER';
   
   // Clearance
   const reprocessorClearance = document.getElementById('dual_reprocessor_clearance');

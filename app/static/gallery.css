@@ -210,8 +210,15 @@
   max-width: 500px;
 }
 
+/* Wider modal for dual template preview (Reprocessor) */
+.id-preview-modal:has(.gallery-dual-template-grid) {
+  max-width: 560px;
+}
+
 .id-preview-modal .modal-body {
-  padding: 0;
+  padding: var(--spacing-md);
+  max-height: 75vh;
+  overflow-y: auto;
 }
 
 .id-preview-content {
@@ -985,5 +992,159 @@
     transform: scale(0.28);
     transform-origin: center center;
     margin: 0;
+  }
+}
+
+/* ============================================
+   Dual Template Badge and Card Styling
+   ============================================ */
+
+/* Dual template badge for Reprocessor employees */
+.dual-template-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+/* Card badges container */
+.id-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Reprocessor card styling */
+.id-gallery-card.reprocessor-card {
+  border: 2px solid transparent;
+  background: linear-gradient(var(--color-card), var(--color-card)) padding-box,
+              linear-gradient(135deg, #7c3aed, #5b21b6) border-box;
+}
+
+/* Landscape card styling for Field Officer (Others) */
+.id-gallery-card.landscape-card .id-card-image-wrapper {
+  height: 280px;  /* Adjusted for landscape aspect ratio */
+}
+
+/* Landscape wrapper for Field Officer templates in gallery grid */
+.id-card-image-wrapper.landscape-wrapper {
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Field Officer landscape ID card scaling in gallery grid */
+.id-card-image-wrapper.landscape-wrapper .id-card-field-office,
+.id-card-image-wrapper .id-card-field-office {
+  transform: scale(0.52);
+  transform-origin: center center;
+  margin: 0;
+  width: 512px !important;
+  height: 319px !important;
+  min-width: 512px;
+  min-height: 319px;
+  flex-shrink: 0;
+}
+
+/* Field Officer back card in gallery grid - same landscape dimensions */
+.id-card-image-wrapper.landscape-wrapper .id-card-field-office-back,
+.id-card-image-wrapper .id-card-field-office-back {
+  transform: scale(0.52);
+  transform-origin: center center;
+  margin: 0;
+  width: 512px !important;
+  height: 319px !important;
+  min-width: 512px;
+  min-height: 319px;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Preview Modal - Field Officer Landscape Support
+   ============================================ */
+
+/* Field Officer front/back in modal - MUST be landscape */
+.id-preview-wrapper .id-card-field-office,
+.id-preview-wrapper .id-card-field-office-back {
+  transform: scale(0.70);
+  transform-origin: top center;
+  margin-bottom: -96px;  /* 319 * (1 - 0.70) */
+  width: 512px !important;
+  height: 319px !important;
+  min-width: 512px;
+  min-height: 319px;
+  flex-shrink: 0;
+}
+
+/* Adjust modal min-height for landscape cards */
+.id-preview-wrapper:has(.id-card-field-office),
+.id-preview-wrapper:has(.id-card-field-office-back) {
+  min-height: 280px;
+}
+
+/* Regular ID card back in modal - same as front */
+.id-preview-wrapper .id-card-back,
+.id-preview-wrapper .gallery-id-card-back {
+  transform: scale(0.58);
+  transform-origin: top center;
+  margin-bottom: -336px;  /* 800 * (1 - 0.58) */
+  width: 512px !important;
+  height: 800px;
+  min-width: 512px;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Responsive - Landscape Gallery Cards
+   ============================================ */
+
+@media (max-width: 768px) {
+  .id-gallery-card.landscape-card .id-card-image-wrapper,
+  .id-card-image-wrapper.landscape-wrapper {
+    height: 220px;
+  }
+  
+  .id-card-image-wrapper.landscape-wrapper .id-card-field-office,
+  .id-card-image-wrapper .id-card-field-office {
+    transform: scale(0.42);
+  }
+  
+  .id-preview-wrapper .id-card-field-office,
+  .id-preview-wrapper .id-card-field-office-back {
+    transform: scale(0.58);
+    margin-bottom: -134px;  /* 319 * (1 - 0.58) */
+  }
+}
+
+@media (max-width: 480px) {
+  .id-gallery-card.landscape-card .id-card-image-wrapper,
+  .id-card-image-wrapper.landscape-wrapper {
+    height: 180px;
+  }
+  
+  .id-card-image-wrapper.landscape-wrapper .id-card-field-office,
+  .id-card-image-wrapper .id-card-field-office {
+    transform: scale(0.34);
+  }
+  
+  .id-preview-wrapper .id-card-field-office,
+  .id-preview-wrapper .id-card-field-office-back {
+    transform: scale(0.48);
+    margin-bottom: -166px;  /* 319 * (1 - 0.48) */
+  }
+  
+  .dual-template-badge {
+    font-size: 0.55rem;
+    padding: 1px 6px;
   }
 }
