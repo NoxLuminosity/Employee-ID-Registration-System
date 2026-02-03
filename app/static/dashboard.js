@@ -638,6 +638,12 @@ function viewDetails(id) {
         <span class="detail-value">${escapeHtml(emp.id_number)}</span>
       </div>
       <div class="detail-item">
+        <span class="detail-label">ID Barcode</span>
+        <div class="detail-value barcode-container">
+          ${generateBarcodeHtml(emp.id_number, { height: 45 })}
+        </div>
+      </div>
+      <div class="detail-item">
         <span class="detail-label">Position</span>
         <span class="detail-value">${escapeHtml(emp.position)}</span>
       </div>
@@ -808,6 +814,63 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+/**
+ * Generate a barcode image URL for the given employee ID number.
+ * Uses BarcodeAPI.org to generate CODE128 barcodes.
+ * 
+ * @param {string} idNumber - The employee ID number to encode
+ * @param {Object} options - Optional configuration
+ * @param {string} options.type - Barcode type: "128" (default), "qr", "39", "auto"
+ * @param {number} options.height - Height in pixels for 1D barcodes (default: 40)
+ * @returns {string} URL to the barcode image
+ */
+function getBarcodeUrl(idNumber, options = {}) {
+  if (!idNumber) return '';
+  
+  const type = options.type || '128';  // Default to CODE128
+  // BarcodeAPI settings: DPI 500, Height 10, Text None
+  const height = options.height || 10;
+  const dpi = options.dpi || 500;
+  
+  // URL-encode the ID number to handle special characters
+  const encodedId = encodeURIComponent(idNumber);
+  
+  // Base URL
+  let url = `https://barcodeapi.org/api/${type}/${encodedId}`;
+  
+  // Add parameters for 1D barcodes (not QR or DataMatrix)
+  if (type !== 'qr' && type !== 'dm') {
+    url += `?height=${height}&dpi=${dpi}`;
+  }
+  
+  return url;
+}
+
+/**
+ * Generate the HTML for a barcode image with error handling and fallback.
+ * 
+ * @param {string} idNumber - The employee ID number to encode
+ * @param {Object} options - Barcode options (type, height)
+ * @returns {string} HTML string for the barcode image
+ */
+function generateBarcodeHtml(idNumber, options = {}) {
+  if (!idNumber) {
+    return `<span class="barcode-fallback">No ID</span>`;
+  }
+  
+  const barcodeUrl = getBarcodeUrl(idNumber, options);
+  
+  return `
+    <img 
+      src="${barcodeUrl}" 
+      alt="Barcode for ${escapeHtml(idNumber)}" 
+      class="barcode-image"
+      onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
+    >
+    <span class="barcode-fallback" style="display:none;">${escapeHtml(idNumber)}</span>
+  `;
 }
 
 // Format comma-separated campaign values with proper spacing

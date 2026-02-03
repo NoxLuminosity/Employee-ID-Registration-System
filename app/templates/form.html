@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employee ID Registration</title>
   <meta name="description" content="Employee ID Registration System - Submit your details for company ID card">
-  <link rel="stylesheet" href="/static/styles.css?v=14">
+  <link rel="stylesheet" href="/static/styles.css?v=16">
   <style>
     /* User Info Bar Styles */
     .user-info-bar {
@@ -995,8 +995,9 @@
 
                     <!-- Barcode area -->
                     <div class="id-barcode-area">
-                      <div class="id-barcode-placeholder">
-                        <span>Barcode</span>
+                      <div class="id-barcode-container" id="id_barcode_container">
+                        <img id="id_preview_barcode" class="id-barcode-image" alt="Barcode" style="display: none;">
+                        <span id="id_barcode_fallback" class="id-barcode-fallback">Barcode</span>
                       </div>
                       <p class="id-number-text" id="id_preview_idnumber">012402-081</p>
                     </div>
@@ -1146,8 +1147,9 @@
 
                 <!-- Barcode - Above ID Number -->
                 <div class="id-fo-barcode-section">
-                  <div class="id-fo-barcode-placeholder">
-                    <span>Barcode</span>
+                  <div class="id-fo-barcode-container" id="id_fo_barcode_container">
+                    <img id="id_fo_preview_barcode" class="id-fo-barcode-image" alt="Barcode" style="display: none;">
+                    <span id="id_fo_barcode_fallback" class="id-barcode-fallback">Barcode</span>
                   </div>
                 </div>
 
@@ -1219,7 +1221,10 @@
                             <span id="dual_original_position">Field Officer - Reprocessor</span>
                           </div>
                           <div class="id-barcode-area">
-                            <div class="id-barcode-placeholder"><span>Barcode</span></div>
+                            <div class="id-barcode-container" id="dual_original_barcode_container">
+                              <img id="dual_original_barcode" class="id-barcode-image" alt="Barcode" style="display: none;">
+                              <span id="dual_original_barcode_fallback" class="id-barcode-fallback">Barcode</span>
+                            </div>
                             <p class="id-number-text" id="dual_original_idnumber">012402-081</p>
                           </div>
                         </div>
@@ -1357,8 +1362,9 @@
                       </div>
                       <!-- Barcode - Above ID Number -->
                       <div class="id-fo-barcode-section">
-                        <div class="id-fo-barcode-placeholder">
-                          <span>Barcode</span>
+                        <div class="id-fo-barcode-container" id="dual_reprocessor_barcode_container">
+                          <img id="dual_reprocessor_barcode" class="id-fo-barcode-image" alt="Barcode" style="display: none;">
+                          <span id="dual_reprocessor_barcode_fallback" class="id-barcode-fallback">Barcode</span>
                         </div>
                       </div>
                       <!-- ID Number - Below Barcode -->
@@ -1594,7 +1600,7 @@
     });
   </script>
 
-  <script src="/static/app.js?v=6"></script>
+  <script src="/static/app.js?v=9"></script>
 
 </body>
 </html>

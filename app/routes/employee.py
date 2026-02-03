@@ -35,6 +35,15 @@ from app.services.cloudinary_service import (
 # BytePlus Seedream integration (for AI headshot generation)
 from app.services.seedream_service import generate_headshot_from_url
 
+# Barcode generation service
+from app.services.barcode_service import (
+    get_barcode_url,
+    get_barcode_image,
+    get_barcode_url_safe,
+    validate_barcode_data,
+    BarcodeType
+)
+
 # Authentication
 from app.auth import get_session
 
@@ -809,4 +818,183 @@ async def submit_spma_employee(
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": "Submission failed", "detail": str(e)}
+        )
+
+
+# ============================================
+# Barcode Generation Endpoints
+# ============================================
+
+@router.get("/api/barcode/{id_number}")
+async def get_employee_barcode(
+    id_number: str,
+    barcode_type: str = "128",
+    height: int = 40
+):
+    """
+    Generate a barcode URL for an employee ID number.
+    
+    This endpoint returns a JSON response with the barcode URL that can be
+    used directly in <img> tags. The barcode is generated on-demand by
+    BarcodeAPI.org.
+    
+    Args:
+        id_number: The employee ID number to encode (path parameter)
+        barcode_type: Barcode format - "128" (CODE128), "qr", "39" (CODE39), "auto"
+        height: Height in pixels for 1D barcodes (default: 40)
+    
+    Returns:
+        JSON with barcode_url, id_number, and barcode_type
+    
+    Example Request:
+        GET /api/barcode/EMP-12345
+        GET /api/barcode/EMP-12345?barcode_type=qr
+        GET /api/barcode/EMP-12345?height=60
+    
+    Example Response:
+        {
+            "success": true,
+            "barcode_url": "https://barcodeapi.org/api/128/EMP-12345?height=40",
+            "id_number": "EMP-12345",
+            "barcode_type": "128"
+        }
+    """
+    try:
+        # Map string type to BarcodeType enum
+        type_mapping = {
+            "128": BarcodeType.CODE128,
+            "code128": BarcodeType.CODE128,
+            "39": BarcodeType.CODE39,
+            "code39": BarcodeType.CODE39,
+            "qr": BarcodeType.QR,
+            "auto": BarcodeType.AUTO,
+            "dm": BarcodeType.DATAMATRIX,
+            "datamatrix": BarcodeType.DATAMATRIX,
+        }
+        
+        bc_type = type_mapping.get(barcode_type.lower(), BarcodeType.CODE128)
+        
+        # Validate the ID number
+        is_valid, validation_error = validate_barcode_data(id_number, bc_type)
+        if not is_valid:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": validation_error,
+                    "id_number": id_number
+                }
+            )
+        
+        # Generate barcode URL with height option for 1D barcodes
+        options = None
+        if bc_type not in [BarcodeType.QR, BarcodeType.DATAMATRIX] and height:
+            options = {"height": height}
+        
+        barcode_url = get_barcode_url(id_number, bc_type, options)
+        
+        logger.info(f"Barcode URL generated for ID: {id_number}, type: {bc_type.value}")
+        
+        return JSONResponse(
+            content={
+                "success": True,
+                "barcode_url": barcode_url,
+                "id_number": id_number,
+                "barcode_type": bc_type.value
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Barcode generation error for '{id_number}': {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "Failed to generate barcode",
+                "detail": str(e)
+            }
+        )
+
+
+@router.get("/api/barcode/{id_number}/image")
+async def get_employee_barcode_image(
+    id_number: str,
+    barcode_type: str = "128",
+    height: int = 40
+):
+    """
+    Fetch and return the actual barcode image for an employee ID number.
+    
+    This endpoint proxies the request to BarcodeAPI.org and returns the PNG image.
+    Useful for caching or when direct client access to BarcodeAPI is not possible.
+    
+    Args:
+        id_number: The employee ID number to encode
+        barcode_type: Barcode format - "128", "qr", "39", "auto"
+        height: Height in pixels for 1D barcodes
+    
+    Returns:
+        PNG image bytes with appropriate Content-Type header
+    
+    Example Request:
+        GET /api/barcode/EMP-12345/image
+    
+    Example Response:
+        Content-Type: image/png
+        [binary PNG data]
+    """
+    from fastapi.responses import Response
+    
+    try:
+        type_mapping = {
+            "128": BarcodeType.CODE128,
+            "code128": BarcodeType.CODE128,
+            "39": BarcodeType.CODE39,
+            "code39": BarcodeType.CODE39,
+            "qr": BarcodeType.QR,
+            "auto": BarcodeType.AUTO,
+            "dm": BarcodeType.DATAMATRIX,
+        }
+        
+        bc_type = type_mapping.get(barcode_type.lower(), BarcodeType.CODE128)
+        
+        # Generate options for 1D barcodes
+        options = None
+        if bc_type not in [BarcodeType.QR, BarcodeType.DATAMATRIX] and height:
+            options = {"height": height}
+        
+        # Fetch the barcode image
+        image_data, error = get_barcode_image(id_number, bc_type, options)
+        
+        if error:
+            logger.error(f"Barcode image fetch error: {error}")
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "success": False,
+                    "error": error,
+                    "id_number": id_number
+                }
+            )
+        
+        # Return the image with caching headers
+        return Response(
+            content=image_data,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
+                "X-Barcode-Content": id_number,
+                "X-Barcode-Type": bc_type.value
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Barcode image error for '{id_number}': {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "Failed to fetch barcode image",
+                "detail": str(e)
+            }
         )

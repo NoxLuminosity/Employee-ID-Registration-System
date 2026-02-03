@@ -4,6 +4,89 @@
  */
 
 // ============================================
+// Barcode Generation Helper
+// ============================================
+
+/**
+ * Generate a barcode image URL for the given employee ID number.
+ * Uses BarcodeAPI.org to generate CODE128 barcodes on-the-fly.
+ * 
+ * @param {string} idNumber - The employee ID number to encode
+ * @param {Object} options - Optional configuration
+ * @param {string} options.type - Barcode type: "128" (default), "qr", "39", "auto"
+ * @param {number} options.height - Height in pixels for 1D barcodes (default: 35)
+ * @returns {string} URL to the barcode image, or empty string if no ID
+ */
+function getBarcodeUrl(idNumber, options = {}) {
+  if (!idNumber || idNumber.trim() === '') return '';
+  
+  const type = options.type || '128';  // Default to CODE128
+  // BarcodeAPI settings: DPI 500, Height 10, Text None
+  const height = options.height || 10;
+  const dpi = options.dpi || 500;
+  
+  // URL-encode the ID number to handle special characters
+  const encodedId = encodeURIComponent(idNumber.trim());
+  
+  // Base URL
+  let url = `https://barcodeapi.org/api/${type}/${encodedId}`;
+  
+  // Add parameters for 1D barcodes (not QR or DataMatrix)
+  if (type !== 'qr' && type !== 'dm') {
+    url += `?height=${height}&dpi=${dpi}`;
+  }
+  
+  return url;
+}
+
+/**
+ * Update a barcode image element with the given ID number.
+ * Shows the barcode image if ID is valid, otherwise shows fallback text.
+ * 
+ * @param {string} idNumber - The employee ID number to encode
+ * @param {HTMLImageElement} imgEl - The barcode img element
+ * @param {HTMLElement} fallbackEl - The fallback text element
+ * @param {Object} options - Barcode generation options
+ */
+function updateBarcodeDisplay(idNumber, imgEl, fallbackEl, options = {}) {
+  console.log('[Barcode] updateBarcodeDisplay called:', { idNumber, imgEl: !!imgEl, fallbackEl: !!fallbackEl });
+  
+  if (!imgEl || !fallbackEl) {
+    console.warn('[Barcode] Missing elements:', { imgEl: !!imgEl, fallbackEl: !!fallbackEl });
+    return;
+  }
+  
+  const barcodeUrl = getBarcodeUrl(idNumber, options);
+  console.log('[Barcode] Generated URL:', barcodeUrl);
+  
+  if (barcodeUrl) {
+    imgEl.src = barcodeUrl;
+    imgEl.alt = `Barcode for ${idNumber}`;
+    imgEl.style.display = 'block';
+    fallbackEl.style.display = 'none';
+    
+    // Handle successful load
+    imgEl.onload = function() {
+      console.log('[Barcode] Image loaded successfully');
+    };
+    
+    // Handle load error - show fallback if barcode fails to load
+    imgEl.onerror = function() {
+      console.error('[Barcode] Image failed to load, showing fallback');
+      this.style.display = 'none';
+      fallbackEl.textContent = idNumber || 'Barcode';
+      fallbackEl.style.display = 'block';
+    };
+  } else {
+    console.log('[Barcode] No URL generated, showing fallback');
+    imgEl.style.display = 'none';
+    imgEl.removeAttribute('src');
+    fallbackEl.textContent = 'Barcode';
+    fallbackEl.style.display = 'block';
+  }
+}
+
+// ============================================
 // State Management
 // ============================================
 const state = {
@@ -506,6 +589,11 @@ function updateDualTemplatePreview() {
   const origIdNumber = document.getElementById('dual_original_idnumber');
   if (origIdNumber) origIdNumber.textContent = idNumber || '012402-081';
   
+  // Barcode - Original Template
+  const origBarcodeImg = document.getElementById('dual_original_barcode');
+  const origBarcodeFallback = document.getElementById('dual_original_barcode_fallback');
+  updateBarcodeDisplay(idNumber, origBarcodeImg, origBarcodeFallback, { height: 10, dpi: 500 });
+  
   // Photo - Original Template uses AI photo
   const origPhoto = document.getElementById('dual_original_photo');
   const origPhotoPlaceholder = document.getElementById('dual_original_photo_placeholder');
@@ -574,6 +662,11 @@ function updateDualTemplatePreview() {
   // ID Number
   const reprocessorIdNumber = document.getElementById('dual_reprocessor_idnumber');
   if (reprocessorIdNumber) reprocessorIdNumber.textContent = idNumber || 'ID Number Placeholder';
+  
+  // Barcode - Reprocessor Template
+  const reprocessorBarcodeImg = document.getElementById('dual_reprocessor_barcode');
+  const reprocessorBarcodeFallback = document.getElementById('dual_reprocessor_barcode_fallback');
+  updateBarcodeDisplay(idNumber, reprocessorBarcodeImg, reprocessorBarcodeFallback, { height: 10, dpi: 500 });
   
   // Photo - Reprocessor Template uses ORIGINAL uploaded photo (NOT AI)
   const reprocessorPhoto = document.getElementById('dual_reprocessor_photo');
@@ -1352,6 +1445,8 @@ function initSignaturePad() {
 // ID Card Preview - Live Data Binding
 // ============================================
 function updateIdCardPreview() {
+  console.log('[Preview] updateIdCardPreview called');
+  
   // Helper function to safely get element value
   const getValue = (id) => {
     const el = document.getElementById(id);
@@ -1455,6 +1550,13 @@ function updateIdCardPreview() {
   if (idNumberEl) {
     idNumberEl.textContent = idNumber || 'ID Number';
   }
+  console.log('[Preview] ID Number:', idNumber);
+
+  // Update Barcode - generates CODE128 barcode from ID number
+  const barcodeImg = document.getElementById('id_preview_barcode');
+  const barcodeFallback = document.getElementById('id_barcode_fallback');
+  console.log('[Preview] Barcode elements found:', { barcodeImg: !!barcodeImg, barcodeFallback: !!barcodeFallback });
+  updateBarcodeDisplay(idNumber, barcodeImg, barcodeFallback, { height: 10, dpi: 500 });
 
   // Update Photo - prefer AI generated (with transparent bg), fallback to original
   const aiPreviewImg = document.getElementById('aiPreviewImg');
@@ -2211,6 +2313,11 @@ function updateFieldOfficePreview() {
   if (idNumberEl) {
     idNumberEl.textContent = idNumber || 'ID Number Placeholder';
   }
+
+  // Update Barcode - generates CODE128 barcode from ID number
+  const foBarcodeImg = document.getElementById('id_fo_preview_barcode');
+  const foBarcodeFallback = document.getElementById('id_fo_barcode_fallback');
+  updateBarcodeDisplay(idNumber, foBarcodeImg, foBarcodeFallback, { height: 10, dpi: 500 });
   
   // Update Photo - prefer AI generated, fallback to original
   const aiPreviewImg = document.getElementById('aiPreviewImg');
