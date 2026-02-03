@@ -880,6 +880,199 @@ def api_complete_employee(employee_id: int, hr_session: str = Cookie(None)):
         )
 
 
+@router.post("/api/employees/{employee_id}/upload-pdf")
+async def api_upload_pdf(employee_id: int, request: Request, hr_session: str = Cookie(None)):
+    """
+    Upload employee ID PDF to Cloudinary and save URL to LarkBase id_card column.
+    
+    This endpoint receives the PDF bytes from the frontend after generation,
+    uploads it to Cloudinary, and updates the LarkBase id_card field with the URL.
+    
+    CRITICAL FLOW:
+    1. Receive PDF bytes from frontend
+    2. Upload to Cloudinary -> get secure URL
+    3. Update LarkBase id_card field with attachment format
+    4. Return success ONLY if both operations succeed
+    5. Frontend triggers download ONLY after receiving success response
+    
+    Request body should be the raw PDF bytes (Content-Type: application/pdf).
+    
+    Returns:
+        - success: True only if both Cloudinary upload AND LarkBase update succeed
+        - pdf_url: The Cloudinary URL of the uploaded PDF
+        - lark_synced: True if LarkBase id_card was updated successfully
+        - error: Error message if any step failed
+    """
+    session = get_session(hr_session)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
+    
+    try:
+        # Get employee data
+        row = get_employee_by_id(employee_id)
+        
+        if not row:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "error": "Employee not found"}
+            )
+        
+        if row.get("status") not in ["Approved", "Completed"]:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "ID not yet approved"}
+            )
+        
+        # Read PDF bytes from request body
+        pdf_bytes = await request.body()
+        
+        if not pdf_bytes or len(pdf_bytes) < 100:
+            logger.error(f"Invalid PDF data received for employee {employee_id}: {len(pdf_bytes) if pdf_bytes else 0} bytes")
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Invalid or empty PDF data"}
+            )
+        
+        logger.info(f"📥 Received PDF upload for employee {employee_id}: {len(pdf_bytes)} bytes")
+        
+        # Generate unique public_id for the PDF
+        id_number = row.get("id_number", "")
+        id_number_safe = id_number.replace(" ", "_").replace("/", "-").replace("\\", "-")
+        employee_name = row.get("employee_name", "").replace(" ", "_")
+        position = row.get("position", "")
+        
+        # Add timestamp to ensure uniqueness
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Determine suffix based on position
+        suffix = "_dual_templates" if position == "Field Officer" else ""
+        public_id = f"ID_{id_number_safe}_{employee_name}{suffix}_{timestamp}"
+        
+        # Step 1: Upload PDF to Cloudinary
+        logger.info(f"📤 Uploading PDF to Cloudinary: {public_id}")
+        from app.services.cloudinary_service import upload_pdf_to_cloudinary
+        pdf_url = upload_pdf_to_cloudinary(pdf_bytes, public_id, folder="id_cards")
+        
+        if not pdf_url:
+            logger.error(f"❌ Cloudinary upload failed for employee {employee_id}")
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": "Failed to upload PDF to cloud storage"}
+            )
+        
+        logger.info(f"✅ PDF uploaded to Cloudinary: {pdf_url}")
+        
+        # Step 1.5: Verify the URL is publicly accessible before saving to LarkBase
+        # This prevents saving 401/403 URLs to the database
+        import urllib.request
+        import urllib.error
+        try:
+            logger.info(f"🔗 Verifying PDF URL accessibility: {pdf_url[:80]}...")
+            req = urllib.request.Request(pdf_url, method='HEAD')
+            req.add_header('User-Agent', 'Mozilla/5.0 (compatible; URLValidator/1.0)')
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    logger.info(f"✅ PDF URL is publicly accessible (HTTP {response.status})")
+                else:
+                    logger.warning(f"⚠️ PDF URL returned unexpected status: HTTP {response.status}")
+        except urllib.error.HTTPError as http_err:
+            logger.error(f"❌ PDF URL not accessible: HTTP {http_err.code} - {http_err.reason}")
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False, 
+                    "error": f"PDF uploaded but URL not accessible (HTTP {http_err.code})",
+                    "pdf_url": pdf_url,
+                    "http_error": http_err.code
+                }
+            )
+        except Exception as url_err:
+            logger.warning(f"⚠️ Could not verify PDF URL accessibility: {str(url_err)}")
+            # Continue anyway - some CDNs may block HEAD requests
+        
+        # Step 2: Update LarkBase id_card field with the URL
+        # This is CRITICAL - the download should only proceed if this succeeds
+        lark_synced = False
+        lark_error = None
+        try:
+            from app.services.lark_service import update_employee_id_card
+            lark_synced = update_employee_id_card(
+                id_number,
+                pdf_url,
+                source="HR PDF Download"
+            )
+            if lark_synced:
+                logger.info(f"✅ LarkBase id_card updated for employee {id_number}")
+            else:
+                lark_error = "LarkBase update returned False"
+                logger.error(f"❌ LarkBase id_card update failed for employee {id_number}")
+        except Exception as lark_e:
+            lark_error = str(lark_e)
+            logger.error(f"❌ LarkBase id_card update exception for {id_number}: {lark_error}")
+        
+        # If LarkBase update failed, return failure so frontend doesn't download
+        if not lark_synced:
+            logger.error(f"❌ LarkBase sync failed for {id_number}. PDF URL: {pdf_url}. Error: {lark_error}")
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False, 
+                    "error": f"PDF uploaded to cloud but LarkBase update failed: {lark_error}",
+                    "pdf_url": pdf_url,  # Include URL in case manual recovery is needed
+                    "lark_synced": False
+                }
+            )
+        
+        # Step 3: Update local database with PDF URL
+        success = update_employee(employee_id, {
+            "render_url": pdf_url,
+            "date_last_modified": datetime.now().isoformat()
+        })
+        
+        if not success:
+            logger.warning(f"⚠️ Failed to update local database with PDF URL for employee {employee_id}")
+        
+        # Step 4: Mark as completed if currently approved
+        if row.get("status") == "Approved":
+            update_employee(employee_id, {
+                "status": "Completed",
+                "id_generated": 1,
+                "date_last_modified": datetime.now().isoformat()
+            })
+            
+            # Also sync status to LarkBase
+            try:
+                from app.services.lark_service import find_and_update_employee_status
+                find_and_update_employee_status(
+                    id_number,
+                    "Completed",
+                    old_status="Approved",
+                    source="PDF Download"
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Could not sync status to LarkBase: {str(e)}")
+        
+        logger.info(f"✅ PDF upload complete for employee {employee_id} - LarkBase synced: {lark_synced}")
+        
+        # SUCCESS: Both Cloudinary upload and LarkBase update succeeded
+        return JSONResponse(content={
+            "success": True,
+            "pdf_url": pdf_url,
+            "lark_synced": lark_synced,
+            "message": "PDF uploaded and LarkBase id_card updated successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error uploading PDF for employee {employee_id}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
 @router.get("/api/employees/{employee_id}/download-id")
 def api_download_id(employee_id: int, hr_session: str = Cookie(None)):
     """

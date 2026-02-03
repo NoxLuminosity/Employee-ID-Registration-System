@@ -32,12 +32,15 @@ const ScreenshotProtection = (function() {
         detectionDebounceMs: 100,
         overlayEnabled: true, // Enable/disable the visibility overlay
         overlayMessage: 'Content hidden for security',
+        persistentOnScreenshotAttempt: false, // When true, overlay stays permanent after screenshot shortcut detected
+        isEmployeeSide: false, // True for employee-facing pages (stricter protection)
     };
     
     // State tracking
     const state = {
         initialized: false,
         overlayActive: false,
+        overlayPermanentlyLocked: false, // When true, overlay cannot be hidden (screenshot attempt detected)
         lastKeyboardAttempt: 0,
         userIdentifier: null,
         watermarkElement: null,
@@ -355,6 +358,14 @@ const ScreenshotProtection = (function() {
             eventType = 'ctrl_shift_s';
         }
         
+        // Windows+Shift+S (Windows Snipping Tool - most common screenshot method)
+        // Note: Windows key + Shift + S is the most common Windows screenshot shortcut
+        // The Windows key (Meta) + Shift + S triggers the Snipping Tool
+        else if (e.metaKey && e.shiftKey && (e.key === 's' || e.key === 'S')) {
+            detected = true;
+            eventType = 'windows_shift_s';
+        }
+        
         // Cmd+Shift+3 (Mac Full Screenshot)
         else if (e.metaKey && e.shiftKey && e.key === '3') {
             detected = true;
@@ -449,6 +460,12 @@ const ScreenshotProtection = (function() {
     function hideOverlay(reason) {
         if (!state.overlayElement) return;
         
+        // If overlay is permanently locked (screenshot attempt detected), never hide it
+        if (state.overlayPermanentlyLocked) {
+            console.warn('[ScreenshotProtection] Overlay is permanently locked due to screenshot attempt');
+            return;
+        }
+        
         // Only hide if tab is visible AND window has focus
         // This prevents flicker when both events fire
         if (document.visibilityState === 'visible' && document.hasFocus()) {
@@ -478,6 +495,26 @@ const ScreenshotProtection = (function() {
         // Show keyboard warning (brief, non-blocking)
         if (config.showWarningOnKeyboard) {
             showKeyboardWarning();
+        }
+        
+        // If persistent mode is enabled (Employee side), lock the overlay permanently
+        // This makes the black screen stay even after the screenshot attempt
+        if (config.persistentOnScreenshotAttempt && config.isEmployeeSide) {
+            state.overlayPermanentlyLocked = true;
+            showOverlay('screenshot_attempt_locked');
+            console.warn('[ScreenshotProtection] Overlay permanently locked due to screenshot attempt');
+            
+            // Update the overlay message to indicate locked state
+            if (state.overlayElement) {
+                const titleEl = state.overlayElement.querySelector('.spo-title');
+                const subtitleEl = state.overlayElement.querySelector('.spo-subtitle');
+                if (titleEl) {
+                    titleEl.textContent = 'Screenshot Attempt Detected';
+                }
+                if (subtitleEl) {
+                    subtitleEl.textContent = 'This page is now protected. Please refresh the page to continue.';
+                }
+            }
         }
     }
     

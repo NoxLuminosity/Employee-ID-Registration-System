@@ -2,6 +2,49 @@
    ID Gallery Styles
    ============================================ */
 
+/* ============================================
+   High Quality Image Rendering
+   Prevents blurriness in ID card photos and signatures
+   ============================================ */
+.gallery-id-card img,
+.gallery-id-card-back img,
+.gallery-id-card-field-office img,
+.gallery-id-card-field-office-back img,
+.id-card img,
+.id-card-back img,
+.id-card-field-office img,
+.id-card-field-office-back img,
+.id-preview-modal img,
+.modal-body img,
+.pdf-id-card-wrapper img {
+  /* Prevent image blur from browser smoothing */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+  /* Ensure high quality scaling */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  /* Prevent subpixel rendering artifacts */
+  transform: translateZ(0);
+}
+
+/* Ensure ID card containers maintain sharp rendering */
+.gallery-id-card,
+.gallery-id-card-back,
+.gallery-id-card-field-office,
+.gallery-id-card-field-office-back,
+.id-card,
+.id-card-back,
+.id-card-field-office,
+.id-card-field-office-back {
+  /* Force GPU rendering for crisp edges */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  /* Prevent blur during transforms */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* Gallery Stats */
 .gallery-stats {
   display: flex;

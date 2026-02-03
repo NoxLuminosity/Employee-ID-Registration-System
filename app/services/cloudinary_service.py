@@ -362,3 +362,77 @@ def upload_bytes_to_cloudinary(
     except Exception as e:
         logger.error(f"Bytes upload failed for {public_id}: {str(e)}")
         return None
+
+
+def upload_pdf_to_cloudinary(
+    pdf_bytes: bytes,
+    public_id: str,
+    folder: Optional[str] = None
+) -> Optional[str]:
+    """
+    Upload a PDF file to Cloudinary and return the secure URL.
+    
+    Args:
+        pdf_bytes: Raw PDF bytes
+        public_id: Unique identifier for the PDF (e.g., "ID_EMP001")
+        folder: Optional folder name in Cloudinary (defaults to 'id_cards')
+    
+    Returns:
+        Secure HTTPS URL if successful, None otherwise
+    """
+    try:
+        # Ensure Cloudinary is configured
+        if not configure_cloudinary():
+            logger.warning("Cloudinary not configured. Skipping PDF upload.")
+            return None
+        
+        # Use folder from parameter or default to 'id_cards'
+        if folder is None:
+            folder = os.environ.get('CLOUDINARY_PDF_FOLDER', 'id_cards')
+        
+        # Full public_id includes folder
+        full_public_id = f"{folder}/{public_id}"
+        
+        # Check file size - Cloudinary free tier limit is 10MB
+        file_size_mb = len(pdf_bytes) / (1024 * 1024)
+        logger.info(f"PDF upload started: {public_id} ({len(pdf_bytes)} bytes / {file_size_mb:.2f} MB)")
+        
+        if file_size_mb > 10:
+            logger.error(f"PDF too large: {file_size_mb:.2f} MB (Cloudinary limit: 10 MB)")
+            return None
+        
+        # Convert bytes to base64 data URI for PDF
+        base64_data = base64.b64encode(pdf_bytes).decode('utf-8')
+        data_uri = f"data:application/pdf;base64,{base64_data}"
+        
+        # Upload to Cloudinary as raw resource type for PDFs
+        # IMPORTANT: Set access_mode to "public" to ensure URL is accessible without authentication
+        result = cloudinary.uploader.upload(
+            data_uri,
+            public_id=full_public_id,
+            overwrite=True,
+            resource_type="raw",  # Use 'raw' for non-image files like PDFs
+            format="pdf",
+            type="upload",  # Ensure it's a standard upload (publicly accessible)
+            access_mode="public"  # Make the file publicly accessible
+        )
+        
+        secure_url = result.get('secure_url')
+        
+        if secure_url:
+            logger.info(f"PDF upload successful: {public_id} -> {secure_url}")
+            return secure_url
+        else:
+            logger.error(f"PDF upload failed: No secure_url for {public_id}")
+            return None
+            
+    except cloudinary.exceptions.Error as e:
+        error_msg = str(e)
+        logger.error(f"Cloudinary API error uploading PDF {public_id}: {error_msg}")
+        # Re-raise with specific message for file size errors
+        if "File size too large" in error_msg:
+            logger.error("❌ File exceeds Cloudinary 10MB limit. Reduce PDF quality or page count.")
+        return None
+    except Exception as e:
+        logger.error(f"PDF upload failed for {public_id}: {str(e)}")
+        return None
