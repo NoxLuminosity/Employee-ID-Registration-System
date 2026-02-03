@@ -311,22 +311,21 @@ input[readonly]:focus {
    with consistent spacing and visual hierarchy
    ============================================ */
 
-/* Field Officer Fields Grid - Single column vertical layout
-   UPDATED: Changed to 1 column to match Location/Branch field width
-   Each field takes full width with consistent spacing */
+/* Field Officer Fields Grid - Single column layout
+   Each dropdown in its own row, full width */
 .fo-fields-grid {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
-  width: 420%;
-  max-width: 10000%;
+  gap: var(--spacing-md);
+  width: 100%;
+  max-width: 100%;
   padding: 0;
-  align-items: stretch; /* Force children to stretch full width */
+  box-sizing: border-box;
 }
 
-/* Each Field Officer field container - Full width with consistent styling */
+/* Each Field Officer field - full width box container */
 .fo-fields-grid .form-group.fo-field {
-  width: 100% !important;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
   margin: 0;
@@ -336,11 +335,9 @@ input[readonly]:focus {
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
   box-sizing: border-box;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-  flex-shrink: 0;
-  align-self: stretch; /* Ensure full width in flex container */
 }
 
 /* Hover/focus state for field containers */
@@ -349,6 +346,7 @@ input[readonly]:focus {
   box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
+/* Labels in FO fields grid */
 .fo-fields-grid .form-group.fo-field label {
   display: block;
   font-size: 0.875rem;
@@ -750,6 +748,79 @@ input[readonly]:focus {
     width: 100%;
     margin: 0;
   }
+  
+  /* Searchable dropdowns - mobile optimized */
+  .searchable-dropdown .dropdown-search,
+  .fo-fields-grid .searchable-dropdown .dropdown-search {
+    font-size: 16px;
+    min-height: 48px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    padding-right: 2.5rem;
+  }
+  
+  .searchable-dropdown .dropdown-options,
+  .fo-fields-grid .searchable-dropdown .dropdown-options {
+    max-height: 60vh; /* Use viewport height on mobile */
+    border-radius: var(--radius-sm);
+  }
+  
+  .searchable-dropdown .dropdown-option,
+  .fo-fields-grid .searchable-dropdown .dropdown-option {
+    padding: var(--spacing-md);
+    font-size: 1rem;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+  }
+  
+  /* Multi-select dropdown - mobile optimized */
+  .multi-select-dropdown .multi-select-container {
+    min-height: 48px;
+    padding: var(--spacing-sm);
+    padding-right: 2.5rem;
+    gap: var(--spacing-xs);
+  }
+  
+  .multi-select-dropdown .selected-tags {
+    gap: 6px;
+    flex-wrap: wrap;
+    max-width: calc(100% - 2rem);
+  }
+  
+  .multi-select-dropdown .selected-tag {
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .multi-select-dropdown .selected-tag .remove-tag {
+    width: 18px;
+    height: 18px;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  
+  .multi-select-dropdown .dropdown-search.multi-search {
+    font-size: 16px;
+    min-height: 32px;
+    min-width: 80px;
+  }
+  
+  .multi-select-dropdown .dropdown-options {
+    max-height: 60vh;
+    border-radius: var(--radius-sm);
+  }
+  
+  .multi-select-dropdown .dropdown-option {
+    padding: var(--spacing-md);
+    font-size: 1rem;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+  }
 }
 
 /* Extra small phones (≤360px) */
@@ -787,6 +858,46 @@ input[readonly]:focus {
     font-size: 0.8rem;
   }
   
+  /* Dropdowns - compact for extra small screens */
+  .searchable-dropdown .dropdown-search,
+  .fo-fields-grid .searchable-dropdown .dropdown-search {
+    font-size: 16px;
+    min-height: 44px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    padding-right: 2rem;
+  }
+  
+  .searchable-dropdown .dropdown-option,
+  .fo-fields-grid .searchable-dropdown .dropdown-option {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.9rem;
+    min-height: 44px;
+  }
+  
+  .multi-select-dropdown .multi-select-container {
+    min-height: 44px;
+    padding: var(--spacing-xs);
+    padding-right: 2rem;
+  }
+  
+  .multi-select-dropdown .selected-tag {
+    font-size: 0.7rem;
+    padding: 4px 6px;
+    max-width: calc(100% - 1rem);
+  }
+  
+  .multi-select-dropdown .selected-tag .remove-tag {
+    width: 16px;
+    height: 16px;
+    font-size: 12px;
+  }
+  
+  .multi-select-dropdown .dropdown-option {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.9rem;
+    min-height: 44px;
+  }
+
   /* Buttons */
   .btn {
     font-size: 0.9rem;
@@ -3799,6 +3910,8 @@ input::placeholder {
   gap: var(--spacing-lg);
   width: 100%;
   align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .dual-template-card {
@@ -3839,6 +3952,10 @@ input::placeholder {
   width: 100%;
   /* Tighter fit - no extra space below templates */
   overflow: hidden;
+  box-sizing: border-box;
+  /* Shift both cards left by 20px */
+  margin-right: 20px;
+  margin-left: -20px;
 }
 
 /* Portrait ID card (512x800) scaling - calculate proper margin */
@@ -3863,50 +3980,86 @@ input::placeholder {
 
 /* Mobile responsiveness for dual template */
 @media (max-width: 768px) {
+  .dual-template-grid {
+    align-items: center;
+    width: 100%;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  .dual-template-card {
+    padding: var(--spacing-sm);
+    overflow: visible;
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .dual-preview-wrapper {
+    justify-content: center;
+    width: 100%;
+    display: flex;
+    overflow: visible;
+    /* Shift both cards left by 20px on mobile too */
+    margin-right: 20px;
+    margin-left: -20px;
+  }
+  
   .dual-preview-wrapper .id-card,
   .dual-preview-wrapper .id-card-back {
     transform: scale(0.55);
+    transform-origin: center top;
     /* At 0.55 scale: 512 × 0.55 = 282px width, 800 × 0.55 = 440px height */
     margin-bottom: -360px;
-    margin-left: -115px; /* (512-282)/2 */
-    margin-right: -115px;
+    margin-left: 0;
+    margin-right: 0;
     min-width: unset;
   }
   
   .dual-preview-wrapper .id-card-field-office,
   .dual-preview-wrapper .id-card-field-office-back {
     transform: scale(0.65);
+    transform-origin: center top;
     /* At 0.65 scale: 319px * 0.65 = 207px actual height */
     margin-bottom: -112px;
-    margin-left: -89px;
-    margin-right: -89px;
+    margin-left: 0;
+    margin-right: 0;
     min-width: unset;
-  }
-  
-  .dual-template-card {
-    padding: var(--spacing-sm);
-    overflow: hidden;
   }
 }
 
 @media (max-width: 480px) {
+  .dual-template-grid {
+    padding: 0;
+    gap: var(--spacing-md);
+  }
+  
+  .dual-template-card {
+    padding: var(--spacing-xs);
+    overflow: visible;
+  }
+  
   .dual-preview-wrapper .id-card,
   .dual-preview-wrapper .id-card-back {
     transform: scale(0.45);
+    transform-origin: center top;
     /* At 0.45 scale: 512 × 0.45 = 230px width, 800 × 0.45 = 360px height */
     margin-bottom: -440px;
-    margin-left: -141px; /* (512-230)/2 */
-    margin-right: -141px;
+    margin-left: 0;
+    margin-right: 0;
     min-width: unset;
   }
   
   .dual-preview-wrapper .id-card-field-office,
   .dual-preview-wrapper .id-card-field-office-back {
     transform: scale(0.52);
+    transform-origin: center top;
     /* At 0.52 scale: 319px * 0.52 = 166px actual height */
     margin-bottom: -153px;
-    margin-left: -123px;
-    margin-right: -123px;
+    margin-left: 0;
+    margin-right: 0;
     min-width: unset;
   }
   
@@ -3922,29 +4075,35 @@ input::placeholder {
 
 /* Extra small phones (≤360px) */
 @media (max-width: 360px) {
+  .dual-template-grid {
+    gap: var(--spacing-sm);
+  }
+  
+  .dual-template-card {
+    padding: var(--spacing-xs);
+    overflow: visible;
+  }
+  
   .dual-preview-wrapper .id-card,
   .dual-preview-wrapper .id-card-back {
     transform: scale(0.38);
+    transform-origin: center top;
     /* At 0.38 scale: 512 × 0.38 = 195px width, 800 × 0.38 = 304px height */
     margin-bottom: -496px;
-    margin-left: -158px; /* (512-195)/2 */
-    margin-right: -158px;
+    margin-left: 0;
+    margin-right: 0;
     min-width: unset;
   }
   
   .dual-preview-wrapper .id-card-field-office,
   .dual-preview-wrapper .id-card-field-office-back {
     transform: scale(0.45);
+    transform-origin: center top;
     /* At 0.45 scale: 512 × 0.45 = 230px width */
     margin-bottom: -175px;
-    margin-left: -141px;
-    margin-right: -141px;
+    margin-left: 0;
+    margin-right: 0;
     min-width: unset;
-  }
-  
-  .dual-template-card {
-    padding: var(--spacing-xs);
-    overflow: hidden;
   }
   
   .dual-template-title {
@@ -3959,23 +4118,34 @@ input::placeholder {
 
 /* Extra extra small phones (≤320px) */
 @media (max-width: 320px) {
+  .dual-template-grid {
+    gap: var(--spacing-xs);
+  }
+  
+  .dual-template-card {
+    padding: 4px;
+    overflow: visible;
+  }
+  
   .dual-preview-wrapper .id-card,
   .dual-preview-wrapper .id-card-back {
     transform: scale(0.32);
+    transform-origin: center top;
     /* At 0.32 scale: 512 × 0.32 = 164px width, 800 × 0.32 = 256px height */
     margin-bottom: -544px;
-    margin-left: -174px; /* (512-164)/2 */
-    margin-right: -174px;
+    margin-left: 0;
+    margin-right: 0;
     min-width: unset;
   }
   
   .dual-preview-wrapper .id-card-field-office,
   .dual-preview-wrapper .id-card-field-office-back {
     transform: scale(0.38);
+    transform-origin: center top;
     /* At 0.38 scale: 512 × 0.38 = 195px width */
     margin-bottom: -198px;
-    margin-left: -158px;
-    margin-right: -158px;
+    margin-left: 0;
+    margin-right: 0;
     min-width: unset;
   }
   
