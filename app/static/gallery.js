@@ -1229,25 +1229,66 @@ async function captureCardCanvas(tempContainer, cardHtml, designWidth, designHei
     throw new Error('Card element not found for PDF capture');
   }
 
+  // Set exact dimensions - prevents any scaling during capture
   cardEl.style.width = `${designWidth}px`;
   cardEl.style.height = `${designHeight}px`;
   cardEl.style.minWidth = `${designWidth}px`;
   cardEl.style.minHeight = `${designHeight}px`;
+  cardEl.style.maxWidth = `${designWidth}px`;
+  cardEl.style.maxHeight = `${designHeight}px`;
   cardEl.style.transform = 'none';
   cardEl.style.transformOrigin = 'top left';
   cardEl.style.margin = '0';
   cardEl.style.overflow = 'hidden';
+  
+  // Apply high-quality image rendering to all images BEFORE capture
+  const allImages = cardEl.querySelectorAll('img');
+  allImages.forEach(img => {
+    img.style.imageRendering = 'high-quality'; // Best quality rendering
+    img.style.webkitBackfaceVisibility = 'hidden';
+    img.style.backfaceVisibility = 'hidden';
+    // Force image to re-render
+    img.style.willChange = 'transform';
+  });
 
+  // Initial wait for DOM to settle
   await new Promise(resolve => setTimeout(resolve, waitTime));
   
+  // Wait for all images to fully load with better error handling
   const images = tempContainer.querySelectorAll('img');
-  await Promise.all(Array.from(images).map(img => {
-    if (img.complete) return Promise.resolve();
+  console.log(`  Waiting for ${images.length} images to load...`);
+  
+  await Promise.all(Array.from(images).map((img, index) => {
     return new Promise(resolve => {
-      img.onload = resolve;
-      img.onerror = resolve;
+      // Check if already loaded
+      if (img.complete && img.naturalHeight !== 0 && img.naturalWidth !== 0) {
+        console.log(`  Image ${index + 1} already loaded: ${img.src.substring(0, 50)}...`);
+        return resolve();
+      }
+      
+      const timeoutId = setTimeout(() => {
+        console.warn(`  Image ${index + 1} timeout after 8s: ${img.src.substring(0, 50)}...`);
+        resolve();
+      }, 8000);
+      
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        console.log(`  Image ${index + 1} loaded: ${img.naturalWidth}x${img.naturalHeight}`);
+        resolve();
+      };
+      
+      img.onerror = (e) => {
+        clearTimeout(timeoutId);
+        console.error(`  Image ${index + 1} failed to load:`, e);
+        resolve();
+      };
     });
   }));
+  
+  // Additional wait after images load to ensure rendering is complete
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  console.log(`  Starting html2canvas capture at scale ${scaleToFit}...`);
 
   return await html2canvas(cardEl, {
     scale: scaleToFit,
@@ -1260,18 +1301,31 @@ async function captureCardCanvas(tempContainer, cardHtml, designWidth, designHei
     scrollX: 0,
     logging: false,
     // High quality image rendering settings
-    imageTimeout: 15000,         // Wait longer for images to load
+    imageTimeout: 15000,         // Wait for images
     removeContainer: false,      // Keep container for accurate rendering
     letterRendering: true,       // Better text rendering
     foreignObjectRendering: false, // More compatible rendering mode
-    // Prevent image smoothing artifacts
-    onclone: function(clonedDoc) {
-      // Apply crisp image rendering to all images in cloned document
-      const images = clonedDoc.querySelectorAll('img');
-      images.forEach(img => {
-        img.style.imageRendering = 'crisp-edges';
+    windowWidth: designWidth,    // Match window to design width
+    windowHeight: designHeight,  // Match window to design height
+    // Preserve image quality in cloned document
+    onclone: function(clonedDoc, clonedElement) {
+      // Apply high-quality image rendering to all images
+      const clonedImages = clonedElement.querySelectorAll('img');
+      clonedImages.forEach(img => {
+        // Use 'high-quality' for best rendering
+        img.style.imageRendering = 'high-quality';
+        // Fallback for browsers that don't support high-quality
         img.style.imageRendering = '-webkit-optimize-contrast';
+        // Ensure images display properly
+        img.style.objectFit = 'cover';
+        // GPU acceleration for crisp rendering
+        img.style.transform = 'translateZ(0)';
+        img.style.webkitTransform = 'translateZ(0)';
       });
+      
+      // Ensure card element maintains exact dimensions
+      clonedElement.style.width = `${designWidth}px`;
+      clonedElement.style.height = `${designHeight}px`;
     }
   });
 }
@@ -1355,41 +1409,63 @@ async function downloadIDPdf(emp) {
       const originalBackImgData = originalBackCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
       pdf.addImage(originalBackImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
       
-      // Page 3: Field Officer template front (landscape - 3.33" x 2.13")
+      // Page 3: Field Officer template front (LANDSCAPE page - 3.33" × 2.13")
+      // Maintains original template dimensions for maximum quality - NO resizing
       console.log('Capturing Field Officer template front (landscape)...');
-      const landscapeWidthMm = PDF_CONFIG_LANDSCAPE.WIDTH_MM;  // 3.33" = 84.582mm
+      
+      // Landscape page dimensions (matching template aspect ratio exactly)
+      const landscapeWidthMm = PDF_CONFIG_LANDSCAPE.WIDTH_MM;   // 3.33" = 84.582mm
       const landscapeHeightMm = PDF_CONFIG_LANDSCAPE.HEIGHT_MM; // 2.13" = 54.102mm
+      
+      // Capture dimensions (landscape design) - matches CSS exactly
       const landscapeDesignWidth = PDF_CONFIG_LANDSCAPE.PREVIEW_WIDTH_PX;  // 512px
       const landscapeDesignHeight = PDF_CONFIG_LANDSCAPE.PREVIEW_HEIGHT_PX; // 319px
-      const landscapeScale = PDF_CONFIG_LANDSCAPE.CANVAS_SCALE;
       
-      // Add page with LANDSCAPE orientation - width > height
+      // Scale 3 for landscape - best balance of quality and file size
+      // Scale 2 was blurry, scale 4 was 20MB, scale 3 gives sharp quality at ~7-8MB total
+      const landscapeScale = 3;
+      
+      // Add LANDSCAPE page with correct dimensions
       pdf.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
+      
+      // Capture the landscape card at high resolution
       const foFrontCanvas = await captureCardCanvas(
         tempContainer, 
         generateFieldOfficeIDCardHtml(emp), 
         landscapeDesignWidth, 
         landscapeDesignHeight, 
         landscapeScale, 
-        1000
+        2000 // Longer wait for images to fully load
       );
-      const foFrontImgData = foFrontCanvas.toDataURL('image/jpeg', PDF_CONFIG_LANDSCAPE.JPEG_QUALITY);
-      pdf.addImage(foFrontImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
       
-      // Page 4: Field Officer template back (landscape - 3.33" x 2.13" - MUST match front)
+      // Use JPEG with 92% quality - high quality with reasonable file size
+      // 92% preserves sharpness while keeping each page under 2MB
+      const foFrontImgData = foFrontCanvas.toDataURL('image/jpeg', 0.92);
+      
+      console.log(`  Landscape page: ${landscapeWidthMm.toFixed(2)}mm × ${landscapeHeightMm.toFixed(2)}mm (3.33" × 2.13")`);
+      console.log(`  Canvas captured: ${foFrontCanvas.width}px × ${foFrontCanvas.height}px`);
+      
+      // Add image at FULL page size - SLOW compression for better quality
+      pdf.addImage(foFrontImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'SLOW');
+      
+      // Page 4: Field Officer template back (LANDSCAPE page - same dimensions)
       console.log('Capturing Field Officer template back (landscape)...');
-      // CRITICAL: Back side MUST use same landscape dimensions as front
       pdf.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
+      
       const foBackCanvas = await captureCardCanvas(
         tempContainer, 
         generateFieldOfficeIDCardBackHtml(emp), 
         landscapeDesignWidth, 
         landscapeDesignHeight, 
         landscapeScale, 
-        1000
+        1500
       );
-      const foBackImgData = foBackCanvas.toDataURL('image/jpeg', PDF_CONFIG_LANDSCAPE.JPEG_QUALITY);
-      pdf.addImage(foBackImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
+      
+      // Use JPEG with 92% quality - matches front side
+      const foBackImgData = foBackCanvas.toDataURL('image/jpeg', 0.92);
+      
+      // Add image at FULL page size - SLOW compression for better quality
+      pdf.addImage(foBackImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'SLOW');
       
     } else {
       // Standard 2-page PDF for non-Field Officer employees (Freelancer, Intern, Others)
