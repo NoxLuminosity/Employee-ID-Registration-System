@@ -833,7 +833,7 @@ function getBarcodeUrl(idNumber, options = {}) {
   // BarcodeAPI settings: DPI 500, Height 10, Text None
   const height = options.height || 10;
   const dpi = options.dpi || 500;
-  
+
   // URL-encode the ID number to handle special characters
   const encodedId = encodeURIComponent(idNumber);
   
@@ -841,8 +841,9 @@ function getBarcodeUrl(idNumber, options = {}) {
   let url = `https://barcodeapi.org/api/${type}/${encodedId}`;
   
   // Add parameters for 1D barcodes (not QR or DataMatrix)
+  // hidetext=1&text=none removes the human-readable text from the barcode image
   if (type !== 'qr' && type !== 'dm') {
-    url += `?height=${height}&dpi=${dpi}`;
+    url += `?height=${height}&dpi=${dpi}&hidetext=1&text=none`;
   }
   
   return url;
@@ -857,19 +858,19 @@ function getBarcodeUrl(idNumber, options = {}) {
  */
 function generateBarcodeHtml(idNumber, options = {}) {
   if (!idNumber) {
-    return `<span class="barcode-fallback">No ID</span>`;
+    return ``; // Return nothing if no ID
   }
   
   const barcodeUrl = getBarcodeUrl(idNumber, options);
   
+  // Generate HTML - hide on error (no text shown)
   return `
     <img 
       src="${barcodeUrl}" 
       alt="Barcode for ${escapeHtml(idNumber)}" 
       class="barcode-image"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
+      onerror="this.style.display='none';"
     >
-    <span class="barcode-fallback" style="display:none;">${escapeHtml(idNumber)}</span>
   `;
 }
 

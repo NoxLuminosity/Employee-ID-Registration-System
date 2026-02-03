@@ -32,8 +32,9 @@ function getBarcodeUrl(idNumber, options = {}) {
   let url = `https://barcodeapi.org/api/${type}/${encodedId}`;
   
   // Add parameters for 1D barcodes (not QR or DataMatrix)
+  // hidetext=1&text=none removes the human-readable text from the barcode image
   if (type !== 'qr' && type !== 'dm') {
-    url += `?height=${height}&dpi=${dpi}`;
+    url += `?height=${height}&dpi=${dpi}&hidetext=1&text=none`;
   }
   
   return url;
@@ -68,21 +69,26 @@ function updateBarcodeDisplay(idNumber, imgEl, fallbackEl, options = {}) {
     // Handle successful load
     imgEl.onload = function() {
       console.log('[Barcode] Image loaded successfully');
+      // BarcodeAPI returns error images with small dimensions or specific sizes
+      // A valid barcode should have reasonable dimensions
+      if (this.naturalWidth < 20 || this.naturalHeight < 5) {
+        console.warn('[Barcode] Image too small, likely an error response');
+        this.style.display = 'none';
+        fallbackEl.style.display = 'none'; // Hide fallback too - show nothing on error
+      }
     };
     
-    // Handle load error - show fallback if barcode fails to load
+    // Handle load error - hide everything (no text, no fallback)
     imgEl.onerror = function() {
-      console.error('[Barcode] Image failed to load, showing fallback');
+      console.error('[Barcode] Image failed to load');
       this.style.display = 'none';
-      fallbackEl.textContent = idNumber || 'Barcode';
-      fallbackEl.style.display = 'block';
+      fallbackEl.style.display = 'none'; // Show nothing on error
     };
   } else {
-    console.log('[Barcode] No URL generated, showing fallback');
+    console.log('[Barcode] No URL generated, hiding barcode area');
     imgEl.style.display = 'none';
     imgEl.removeAttribute('src');
-    fallbackEl.textContent = 'Barcode';
-    fallbackEl.style.display = 'block';
+    fallbackEl.style.display = 'none'; // Show nothing when no ID
   }
 }
 
