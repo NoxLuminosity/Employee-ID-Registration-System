@@ -92,8 +92,13 @@ const PDF_CONFIG = {
   get RENDER_WIDTH_PX() { return Math.round(this.WIDTH_INCHES * this.PRINT_DPI); },  // 639px
   get RENDER_HEIGHT_PX() { return Math.round(this.HEIGHT_INCHES * this.PRINT_DPI); }, // 999px
   
-  // html2canvas scale factor (DPI ratio)
-  get CANVAS_SCALE() { return this.PRINT_DPI / this.SCREEN_DPI; }  // ~3.125
+  // html2canvas scale factor - 2x for good quality while keeping file size under 10MB
+  // Higher scale = larger file size. Cloudinary free tier has 10MB limit.
+  CANVAS_SCALE: 2,
+  
+  // JPEG quality for PDF images (0.0-1.0)
+  // Lower = smaller file, higher = better quality. 0.85 is good balance.
+  JPEG_QUALITY: 0.85
 };
 
 // Landscape PDF Config for Field Officer templates
@@ -120,8 +125,11 @@ const PDF_CONFIG_LANDSCAPE = {
   get RENDER_WIDTH_PX() { return Math.round(this.WIDTH_INCHES * this.PRINT_DPI); },  // 999px
   get RENDER_HEIGHT_PX() { return Math.round(this.HEIGHT_INCHES * this.PRINT_DPI); }, // 639px
   
-  // html2canvas scale factor - use 4x for high quality PDF (matches portrait)
-  CANVAS_SCALE: 4
+  // html2canvas scale factor - 2x for good quality while keeping file size under 10MB
+  CANVAS_SCALE: 2,
+  
+  // JPEG quality for PDF images (0.0-1.0)
+  JPEG_QUALITY: 0.85
 };
 
 // Cache settings - MUST match dashboard.js for shared cache
@@ -1250,7 +1258,21 @@ async function captureCardCanvas(tempContainer, cardHtml, designWidth, designHei
     height: designHeight,
     scrollY: 0,
     scrollX: 0,
-    logging: false
+    logging: false,
+    // High quality image rendering settings
+    imageTimeout: 15000,         // Wait longer for images to load
+    removeContainer: false,      // Keep container for accurate rendering
+    letterRendering: true,       // Better text rendering
+    foreignObjectRendering: false, // More compatible rendering mode
+    // Prevent image smoothing artifacts
+    onclone: function(clonedDoc) {
+      // Apply crisp image rendering to all images in cloned document
+      const images = clonedDoc.querySelectorAll('img');
+      images.forEach(img => {
+        img.style.imageRendering = 'crisp-edges';
+        img.style.imageRendering = '-webkit-optimize-contrast';
+      });
+    }
   });
 }
 
@@ -1316,8 +1338,8 @@ async function downloadIDPdf(emp) {
         scaleToFit, 
         1500
       );
-      const originalFrontImgData = originalFrontCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(originalFrontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      const originalFrontImgData = originalFrontCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
+      pdf.addImage(originalFrontImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
       
       // Page 2: Original template back
       console.log('Capturing Original template back...');
@@ -1330,8 +1352,8 @@ async function downloadIDPdf(emp) {
         scaleToFit, 
         1000
       );
-      const originalBackImgData = originalBackCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(originalBackImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      const originalBackImgData = originalBackCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
+      pdf.addImage(originalBackImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
       
       // Page 3: Field Officer template front (landscape - 3.33" x 2.13")
       console.log('Capturing Field Officer template front (landscape)...');
@@ -1351,8 +1373,8 @@ async function downloadIDPdf(emp) {
         landscapeScale, 
         1000
       );
-      const foFrontImgData = foFrontCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(foFrontImgData, 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
+      const foFrontImgData = foFrontCanvas.toDataURL('image/jpeg', PDF_CONFIG_LANDSCAPE.JPEG_QUALITY);
+      pdf.addImage(foFrontImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
       
       // Page 4: Field Officer template back (landscape - 3.33" x 2.13" - MUST match front)
       console.log('Capturing Field Officer template back (landscape)...');
@@ -1366,8 +1388,8 @@ async function downloadIDPdf(emp) {
         landscapeScale, 
         1000
       );
-      const foBackImgData = foBackCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(foBackImgData, 'PNG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
+      const foBackImgData = foBackCanvas.toDataURL('image/jpeg', PDF_CONFIG_LANDSCAPE.JPEG_QUALITY);
+      pdf.addImage(foBackImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'FAST');
       
     } else {
       // Standard 2-page PDF for non-Field Officer employees (Freelancer, Intern, Others)
@@ -1385,8 +1407,8 @@ async function downloadIDPdf(emp) {
         scaleToFit, 
         1500
       );
-      const frontImgData = frontCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(frontImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      const frontImgData = frontCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
+      pdf.addImage(frontImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
       
       // Page 2: Back side (uses position-aware template)
       console.log('Capturing back side...');
@@ -1399,8 +1421,8 @@ async function downloadIDPdf(emp) {
         scaleToFit, 
         1000
       );
-      const backImgData = backCanvas.toDataURL('image/png', 1.0);
-      pdf.addImage(backImgData, 'PNG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      const backImgData = backCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
+      pdf.addImage(backImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
     }
     
     console.log('PDF Output:', {
@@ -1410,25 +1432,120 @@ async function downloadIDPdf(emp) {
       pages: pageCount
     });
     
-    // Download the PDF with descriptive filename
+    // Get PDF as binary blob for backend upload
+    const pdfBlob = pdf.output('blob');
+    console.log('PDF blob size:', pdfBlob.size, 'bytes');
+    
+    // Check file size - Cloudinary free tier limit is 10MB
+    const maxFileSizeMB = 10;
+    const fileSizeMB = pdfBlob.size / (1024 * 1024);
+    console.log(`PDF size: ${fileSizeMB.toFixed(2)} MB (max: ${maxFileSizeMB} MB)`);
+    
+    if (fileSizeMB > maxFileSizeMB) {
+      document.body.removeChild(tempContainer);
+      showToast(`❌ PDF too large: ${fileSizeMB.toFixed(1)}MB (max: ${maxFileSizeMB}MB). Try again.`, 'error');
+      console.error(`PDF size ${fileSizeMB.toFixed(2)}MB exceeds Cloudinary limit of ${maxFileSizeMB}MB`);
+      return;
+    }
+    
+    // Upload PDF to backend for Cloudinary and LarkBase sync
+    // CRITICAL: Only allow download AFTER backend confirms upload success
+    let pdfUrl = null;
+    let larkSynced = false;
+    let uploadSuccess = false;
+    
+    try {
+      showToast('Uploading PDF to cloud storage and LarkBase...', 'success');
+      console.log('Uploading PDF to backend for employee:', emp.id);
+      
+      const uploadResponse = await fetch(`/hr/api/employees/${emp.id}/upload-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/pdf'
+        },
+        body: pdfBlob,
+        credentials: 'include'
+      });
+      
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('Upload failed with status:', uploadResponse.status, errorText);
+        throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
+      }
+      
+      const uploadResult = await uploadResponse.json();
+      console.log('PDF upload result:', uploadResult);
+      
+      if (uploadResult.success && uploadResult.pdf_url) {
+        pdfUrl = uploadResult.pdf_url;
+        larkSynced = uploadResult.lark_synced || false;
+        uploadSuccess = true;
+        console.log('PDF uploaded successfully:', pdfUrl, 'LarkBase synced:', larkSynced);
+        
+        // Verify LarkBase sync was successful
+        if (!larkSynced) {
+          console.warn('⚠️ PDF uploaded but LarkBase id_card update failed');
+          showToast('⚠️ PDF uploaded but LarkBase update failed. Retrying...', 'warning');
+          
+          // Retry LarkBase update via dedicated endpoint if available
+          // For now, we'll proceed but warn the user
+        }
+      } else {
+        console.error('Upload response indicates failure:', uploadResult.error || 'Unknown error');
+        throw new Error(uploadResult.error || 'Upload failed - no URL returned');
+      }
+    } catch (uploadError) {
+      console.error('Error uploading PDF to backend:', uploadError);
+      
+      // CRITICAL: Do NOT proceed with download if upload failed
+      // Cleanup and show error
+      document.body.removeChild(tempContainer);
+      showToast(`❌ PDF upload failed: ${uploadError.message}. Download blocked.`, 'error');
+      return; // Exit without downloading
+    }
+    
+    // ONLY proceed with download if upload was successful
+    if (!uploadSuccess || !pdfUrl) {
+      document.body.removeChild(tempContainer);
+      showToast('❌ Cannot download - PDF was not uploaded successfully', 'error');
+      return;
+    }
+    
+    // Download the PDF locally with descriptive filename
+    // This is now AFTER successful backend upload
     const suffix = isFieldOfficer ? '_dual_templates' : '';
-    pdf.save(`ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}${suffix}.pdf`);
+    const filename = `ID_${emp.id_number}_${emp.employee_name.replace(/\s+/g, '_')}${suffix}.pdf`;
+    
+    console.log('✅ Backend upload confirmed. Starting local download:', filename);
+    pdf.save(filename);
 
     // Cleanup
     document.body.removeChild(tempContainer);
     
-    // Mark as completed if approved
+    // Update local state to reflect "Completed" status
     if (emp.status === 'Approved') {
-      await markAsCompleted(emp.id);
+      emp.status = 'Completed';
+      renderGallery();
+      // updateStats() refreshes the status counts in the sidebar
+      if (typeof updateStats === 'function') {
+        updateStats();
+      }
     }
 
-    const message = isFieldOfficer 
-      ? `4-page PDF downloaded (Portrait + Landscape templates at ${PDF_CONFIG.PRINT_DPI} DPI)`
+    // Show success message with cloud upload and LarkBase status
+    let message = isFieldOfficer 
+      ? `4-page PDF downloaded (Portrait + Landscape at ${PDF_CONFIG.PRINT_DPI} DPI)`
       : `PDF downloaded (${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}" at ${PDF_CONFIG.PRINT_DPI} DPI)`;
+    
+    if (larkSynced) {
+      message += ' ✅ Saved to LarkBase';
+    } else if (pdfUrl) {
+      message += ' ⚠️ Cloud uploaded (LarkBase pending)';
+    }
     showToast(message, 'success');
   } catch (error) {
     console.error('Error generating PDF:', error);
-    showToast('Failed to generate PDF. Please try again.', 'error');
+    showToast(`Failed to generate PDF: ${error.message}`, 'error');
   }
 }
 

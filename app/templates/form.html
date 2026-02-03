@@ -1581,12 +1581,15 @@
   <script src="/static/screenshot_protection.js"></script>
   <script>
     // Initialize screenshot protection with user identifier
+    // persistentOnScreenshotAttempt: makes overlay stay permanent when screenshot shortcut is detected
     document.addEventListener('DOMContentLoaded', function() {
       ScreenshotProtection.init({
         userIdentifier: '{{ user.name or user.email or "Employee" }}',
         watermarkText: 'CONFIDENTIAL - ID Registration',
         logToServer: true,
-        overlayEnabled: true
+        overlayEnabled: true,
+        persistentOnScreenshotAttempt: true,  // Keep overlay persistent on Win+Shift+S detection
+        isEmployeeSide: true  // Mark this as employee-side for stricter protection
       });
     });
   </script>

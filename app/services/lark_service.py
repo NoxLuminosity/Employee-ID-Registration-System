@@ -420,12 +420,46 @@ def log_status_transition(id_number: str, old_status: str, new_status: str, sour
     logger.info("=" * 60)
 
 
+# Valid status values for Lark Bitable dropdown field
+VALID_STATUS_VALUES = ["Reviewing", "Approved", "Completed"]
+
+# Maximum retry attempts for handling race conditions
+MAX_RETRY_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 0.5
+
+
+def validate_status_value(status: str) -> Tuple[bool, str]:
+    """Validate that a status value is a valid dropdown option.
+    
+    Args:
+        status: The status value to validate
+    
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not status:
+        return False, "Status value cannot be empty"
+    
+    # Normalize status for comparison (handle case differences)
+    normalized_status = status.strip()
+    
+    # Check exact match against valid values
+    if normalized_status not in VALID_STATUS_VALUES:
+        return False, f"Invalid status '{status}'. Must be one of: {', '.join(VALID_STATUS_VALUES)}"
+    
+    return True, ""
+
+
 def find_and_update_employee_status(id_number: str, new_status: str, old_status: str = None, source: str = "HR System") -> bool:
     """Find an employee by ID number and update their status in Lark Bitable.
     
+    Uses precise record matching by id_number to ensure only the correct employee
+    record is updated. Includes validation for dropdown status values and
+    retry logic to handle race conditions.
+    
     Args:
-        id_number: The employee's ID number to search for
-        new_status: The new status value (e.g., "Approved", "Completed")
+        id_number: The employee's ID number to search for (unique identifier)
+        new_status: The new status value (must be "Reviewing", "Approved", or "Completed")
         old_status: Previous status for logging (optional)
         source: Source of the status change for logging
     
@@ -433,6 +467,12 @@ def find_and_update_employee_status(id_number: str, new_status: str, old_status:
         True if update was successful, False otherwise
     """
     logger.info(f"🔍 Finding employee {id_number} in Lark Bitable to update status to '{new_status}'")
+    
+    # Step 1: Validate the new status value against allowed dropdown options
+    is_valid, error_msg = validate_status_value(new_status)
+    if not is_valid:
+        logger.error(f"❌ Status validation failed: {error_msg}")
+        return False
     
     # Log the status transition
     log_status_transition(id_number, old_status or "Unknown", new_status, source)
@@ -444,30 +484,174 @@ def find_and_update_employee_status(id_number: str, new_status: str, old_status:
         logger.error("❌ Lark Bitable credentials not configured")
         return False
     
-    # Get all records and find the one with matching id_number
-    records = get_bitable_records(app_token, table_id, filter_formula=f'CurrentValue.[id_number]="{id_number}"')
+    # Step 2: Find the exact record by id_number with filter
+    # Use precise filter to ensure we get only the matching record
+    filter_formula = f'CurrentValue.[id_number]="{id_number}"'
+    records = get_bitable_records(app_token, table_id, filter_formula=filter_formula)
+    
+    if not records:
+        logger.warning(f"⚠️ Employee {id_number} not found in Lark Bitable using filter: {filter_formula}")
+        return False
+    
+    # Step 3: Verify we found exactly the right record (prevent updating wrong record)
+    matching_record = None
+    for record in records:
+        fields = record.get("fields", {})
+        record_id_number = fields.get("id_number", "").strip()
+        
+        # Exact match verification (case-sensitive)
+        if record_id_number == id_number.strip():
+            matching_record = record
+            logger.info(f"✅ Found exact match for id_number: {id_number}")
+            break
+    
+    if not matching_record:
+        logger.error(f"❌ No exact match found for id_number '{id_number}' in {len(records)} returned records")
+        return False
+    
+    record_id = matching_record.get("record_id")
+    if not record_id:
+        logger.error(f"❌ No record_id found for employee {id_number}")
+        return False
+    
+    logger.info(f"📍 Targeting Lark Bitable record_id: {record_id} for employee {id_number}")
+    
+    # Step 4: Update the status with retry logic for race conditions
+    for attempt in range(MAX_RETRY_ATTEMPTS):
+        try:
+            success = update_record_in_bitable(app_token, table_id, record_id, {"status": new_status})
+            
+            if success:
+                logger.info(f"✅ Larkbase status synced: {id_number} → {new_status} (record_id: {record_id})")
+                return True
+            else:
+                logger.warning(f"⚠️ Update attempt {attempt + 1}/{MAX_RETRY_ATTEMPTS} failed for {id_number}")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Update attempt {attempt + 1}/{MAX_RETRY_ATTEMPTS} raised exception: {str(e)}")
+        
+        # Wait before retry (except on last attempt)
+        if attempt < MAX_RETRY_ATTEMPTS - 1:
+            time.sleep(RETRY_DELAY_SECONDS)
+    
+    logger.error(f"❌ Failed to sync Larkbase status for {id_number} after {MAX_RETRY_ATTEMPTS} attempts")
+    return False
+
+
+def update_employee_id_card(id_number: str, pdf_url: str, source: str = "HR PDF Download") -> bool:
+    """Update the id_card field for an employee in Lark Bitable.
+    
+    Uses precise record matching by id_number to ensure only the correct employee
+    record is updated. The id_card field is a URL field in LarkBase.
+    
+    For LarkBase URL fields, we use the format:
+    {"link": "https://...", "text": "display text"}
+    
+    Args:
+        id_number: The employee's ID number to search for (unique identifier)
+        pdf_url: The Cloudinary URL of the uploaded PDF
+        source: Source of the update for logging
+    
+    Returns:
+        True if update was successful, False otherwise
+    """
+    logger.info(f"📄 Updating id_card for employee {id_number}")
+    logger.info(f"   PDF URL: {pdf_url[:80]}..." if len(pdf_url) > 80 else f"   PDF URL: {pdf_url}")
+    
+    if not pdf_url:
+        logger.error("❌ PDF URL cannot be empty")
+        return False
+    
+    app_token = LARK_BITABLE_ID or os.environ.get('LARK_BITABLE_APP_TOKEN')
+    table_id = LARK_TABLE_ID or os.environ.get('LARK_BITABLE_TABLE_ID')
+    
+    if not app_token or not table_id:
+        logger.error("❌ Lark Bitable credentials not configured")
+        return False
+    
+    # Find the exact record by id_number with filter
+    filter_formula = f'CurrentValue.[id_number]="{id_number}"'
+    records = get_bitable_records(app_token, table_id, filter_formula=filter_formula)
     
     if not records:
         logger.warning(f"⚠️ Employee {id_number} not found in Lark Bitable")
         return False
     
-    # Update the first matching record
-    record = records[0]
-    record_id = record.get("record_id")
+    # Verify we found exactly the right record
+    matching_record = None
+    for record in records:
+        fields = record.get("fields", {})
+        record_id_number = fields.get("id_number", "").strip()
+        
+        if record_id_number == id_number.strip():
+            matching_record = record
+            logger.info(f"✅ Found exact match for id_number: {id_number}")
+            break
     
+    if not matching_record:
+        logger.error(f"❌ No exact match found for id_number '{id_number}'")
+        return False
+    
+    record_id = matching_record.get("record_id")
     if not record_id:
         logger.error(f"❌ No record_id found for employee {id_number}")
         return False
     
-    # Update just the status field
-    success = update_record_in_bitable(app_token, table_id, record_id, {"status": new_status})
+    logger.info(f"📍 Targeting Lark Bitable record_id: {record_id} for employee {id_number}")
     
-    if success:
-        logger.info(f"✅ Larkbase status synced: {id_number} → {new_status}")
-    else:
-        logger.error(f"❌ Failed to sync Larkbase status for {id_number}")
+    # Build proper URL field value for LarkBase
+    # URL fields accept: {"link": "https://...", "text": "display text"}
+    # Extract filename from URL for display text
+    try:
+        filename = pdf_url.split('/')[-1].split('?')[0]
+        if not filename or len(filename) < 3:
+            filename = f"ID_Card_{id_number}.pdf"
+    except:
+        filename = f"ID_Card_{id_number}.pdf"
     
-    return success
+    # Use URL field format (object with link and text)
+    id_card_url_field = {"link": pdf_url, "text": filename}
+    logger.info(f"📎 URL field value: {json.dumps(id_card_url_field)}")
+    
+    # Update with retry logic
+    for attempt in range(MAX_RETRY_ATTEMPTS):
+        try:
+            success = update_record_in_bitable(app_token, table_id, record_id, {"id_card": id_card_url_field})
+            
+            if success:
+                logger.info(f"✅ Larkbase id_card updated for {id_number} (record_id: {record_id})")
+                return True
+            else:
+                logger.warning(f"⚠️ Update attempt {attempt + 1}/{MAX_RETRY_ATTEMPTS} failed for {id_number}")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Update attempt {attempt + 1}/{MAX_RETRY_ATTEMPTS} raised exception: {str(e)}")
+        
+        if attempt < MAX_RETRY_ATTEMPTS - 1:
+            time.sleep(RETRY_DELAY_SECONDS)
+    
+    logger.error(f"❌ Failed to update id_card for {id_number} after {MAX_RETRY_ATTEMPTS} attempts")
+    return False
+
+
+def update_employee_status(id_number: str, new_status: str) -> bool:
+    """Update the status field for an employee in Lark Bitable.
+    
+    Wrapper around find_and_update_employee_status for simplified testing.
+    Uses precise record matching by id_number to ensure only the correct employee
+    record is updated. The status field is a dropdown field in LarkBase.
+    
+    Args:
+        id_number: The employee's ID number to search for (unique identifier)
+        new_status: The new status value (must be "Reviewing", "Approved", or "Completed")
+    
+    Returns:
+        True if update was successful, False otherwise
+    """
+    logger.info(f"📝 Updating status for employee {id_number} to '{new_status}'")
+    
+    # Call the main function with default source
+    return find_and_update_employee_status(id_number, new_status, source="API Call")
 
 
 def append_record_to_bitable(app_token: str, table_id: str, fields: Dict[str, Any], token: Optional[str] = None) -> bool:
