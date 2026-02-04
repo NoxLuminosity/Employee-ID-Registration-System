@@ -17,14 +17,14 @@ const galleryState = {
   autoDownloadAttempted: false
 };
 
-// If navigated from Dashboard "Download ID", auto-trigger a download once data loads.
+// If navigated from Dashboard "Render ID" or "Preview", auto-trigger preview once data loads.
 try {
   const params = new URLSearchParams(window.location.search);
-  const downloadParam = params.get('download');
-  if (downloadParam) {
-    const parsed = Number(downloadParam);
+  const previewParam = params.get('preview');
+  if (previewParam) {
+    const parsed = Number(previewParam);
     if (Number.isFinite(parsed)) {
-      galleryState.autoDownloadId = parsed;
+      galleryState.autoDownloadId = parsed; // Reuse the field for auto-preview
     }
   }
 } catch (e) {
@@ -36,28 +36,23 @@ function maybeAutoDownloadFromQuery() {
   if (!galleryState.autoDownloadId) return;
   galleryState.autoDownloadAttempted = true;
 
-  // Ensure libraries exist
-  if (typeof window.html2canvas === 'undefined' || !window.jspdf) {
-    showToast('PDF tools not loaded. Please refresh and try again.', 'error');
-    return;
-  }
-
   const emp = galleryState.employees.find(e => e.id === galleryState.autoDownloadId);
   if (!emp) {
     showToast('Employee not found in gallery yet.', 'error');
     return;
   }
 
-  // Remove the query param so refresh doesn't re-download
+  // Remove the query param so refresh doesn't re-preview
   try {
     const url = new URL(window.location.href);
-    url.searchParams.delete('download');
+    url.searchParams.delete('preview');
     window.history.replaceState({}, document.title, url.pathname + url.search);
   } catch (e) {
     // no-op
   }
 
-  downloadIDPdf(emp);
+  // Auto-open preview modal instead of downloading
+  previewID(emp.id);
 }
 
 // ============================================
@@ -261,9 +256,9 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
   if (!forceRefresh) {
     const cachedData = loadGalleryCachedData();
     if (cachedData) {
-      // Filter only approved and completed IDs from cache
+      // Filter Rendered, Approved and Completed IDs from cache
       galleryState.employees = cachedData.filter(
-        emp => emp.status === 'Approved' || emp.status === 'Completed'
+        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Completed'
       );
       galleryState.filteredEmployees = [...galleryState.employees];
       galleryState.lastFetchTime = Date.now();
@@ -334,7 +329,7 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
     console.log('fetchGalleryData: Employee array length:', data.employees?.length);
 
     if (data.success) {
-      // Filter only approved and completed IDs
+      // Filter Rendered, Approved and Completed IDs
       const allEmployees = data.employees || [];
       console.log('fetchGalleryData: Total employees:', allEmployees.length);
       
@@ -343,9 +338,9 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
       galleryState.lastFetchTime = Date.now();
       
       galleryState.employees = allEmployees.filter(
-        emp => emp.status === 'Approved' || emp.status === 'Completed'
+        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Completed'
       );
-      console.log('fetchGalleryData: Filtered employees (Approved/Completed):', galleryState.employees.length);
+      console.log('fetchGalleryData: Filtered employees (Rendered/Approved/Completed):', galleryState.employees.length);
       
       galleryState.filteredEmployees = [...galleryState.employees];
       updateStats();
@@ -385,7 +380,7 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
     if (cachedData && cachedData.length > 0) {
       console.log('Gallery: Using cached data after fetch error');
       galleryState.employees = cachedData.filter(
-        emp => emp.status === 'Approved' || emp.status === 'Completed'
+        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Completed'
       );
       galleryState.filteredEmployees = [...galleryState.employees];
       updateStats();
@@ -423,7 +418,7 @@ async function fetchGalleryDataBackground() {
     if (data.success && data.employees) {
       const allEmployees = data.employees;
       const filteredNew = allEmployees.filter(
-        emp => emp.status === 'Approved' || emp.status === 'Completed'
+        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Completed'
       );
       
       // Only update if data changed
@@ -474,11 +469,13 @@ function showLoading(show) {
 }
 
 function updateStats() {
+  const rendered = galleryState.employees.filter(e => e.status === 'Rendered').length;
   const approved = galleryState.employees.filter(e => e.status === 'Approved').length;
   const completed = galleryState.employees.filter(e => e.status === 'Completed').length;
   
+  // Combine Rendered + Approved for display (both are "awaiting final approval")
   if (elements.totalApproved) {
-    elements.totalApproved.textContent = approved;
+    elements.totalApproved.textContent = rendered + approved;
   }
   if (elements.totalCompleted) {
     elements.totalCompleted.textContent = completed;
@@ -508,6 +505,8 @@ function renderGallery() {
   const cards = employees.map(emp => {
     const statusClass = emp.status.toLowerCase();
     const isFieldOfficer = emp.position === 'Field Officer';
+    // Can approve if Rendered or Approved (Rendered = new, Approved = legacy)
+    const canApprove = emp.status === 'Rendered' || emp.status === 'Approved';
     
     // Dual template badge for ALL Field Officers
     const dualBadge = isFieldOfficer 
@@ -544,13 +543,13 @@ function renderGallery() {
               </svg>
               Preview
             </button>
-            <button class="btn-download" onclick="window.downloadSinglePdf(${emp.id})">
+            ${canApprove ? `
+            <button class="btn-approve" onclick="window.approveAndSaveID(${emp.id})">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2v8M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M2 12v2h12v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              PDF${isFieldOfficer ? ' (4 pages)' : ''}
-            </button>
+              Approve
+            </button>` : ''}
           </div>
         </div>
       </div>
@@ -1157,6 +1156,15 @@ function previewID(id) {
 
   if (elements.previewModal) {
     elements.previewModal.classList.add('active');
+    
+    // Ensure modal scrolls to top - use setTimeout to ensure DOM is rendered
+    setTimeout(() => {
+      elements.modalBody.scrollTop = 0;
+      const dualGrid = elements.modalBody.querySelector('.gallery-dual-template-grid');
+      if (dualGrid) {
+        dualGrid.scrollTop = 0;
+      }
+    }, 0);
   }
 }
 
@@ -1935,5 +1943,231 @@ function debounce(func, wait) {
 window.showPreviewSide = showPreviewSide;
 window.previewID = previewID;
 window.closePreviewModal = closePreviewModal;
-window.downloadSinglePdf = downloadSinglePdf;
-window.downloadAllPdfs = downloadAllPdfs;
+window.approveAndSaveID = approveAndSaveID;
+
+/**
+ * Approve and Save ID - Generates ID URL, stores in Lark Base id_card column, marks as Completed
+ * This replaces the old download action. No local file download occurs.
+ */
+async function approveAndSaveID(id) {
+  const emp = galleryState.employees.find(e => e.id == id);
+  
+  if (!emp) {
+    showToast('Employee not found', 'error');
+    return;
+  }
+
+  if (!confirm(`Approve ${emp.employee_name}'s ID and save to Lark Base?`)) return;
+
+  const isFieldOfficer = emp.position === 'Field Officer';
+  const pageCount = isFieldOfficer ? 4 : 2;
+  
+  showToast(`Generating ${pageCount}-page ID and saving to Lark Base...`, 'success');
+
+  try {
+    // Log PDF configuration for debugging
+    console.log('PDF Config:', {
+      dimensions: `${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}"`,
+      dimensionsMm: `${PDF_CONFIG.WIDTH_MM.toFixed(2)}mm × ${PDF_CONFIG.HEIGHT_MM.toFixed(2)}mm`,
+      renderPx: `${PDF_CONFIG.RENDER_WIDTH_PX}px × ${PDF_CONFIG.RENDER_HEIGHT_PX}px`,
+      dpi: PDF_CONFIG.PRINT_DPI,
+      scale: PDF_CONFIG.CANVAS_SCALE.toFixed(3),
+      isFieldOfficer: isFieldOfficer,
+      pageCount: pageCount
+    });
+
+    // Create a temporary container - position off-screen but rendered
+    const tempContainer = document.createElement('div');
+    tempContainer.style.position = 'absolute';
+    tempContainer.style.left = '-9999px';
+    tempContainer.style.top = '0';
+    tempContainer.style.width = `${PDF_CONFIG.RENDER_WIDTH_PX + 20}px`;
+    tempContainer.style.background = '#ffffff';
+    document.body.appendChild(tempContainer);
+    
+    // Use actual ID card dimensions (512×800) - matches preview exactly
+    const designWidth = PDF_CONFIG.PREVIEW_WIDTH_PX;   // 512px
+    const designHeight = PDF_CONFIG.PREVIEW_HEIGHT_PX; // 800px
+    const scaleToFit = PDF_CONFIG.CANVAS_SCALE;        // ~3.125 for 300 DPI
+    
+    // Use exact PDF dimensions from config (2.13" × 3.33")
+    const pdfWidthMm = PDF_CONFIG.WIDTH_MM;
+    const pdfHeightMm = PDF_CONFIG.HEIGHT_MM;
+    
+    // Create PDF with exact ID card dimensions
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [pdfWidthMm, pdfHeightMm],
+      compress: true
+    });
+
+    if (isFieldOfficer) {
+      // 4-page PDF for ALL Field Officers: Original Portrait (front/back) + Field Office Landscape (front/back)
+      console.log('Generating 4-page PDF for Field Officer...');
+      
+      // Page 1: Original template front
+      console.log('Capturing Original template front...');
+      const originalFrontCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateRegularIDCardHtml(emp), 
+        designWidth, 
+        designHeight, 
+        scaleToFit, 
+        1500
+      );
+      const originalFrontImgData = originalFrontCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
+      pdf.addImage(originalFrontImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      
+      // Page 2: Original template back
+      console.log('Capturing Original template back...');
+      pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
+      const originalBackCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateIDCardBackHtml(emp), 
+        designWidth, 
+        designHeight, 
+        scaleToFit, 
+        1000
+      );
+      const originalBackImgData = originalBackCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
+      pdf.addImage(originalBackImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      
+      // Page 3: Field Officer template front (LANDSCAPE page - 3.33" × 2.13")
+      console.log('Capturing Field Officer template front (landscape)...');
+      
+      const landscapeWidthMm = PDF_CONFIG_LANDSCAPE.WIDTH_MM;
+      const landscapeHeightMm = PDF_CONFIG_LANDSCAPE.HEIGHT_MM;
+      const landscapeDesignWidth = PDF_CONFIG_LANDSCAPE.PREVIEW_WIDTH_PX;
+      const landscapeDesignHeight = PDF_CONFIG_LANDSCAPE.PREVIEW_HEIGHT_PX;
+      const landscapeScale = 3;
+      
+      pdf.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
+      
+      const foFrontCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateFieldOfficeIDCardHtml(emp), 
+        landscapeDesignWidth, 
+        landscapeDesignHeight, 
+        landscapeScale, 
+        2000
+      );
+      
+      const foFrontImgData = foFrontCanvas.toDataURL('image/jpeg', 0.92);
+      pdf.addImage(foFrontImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'SLOW');
+      
+      // Page 4: Field Officer template back
+      console.log('Capturing Field Officer template back (landscape)...');
+      pdf.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
+      
+      const foBackCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateFieldOfficeIDCardBackHtml(emp), 
+        landscapeDesignWidth, 
+        landscapeDesignHeight, 
+        landscapeScale, 
+        1500
+      );
+      
+      const foBackImgData = foBackCanvas.toDataURL('image/jpeg', 0.92);
+      pdf.addImage(foBackImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'SLOW');
+      
+    } else {
+      // Standard 2-page PDF
+      console.log('Generating 2-page PDF (portrait)...');
+      
+      // Page 1: Front side
+      console.log('Capturing front side...');
+      const frontCanvas = await captureCardCanvas(
+        tempContainer, 
+        generateIDCardHtml(emp), 
+        designWidth, 
+        designHeight, 
+        scaleToFit, 
+        1500
+      );
+      const frontImgData = frontCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
+      pdf.addImage(frontImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      
+      // Page 2: Back side
+      console.log('Capturing back side...');
+      pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
+      const backCanvas = await captureCardCanvas(
+        tempContainer, 
+        getBackHtml(emp), 
+        designWidth, 
+        designHeight, 
+        scaleToFit, 
+        1000
+      );
+      const backImgData = backCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
+      pdf.addImage(backImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+    }
+    
+    // Get PDF as binary blob for backend upload
+    const pdfBlob = pdf.output('blob');
+    console.log('PDF blob size:', pdfBlob.size, 'bytes');
+    
+    // Check file size - Cloudinary free tier limit is 10MB
+    const maxFileSizeMB = 10;
+    const fileSizeMB = pdfBlob.size / (1024 * 1024);
+    console.log(`PDF size: ${fileSizeMB.toFixed(2)} MB (max: ${maxFileSizeMB} MB)`);
+    
+    if (fileSizeMB > maxFileSizeMB) {
+      document.body.removeChild(tempContainer);
+      showToast(`❌ PDF too large: ${fileSizeMB.toFixed(1)}MB (max: ${maxFileSizeMB}MB). Try again.`, 'error');
+      return;
+    }
+    
+    // Upload PDF to backend for Cloudinary and LarkBase sync (NO LOCAL DOWNLOAD)
+    showToast('Uploading ID to cloud storage and Lark Base...', 'success');
+    console.log('Uploading PDF to backend for employee:', emp.id);
+    
+    const uploadResponse = await fetch(`/hr/api/employees/${emp.id}/upload-pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/pdf'
+      },
+      body: pdfBlob,
+      credentials: 'include'
+    });
+    
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('Upload failed with status:', uploadResponse.status, errorText);
+      throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
+    }
+    
+    const uploadResult = await uploadResponse.json();
+    console.log('PDF upload result:', uploadResult);
+    
+    if (!uploadResult.success || !uploadResult.pdf_url) {
+      throw new Error(uploadResult.error || 'Upload failed - no URL returned');
+    }
+    
+    const pdfUrl = uploadResult.pdf_url;
+    const larkSynced = uploadResult.lark_synced || false;
+    
+    console.log('PDF uploaded successfully:', pdfUrl, 'LarkBase synced:', larkSynced);
+    
+    // Cleanup
+    document.body.removeChild(tempContainer);
+    
+    // Update local state to reflect "Completed" status
+    emp.status = 'Completed';
+    renderGallery();
+    updateStats();
+
+    // Show success message
+    let message = `✅ ID approved and saved to Lark Base`;
+    if (!larkSynced) {
+      message = `⚠️ ID uploaded but Lark Base sync pending`;
+    }
+    showToast(message, larkSynced ? 'success' : 'warning');
+    
+  } catch (error) {
+    console.error('Error approving and saving ID:', error);
+    showToast(`Failed to approve ID: ${error.message}`, 'error');
+  }
+}

@@ -260,8 +260,9 @@
 
 .id-preview-modal .modal-body {
   padding: var(--spacing-md);
-  max-height: 75vh;
+  max-height: 80vh;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .id-preview-content {
@@ -475,7 +476,8 @@
 }
 
 .id-card-actions .btn-preview,
-.id-card-actions .btn-download {
+.id-card-actions .btn-download,
+.id-card-actions .btn-approve {
   flex: 1;
   display: flex;
   align-items: center;
@@ -511,6 +513,15 @@
   background: var(--color-primary-dark);
 }
 
+.id-card-actions .btn-approve {
+  background: var(--color-primary);
+  color: white;
+}
+
+.id-card-actions .btn-approve:hover {
+  background: var(--color-primary-hover);
+}
+
 /* Preview Modal Updates */
 .id-preview-wrapper {
   display: flex;
@@ -520,7 +531,7 @@
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-radius: var(--radius-md);
   margin-bottom: var(--spacing-lg);
-  overflow: hidden;
+  overflow: visible;
   min-height: 480px;  /* Accommodate 800px card at ~0.58 scale */
 }
 
@@ -530,8 +541,9 @@
   transform-origin: top center;
   margin-bottom: -336px;  /* 800 * (1 - 0.58) */
   width: 512px !important;
-  height: 800px;
+  height: 800px !important;
   min-width: 512px;
+  min-height: 800px;
   flex-shrink: 0;
 }
 
@@ -812,7 +824,7 @@
   /* Gallery modal - Scale for 512×800 cards */
   .id-preview-wrapper {
     padding: var(--spacing-sm);
-    overflow: hidden;
+    overflow: visible;
     display: flex;
     justify-content: center;
     align-items: flex-start;
@@ -827,8 +839,9 @@
     transform-origin: top center;
     margin-bottom: -416px;  /* 800 × (1 - 0.48) */
     width: 512px !important;
-    height: 800px;
+    height: 800px !important;
     min-width: 512px;
+    min-height: 800px;
   }
   
   /* Gallery card scaling - tablet */
@@ -846,6 +859,7 @@
 @media (max-width: 480px) {
   .id-preview-wrapper {
     min-height: 320px;
+    overflow: visible;
   }
   
   /* Scale 512×800 to fit mobile screens */
@@ -856,8 +870,9 @@
     transform-origin: top center;
     margin-bottom: -496px;  /* 800 × (1 - 0.38) */
     width: 512px !important;
-    height: 800px;
+    height: 800px !important;
     min-width: 512px;
+    min-height: 800px;
   }
   
   .id-card-image-wrapper .id-card.gallery-id-card {
@@ -904,18 +919,24 @@
    Dual Template Grid for Gallery (Reprocessor)
    ============================================ */
 
-/* Gallery dual template uses VERTICAL STACK - scrollable container */
+/* Gallery dual template uses VERTICAL STACK - no max-height to ensure all visible */
 .gallery-dual-template-grid {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-xl);
   width: 100%;
   margin-bottom: var(--spacing-lg);
   align-items: center;
-  /* Enable vertical scrolling for dual templates */
-  max-height: 70vh;
-  overflow-y: auto;
-  padding: var(--spacing-sm);
+  /* Remove max-height to prevent cut-off issues */
+  overflow: visible;
+  padding: var(--spacing-md) var(--spacing-sm);
+  padding-top: var(--spacing-lg);
+}
+
+/* First dual template card - ensure title and buttons are visible */
+.gallery-dual-template-grid .dual-template-card:first-child {
+  /* Ensure first card has space at top */
+  margin-top: var(--spacing-sm);
 }
 
 .gallery-dual-template-grid .dual-template-card {
@@ -929,20 +950,31 @@
   width: 100%;
   max-width: 450px;
   flex-shrink: 0;
-  /* Tighter container - reduce extra white space */
-  overflow: hidden;
+  /* Allow overflow for proper card display */
+  overflow: visible;
 }
 
 .gallery-dual-template-grid .dual-template-title {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
   color: var(--color-primary);
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  margin-top: 0;
   text-align: center;
+  /* Ensure title is visible above any transformed elements */
+  position: relative;
+  z-index: 10;
+  padding: var(--spacing-xs) 0;
+  background: var(--color-bg);
 }
 
 .gallery-dual-template-grid .dual-flip-toggle {
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  /* Ensure buttons are visible above any transformed elements */
+  position: relative;
+  z-index: 10;
+  display: flex;
+  gap: var(--spacing-xs);
 }
 
 .gallery-dual-template-grid .dual-flip-toggle .flip-btn {
@@ -955,7 +987,10 @@
   justify-content: center;
   align-items: flex-start;
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
+  /* Ensure no negative margins push content up */
+  margin-top: 0;
+  position: relative;
 }
 
 /* Portrait ID card (512x800) scaling for gallery */
@@ -966,6 +1001,10 @@
   /* At 0.55 scale: 800px * 0.55 = 440px actual height
      Hidden space: 800px - 440px = 360px, need to offset */
   margin-bottom: -360px;
+  width: 512px !important;
+  height: 800px !important;
+  min-width: 512px;
+  min-height: 800px;
 }
 
 /* Landscape ID card (512x319) scaling for gallery */
@@ -982,6 +1021,7 @@
 @media (max-width: 768px) {
   .gallery-dual-template-grid .dual-template-card {
     padding: var(--spacing-sm);
+    overflow: visible;
   }
   
   /* Portrait cards on mobile */
@@ -991,6 +1031,10 @@
     /* At 0.45 scale: 800px * 0.45 = 360px actual height
        Hidden space: 800px - 360px = 440px */
     margin-bottom: -440px;
+    width: 512px !important;
+    height: 800px !important;
+    min-width: 512px;
+    min-height: 800px;
   }
   
   /* Landscape cards on mobile */
@@ -1011,6 +1055,10 @@
     /* At 0.35 scale: 800px * 0.35 = 280px actual height
        Hidden space: 800px - 280px = 520px */
     margin-bottom: -520px;
+    width: 512px !important;
+    height: 800px !important;
+    min-width: 512px;
+    min-height: 800px;
   }
   
   /* Landscape cards on small mobile */
@@ -1142,8 +1190,9 @@
   transform-origin: top center;
   margin-bottom: -336px;  /* 800 * (1 - 0.58) */
   width: 512px !important;
-  height: 800px;
+  height: 800px !important;
   min-width: 512px;
+  min-height: 800px;
   flex-shrink: 0;
 }
 

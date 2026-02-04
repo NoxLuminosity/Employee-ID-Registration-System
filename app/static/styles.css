@@ -3986,8 +3986,8 @@ input::placeholder {
   align-items: center;
   width: 100%;
   max-width: 600px;
-  /* Tighter container - reduce extra white space */
-  overflow: hidden;
+  /* Allow overflow for proper card display */
+  overflow: visible;
 }
 
 .dual-template-title {
@@ -4012,8 +4012,8 @@ input::placeholder {
   justify-content: center;
   align-items: flex-start;
   width: 100%;
-  /* Tighter fit - no extra space below templates */
-  overflow: hidden;
+  /* Allow overflow for proper card display */
+  overflow: visible;
   box-sizing: border-box;
   /* Shift both cards left by 20px */
   margin-right: 20px;
@@ -4028,6 +4028,10 @@ input::placeholder {
   /* At 0.65 scale: 800px * 0.65 = 520px actual height
      Hidden space: 800px - 520px = 280px, need to offset */
   margin-bottom: -280px;
+  width: 512px !important;
+  height: 800px !important;
+  min-width: 512px;
+  min-height: 800px;
 }
 
 /* Landscape ID card (512x319) scaling - calculate proper margin */
@@ -4077,7 +4081,10 @@ input::placeholder {
     margin-bottom: -360px;
     margin-left: 0;
     margin-right: 0;
-    min-width: unset;
+    min-width: 512px;
+    min-height: 800px;
+    width: 512px !important;
+    height: 800px !important;
   }
   
   .dual-preview-wrapper .id-card-field-office,
@@ -4111,7 +4118,10 @@ input::placeholder {
     margin-bottom: -440px;
     margin-left: 0;
     margin-right: 0;
-    min-width: unset;
+    min-width: 512px;
+    min-height: 800px;
+    width: 512px !important;
+    height: 800px !important;
   }
   
   .dual-preview-wrapper .id-card-field-office,

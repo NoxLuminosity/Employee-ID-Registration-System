@@ -385,12 +385,14 @@ function renderEmployeeTable() {
         })
       : '-';
 
-    const canApprove = emp.status === 'Reviewing';
-    const canDownload = emp.status === 'Approved' || emp.status === 'Completed';
+    // Show Render ID for Reviewing, Pending, or Submitted status
+    const canRenderID = ['Reviewing', 'Pending', 'Submitted'].includes(emp.status);
+    // Show Preview for Rendered, Approved, or Completed status
+    const canPreview = ['Rendered', 'Approved', 'Completed'].includes(emp.status);
     const viewed = hasViewedDetails(emp.id);
     
-    // Disable Approve and Remove buttons until Details has been viewed
-    const approveDisabled = !viewed ? 'disabled title="View details first"' : '';
+    // Disable Render ID and Remove buttons until Details has been viewed
+    const renderDisabled = !viewed ? 'disabled title="View details first"' : '';
     const removeDisabled = !viewed ? 'disabled title="View details first"' : '';
 
     return `
@@ -416,8 +418,8 @@ function renderEmployeeTable() {
         <td>
           <div class="action-buttons">
             <button class="action-btn-sm view" onclick="viewDetails(${emp.id})">Details</button>
-            ${canApprove ? `<button class="action-btn-sm approve" onclick="approveEmployee(${emp.id})" ${approveDisabled}>Approve</button>` : ''}
-            ${canDownload ? `<button class="action-btn-sm download" onclick="downloadID(${emp.id})">Download</button>` : ''}
+            ${canRenderID ? `<button class="action-btn-sm approve" onclick="renderAndApprove(${emp.id})" ${renderDisabled}>Render ID</button>` : ''}
+            ${canPreview ? `<button class="action-btn-sm preview" onclick="previewID(${emp.id})">Preview</button>` : ''}
             <button class="action-btn-sm remove" onclick="removeEmployee(${emp.id})" ${removeDisabled}>Remove</button>
           </div>
         </td>
@@ -437,6 +439,9 @@ function filterEmployees() {
   const positionFilter = elements.positionFilter.value;
 
   dashboardState.filteredEmployees = dashboardState.employees.filter(emp => {
+    // Exclude Removed status from dashboard display
+    if (emp.status === 'Removed') return false;
+    
     // Search filter
     const matchesSearch = !searchTerm || 
       emp.employee_name.toLowerCase().includes(searchTerm) ||
@@ -492,7 +497,7 @@ async function removeEmployee(id) {
   const emp = dashboardState.employees.find(e => e.id === id);
   const empName = emp ? emp.employee_name : 'this employee';
   
-  if (!confirm(`Are you sure you want to remove ${empName}'s application? This action cannot be undone.`)) return;
+  if (!confirm(`Are you sure you want to remove ${empName}'s application? This will mark it as Removed.`)) return;
 
   try {
     const response = await fetch(`/hr/api/employees/${id}`, {
@@ -504,13 +509,15 @@ async function removeEmployee(id) {
     const data = await response.json();
 
     if (data.success) {
-      // Remove from local state
-      dashboardState.employees = dashboardState.employees.filter(e => e.id !== id);
-      dashboardState.filteredEmployees = dashboardState.filteredEmployees.filter(e => e.id !== id);
+      // Update status to Removed instead of deleting from array
+      if (emp) {
+        emp.status = 'Removed';
+      }
       
+      // Re-filter to hide Removed employees
+      filterEmployees();
       updateStatusCounts();
-      renderEmployeeTable();
-      showToast(data.message || 'Application removed successfully', 'success');
+      showToast(data.message || 'Application marked as Removed', 'success');
     } else {
       throw new Error(data.error || 'Failed to remove');
     }
@@ -684,13 +691,13 @@ function viewDetails(id) {
     footerHtml = `
       <button class="btn btn-danger" onclick="removeEmployee(${emp.id}); closeModal();">Remove</button>
       <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-      <button class="btn btn-primary" onclick="approveEmployee(${emp.id}); closeModal();">Approve</button>
+      <button class="btn btn-primary" onclick="renderAndApprove(${emp.id}); closeModal();">Render ID</button>
     `;
   } else if (emp.status === 'Approved' || emp.status === 'Completed') {
     footerHtml = `
       <button class="btn btn-danger" onclick="removeEmployee(${emp.id}); closeModal();">Remove</button>
       <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-      <button class="btn btn-primary" onclick="downloadID(${emp.id})">Download ID</button>
+      <button class="btn btn-primary" onclick="previewID(${emp.id})">Preview ID</button>
     `;
   }
 
@@ -702,16 +709,65 @@ function closeModal() {
   elements.detailsModal.classList.remove('active');
 }
 
-async function downloadID(id) {
+/**
+ * Render ID - Marks ID as rendered and redirects to gallery for preview
+ * This does NOT approve the ID - approval happens in the Gallery.
+ */
+async function renderAndApprove(id) {
   const emp = dashboardState.employees.find(e => e.id === id);
   if (!emp) return;
 
-  // NOTE:
-  // The server endpoint /hr/api/employees/{id}/download-id is intentionally a placeholder (501).
-  // The working PDF generation is client-side on the Gallery page using jsPDF + html2canvas.
-  // Redirect to gallery and auto-trigger download there.
-  showToast('Opening gallery to generate PDF...', 'success');
-  window.location.href = `/hr/gallery?download=${encodeURIComponent(id)}`;
+  if (!confirm('Are you sure you want to render this ID and send it to Gallery for review?')) return;
+
+  showToast('Rendering ID...', 'success');
+
+  try {
+    // Mark as Rendered (NOT Approved) - actual approval happens in Gallery
+    const response = await fetch(`/hr/api/employees/${id}/render`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      // Update local state to Rendered (not Approved)
+      emp.status = 'Rendered';
+      
+      updateStatusCounts();
+      filterEmployees();
+      showToast('ID rendered! Redirecting to Gallery for review...', 'success');
+      
+      // Redirect to gallery for preview
+      setTimeout(() => {
+        window.location.href = `/hr/gallery?preview=${encodeURIComponent(id)}`;
+      }, 1500);
+    } else {
+      throw new Error(data.error || 'Failed to render');
+    }
+  } catch (error) {
+    console.error('Error rendering employee ID:', error);
+    showToast('Failed to render: ' + error.message, 'error');
+    
+    // Log full error details for debugging
+    console.error('Full error details:', {
+      employeeId: id,
+      currentStatus: emp?.status,
+      error: error
+    });
+  }
+}
+
+/**
+ * Preview ID - Opens gallery to preview the rendered ID (no download)
+ */
+function previewID(id) {
+  const emp = dashboardState.employees.find(e => e.id === id);
+  if (!emp) return;
+
+  showToast('Opening gallery for preview...', 'success');
+  window.location.href = `/hr/gallery?preview=${encodeURIComponent(id)}`;
 }
 
 async function markAsCompleted(id) {

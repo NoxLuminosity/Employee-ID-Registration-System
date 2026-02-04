@@ -645,9 +645,94 @@ def api_approve_employee(employee_id: int, hr_session: str = Cookie(None)):
         )
 
 
+@router.post("/api/employees/{employee_id}/render")
+def api_render_employee(employee_id: int, hr_session: str = Cookie(None)):
+    """Mark employee ID as Rendered (ready for Gallery review) - does NOT approve"""
+    session = get_session(hr_session)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
+    
+    # Verify org access on each request
+    if session.get("auth_type") == "lark":
+        from app.services.lark_auth_service import is_descendant_of_people_support
+        open_id = session.get("lark_open_id")
+        is_authorized, reason = is_descendant_of_people_support(open_id)
+        
+        if not is_authorized:
+            logger.warning(f"API /api/employees/{employee_id}/render: Org access denied - {reason}")
+            return JSONResponse(status_code=403, content={
+                "success": False, 
+                "error": "Access denied. You are not authorized to access the HR Portal."
+            })
+    try:
+        # Check if employee exists and is in an acceptable status
+        row = get_employee_by_id(employee_id)
+
+        if not row:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "error": "Employee not found"}
+            )
+
+        # Accept Reviewing, Pending, or Submitted status for rendering
+        current_status = row.get("status")
+        acceptable_statuses = ["Reviewing", "Pending", "Submitted"]
+        
+        if current_status not in acceptable_statuses:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": f"Cannot render. Current status: {current_status}. Must be one of: {', '.join(acceptable_statuses)}"}
+            )
+
+        # Update status to Rendered (NOT Approved - approval happens in Gallery)
+        success = update_employee(employee_id, {
+            "status": "Rendered",
+            "date_last_modified": datetime.now().isoformat()
+        })
+
+        if not success:
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": "Failed to update employee"}
+            )
+
+        # Sync status to Lark Bitable
+        lark_synced = False
+        try:
+            from app.services.lark_service import find_and_update_employee_status
+            id_number = row.get("id_number")
+            if id_number:
+                lark_synced = find_and_update_employee_status(
+                    id_number, 
+                    "Rendered",
+                    old_status=current_status,
+                    source="HR Render"
+                )
+                if lark_synced:
+                    logger.info(f"✅ Lark Bitable status synced to 'Rendered' for employee {id_number}")
+                else:
+                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Rendered' for employee {id_number}")
+        except Exception as lark_e:
+            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+
+        logger.info(f"Employee {employee_id} rendered (Lark synced: {lark_synced})")
+        return JSONResponse(content={
+            "success": True, 
+            "message": "ID marked as Rendered - ready for Gallery approval",
+            "lark_synced": lark_synced
+        })
+
+    except Exception as e:
+        logger.error(f"Error rendering employee {employee_id}: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
 @router.delete("/api/employees/{employee_id}")
 def api_delete_employee(employee_id: int, hr_session: str = Cookie(None)):
-    """Delete an employee application - Protected by org access"""
+    """Mark employee application as Removed instead of deleting - Protected by org access"""
     session = get_session(hr_session)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
@@ -675,21 +760,44 @@ def api_delete_employee(employee_id: int, hr_session: str = Cookie(None)):
             )
 
         employee_name = row.get("employee_name")
+        id_number = row.get("id_number")
+        current_status = row.get("status")
 
-        # Delete the employee
-        success = delete_employee(employee_id)
+        # Update status to Removed instead of deleting
+        success = update_employee(employee_id, {
+            "status": "Removed",
+            "date_last_modified": datetime.now().isoformat()
+        })
         
         if not success:
             return JSONResponse(
                 status_code=500,
-                content={"success": False, "error": "Failed to delete employee"}
+                content={"success": False, "error": "Failed to remove employee"}
             )
 
-        logger.info(f"Employee {employee_id} ({employee_name}) deleted")
-        return JSONResponse(content={"success": True, "message": f"Application for {employee_name} removed"})
+        # Sync status to Lark Bitable
+        lark_synced = False
+        try:
+            from app.services.lark_service import find_and_update_employee_status
+            if id_number:
+                lark_synced = find_and_update_employee_status(
+                    id_number,
+                    "Removed",
+                    old_status=current_status,
+                    source="HR Remove"
+                )
+                if lark_synced:
+                    logger.info(f"✅ Lark Bitable status synced to 'Removed' for employee {id_number}")
+                else:
+                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Removed' for employee {id_number}")
+        except Exception as lark_e:
+            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+
+        logger.info(f"Employee {employee_id} ({employee_name}) marked as Removed (Lark synced: {lark_synced})")
+        return JSONResponse(content={"success": True, "message": f"Application for {employee_name} removed", "lark_synced": lark_synced})
 
     except Exception as e:
-        logger.error(f"Error deleting employee {employee_id}: {str(e)}")
+        logger.error(f"Error removing employee {employee_id}: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": str(e)}
@@ -917,10 +1025,11 @@ async def api_upload_pdf(employee_id: int, request: Request, hr_session: str = C
                 content={"success": False, "error": "Employee not found"}
             )
         
-        if row.get("status") not in ["Approved", "Completed"]:
+        # Accept Rendered, Approved, or Completed status (Rendered is new workflow)
+        if row.get("status") not in ["Rendered", "Approved", "Completed"]:
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": "ID not yet approved"}
+                content={"success": False, "error": "ID not ready for approval"}
             )
         
         # Read PDF bytes from request body
@@ -1033,8 +1142,12 @@ async def api_upload_pdf(employee_id: int, request: Request, hr_session: str = C
         if not success:
             logger.warning(f"⚠️ Failed to update local database with PDF URL for employee {employee_id}")
         
-        # Step 4: Mark as completed if currently approved
-        if row.get("status") == "Approved":
+        # Step 4: Mark as Approved then Completed
+        # This handles both old workflow (Approved -> Completed) and new workflow (Rendered -> Approved -> Completed)
+        current_status = row.get("status")
+        if current_status in ["Rendered", "Approved"]:
+            # For new workflow: Rendered -> set to Approved first (this is the actual approval)
+            # Then mark as Completed
             update_employee(employee_id, {
                 "status": "Completed",
                 "id_generated": 1,
@@ -1047,9 +1160,10 @@ async def api_upload_pdf(employee_id: int, request: Request, hr_session: str = C
                 find_and_update_employee_status(
                     id_number,
                     "Completed",
-                    old_status="Approved",
-                    source="PDF Download"
+                    old_status=current_status,
+                    source="Gallery Approval"
                 )
+                logger.info(f"✅ Status synced to Completed for employee {id_number}")
             except Exception as e:
                 logger.warning(f"⚠️ Could not sync status to LarkBase: {str(e)}")
         
