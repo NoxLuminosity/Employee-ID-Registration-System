@@ -1,216 +1,185 @@
 # Employee ID Registration System
 
-A full-stack employee ID registration system with AI-powered headshot generation, background removal, and HR management dashboard.
+A full-stack employee ID registration and management system with AI-powered headshot generation, background removal, and HR dashboard. Built with FastAPI and integrates with Lark Bitable for enterprise data sync.
 
-## 🌟 Features
+## Features
 
 ### Employee Portal
-- **AI Headshot Generation**: Upload a photo and get a professional AI-generated headshot using BytePlus Seedream API
-- **Background Removal**: Automatic background removal using Cloudinary AI or Remove.bg
-- **Digital Signature**: Canvas-based signature pad with transparent background export
-- **Live ID Preview**: Real-time ID card preview as you fill the form
-- **Form Validation**: Client-side and server-side validation
+- **AI Headshot Generation** - Upload a photo and get a professional AI-generated headshot using BytePlus Seedream API
+- **Background Removal** - Automatic background removal using Cloudinary AI or Remove.bg
+- **Digital Signature** - Canvas-based signature pad with transparent background export
+- **Live ID Preview** - Real-time ID card preview as you fill the form
+- **Lark Authentication** - Mandatory Lark SSO for all access
 
-### HR Dashboard
-- **Session-Based Authentication**: Secure login with bcrypt password hashing
-- **Employee Management**: View, approve, and manage ID card applications
-- **Background Removal**: One-click background removal for employee photos
-- **ID Gallery**: Visual gallery of approved and completed ID cards
-- **Google Sheets Sync**: Automatic sync of employee data to Google Sheets
-- **CSV Export**: Export employee data to CSV
+### HR Dashboard  
+- **Lark SSO Authentication** - Secure login via Lark OAuth
+- **Employee Management** - View, approve, and manage ID card applications
+- **ID Gallery** - Visual gallery of rendered and approved ID cards
+- **PDF Generation** - Generate printable ID card PDFs with QR codes
+- **POC Routing** - Automatic routing to nearest printing POC using haversine distance
+- **Lark Bitable Sync** - Real-time sync of employee data to Lark Bitable
 
-## 🚀 Tech Stack
+## Tech Stack
 
-- **Backend**: FastAPI (Python)
-- **Database**: Supabase PostgreSQL (production) / SQLite (local development)
-- **Frontend**: Vanilla JavaScript, CSS
-- **Templates**: Jinja2
+- **Backend**: FastAPI (Python 3.9+)
+- **Database**: Supabase PostgreSQL (production) / SQLite (local)
+- **Frontend**: Vanilla JavaScript, Jinja2 templates
 - **Image Storage**: Cloudinary
-- **AI Services**: 
-  - BytePlus Seedream (headshot generation)
-  - Cloudinary AI / Remove.bg (background removal)
-- **Integrations**:
-  - Google Sheets (data sync)
-  - Lark Bitable (optional)
+- **AI Services**: BytePlus Seedream (headshot), Cloudinary AI (background removal)
+- **Integrations**: Lark Bitable, Google Sheets (optional)
 
-## 🗄️ Database Setup (Supabase)
-
-For persistent data on Vercel, the system uses Supabase PostgreSQL.
-
-### Setting up Supabase
-
-1. **Create a Supabase account** at https://supabase.com
-
-2. **Create a new project** and note down:
-   - Project URL (e.g., `https://xxxxx.supabase.co`)
-   - Anon/Service key (found in Settings > API)
-
-3. **Create the employees table**:
-   - Go to SQL Editor in Supabase Dashboard
-   - Run the script from `supabase_setup.sql`
-
-4. **Add environment variables** in Vercel:
-   ```
-   SUPABASE_URL=https://your-project.supabase.co
-   SUPABASE_KEY=your-service-role-key
-   ```
-
-### Local Development (SQLite)
-
-For local development without Supabase, the system automatically falls back to SQLite. No configuration needed - just run the app and it will create a local `database.db` file.
-
-## 📦 Installation
+## Quick Start
 
 ### Prerequisites
 - Python 3.9+
-- pip (Python package manager)
+- Lark Developer App credentials
+- Cloudinary account
+- BytePlus API access
 
-### Local Development
+### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/NoxLuminosity/Employee-ID-Registration-System.git
-   cd Employee-ID-Registration-System
-   ```
+```bash
+# Clone the repository
+git clone <repo-url>
+cd Employee-ID-Registration-System
 
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   
-   # Windows
-   .\venv\Scripts\activate
-   
-   # macOS/Linux
-   source venv/bin/activate
-   ```
+# Create virtual environment
+python -m venv .venv
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+# Activate (Windows)
+.venv\Scripts\activate
 
-4. **Configure environment variables**
-   ```bash
-   # Copy the example file
-   cp .env.example .env
-   
-   # Edit .env with your API keys
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-5. **Run the development server**
-   ```bash
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
+# Copy environment template and configure
+cp .env.example .env
+# Edit .env with your API keys
 
-6. **Access the application**
-   - Landing Page: http://localhost:8000
-   - Employee Registration: http://localhost:8000/apply
-   - HR Dashboard: http://localhost:8000/hr/dashboard
+# Run development server
+uvicorn app.main:app --reload --port 8000
+```
 
-## ⚙️ Environment Variables
+### Access URLs
+- Landing Page: http://localhost:8000
+- Employee Registration: http://localhost:8000/apply
+- HR Dashboard: http://localhost:8000/hr/dashboard
+- ID Gallery: http://localhost:8000/gallery
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `SUPABASE_URL` | Supabase project URL | Yes (production) |
-| `SUPABASE_KEY` | Supabase anon/service key | Yes (production) |
-| `BYTEPLUS_API_KEY` | BytePlus Seedream API key for AI headshots | Yes |
-| `BYTEPLUS_MODEL` | BytePlus model name (default: seedream-4-5-251128) | Yes |
-| `BYTEPLUS_ENDPOINT` | BytePlus API endpoint | Yes |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | Yes |
-| `CLOUDINARY_API_KEY` | Cloudinary API key | Yes |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret | Yes |
-| `REMOVEBG_API_KEY` | Remove.bg API key (optional) | No |
-| `HR_USERS` | HR login credentials (format: user1:pass1,user2:pass2) | Yes |
-| `GOOGLE_SHEETS_CREDENTIALS_PATH` | Path to Google service account JSON | No |
-| `GOOGLE_SPREADSHEET_ID` | Google Spreadsheet ID for data sync | No |
+## Environment Variables
 
-## 📁 Project Structure
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `LARK_APP_ID` | Lark App ID for authentication |
+| `LARK_APP_SECRET` | Lark App Secret |
+| `LARK_BITABLE_ID` | Lark Bitable App Token |
+| `LARK_TABLE_ID` | Lark Bitable Table ID |
+| `LARK_REDIRECT_URI` | OAuth callback URL (e.g., `https://yourdomain.com/lark/callback`) |
+| `TARGET_LARK_DEPARTMENT_ID` | Lark Department ID for org validation |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
+| `CLOUDINARY_API_KEY` | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
+| `BYTEPLUS_API_KEY` | BytePlus Seedream API key |
+| `BYTEPLUS_MODEL` | BytePlus model (default: `seedream-4-5-251128`) |
+
+### Optional
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SUPABASE_URL` | Supabase project URL | SQLite fallback |
+| `SUPABASE_KEY` | Supabase service key | SQLite fallback |
+| `REMOVEBG_API_KEY` | Remove.bg API key | Uses Cloudinary |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Google service account JSON string | - |
+| `GOOGLE_SPREADSHEET_ID` | Google Sheets spreadsheet ID | - |
+| `HR_USERS` | Legacy HR credentials (format: `user1:pass1,user2:pass2`) | - |
+| `JWT_SECRET` | Session encryption secret | Generated |
+| `POC_TEST_MODE` | Send POC messages to test recipient | `true` |
+| `POC_TEST_RECIPIENT_EMAIL` | Test mode recipient email | - |
+
+### SPMA-Specific (Multi-Table)
+
+| Variable | Description |
+|----------|-------------|
+| `LARK_APP_ID_SPMA` | SPMA Lark App ID |
+| `LARK_APP_SECRET_SPMA` | SPMA Lark App Secret |
+| `LARK_BITABLE_ID_SPMA` | SPMA Bitable App Token |
+| `LARK_TABLE_ID_SPMA` | SPMA Bitable Table ID |
+
+## Project Structure
 
 ```
-id-registration-system/
+├── api/
+│   └── index.py              # Vercel serverless entry point
 ├── app/
-│   ├── main.py              # FastAPI application entry point
-│   ├── auth.py              # HR authentication module
-│   ├── database.py          # SQLite database with auto-migration
-│   ├── models.py            # Pydantic models
+│   ├── main.py               # FastAPI application
+│   ├── auth.py               # Session management
+│   ├── database.py           # SQLite/Supabase database
+│   ├── models.py             # Pydantic models
 │   ├── routes/
-│   │   ├── employee.py      # Employee registration endpoints
-│   │   └── hr.py            # HR dashboard endpoints
+│   │   ├── auth.py           # Lark OAuth routes
+│   │   ├── employee.py       # Employee registration
+│   │   ├── hr.py             # HR dashboard API
+│   │   └── security.py       # Security endpoints
 │   ├── services/
-│   │   ├── cloudinary_service.py      # Image upload & bg removal
-│   │   ├── seedream_service.py        # AI headshot generation
-│   │   ├── background_removal_service.py  # Remove.bg integration
-│   │   ├── google_sheets.py           # Google Sheets sync
-│   │   └── lark_service.py            # Lark Bitable integration
-│   ├── static/
-│   │   ├── styles.css       # Employee form styles
-│   │   ├── app.js           # Employee form JavaScript
-│   │   ├── landing.css      # Landing page styles
-│   │   ├── landing.js       # Landing page animations
-│   │   ├── dashboard.css    # HR dashboard styles
-│   │   ├── dashboard.js     # HR dashboard logic
-│   │   ├── gallery.css      # ID gallery styles
-│   │   └── gallery.js       # ID gallery logic
-│   └── templates/
-│       ├── landing.html     # Role selection page
-│       ├── form.html        # Employee registration form
-│       ├── hr_login.html    # HR login page
-│       ├── dashboard.html   # HR dashboard
-│       └── gallery.html     # ID card gallery
-├── credentials/             # Service account files (gitignored)
-├── requirements.txt         # Python dependencies
-├── vercel.json             # Vercel deployment config
-├── .env.example            # Environment variables template
-└── README.md
+│   │   ├── lark_service.py   # Lark Bitable integration
+│   │   ├── lark_auth_service.py  # Lark OAuth
+│   │   ├── cloudinary_service.py # Image upload/processing
+│   │   ├── seedream_service.py   # AI headshot generation
+│   │   ├── poc_routing_service.py # POC branch routing
+│   │   └── google_sheets.py      # Google Sheets sync
+│   ├── static/               # CSS, JS, images
+│   └── templates/            # Jinja2 HTML templates
+├── scripts/
+│   ├── bulk_card_router_bot.py   # Batch POC messaging bot
+│   ├── diagnose_lark.py          # Lark config diagnostics
+│   └── diagnose_ai_preview.py    # AI service diagnostics
+├── tests/                    # Test files
+├── credentials/              # Service account files (gitignored)
+├── requirements.txt          # Python dependencies
+├── vercel.json               # Vercel deployment config
+├── supabase_setup.sql        # Production database schema
+└── SPMA_LARK_SETUP.md        # Multi-table setup guide
 ```
 
-## 🔐 HR Dashboard Access
+## Deployment
 
-Default credentials (configurable via `HR_USERS` env var):
-- Username: `admin`
-- Password: `admin123`
+### Vercel
 
-**Important**: Change these credentials in production!
+1. Push code to GitHub
+2. Connect repository to Vercel
+3. Add environment variables in Vercel dashboard
+4. Deploy
 
-## 🚢 Deployment
+The `vercel.json` is pre-configured for deployment.
 
-### Vercel Deployment
+### Production Database (Supabase)
 
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Configure environment variables in Vercel dashboard
-4. Deploy!
+1. Create Supabase project at https://supabase.com
+2. Run `supabase_setup.sql` in SQL Editor
+3. Set `SUPABASE_URL` and `SUPABASE_KEY` in environment
 
-The `vercel.json` is pre-configured for seamless deployment.
+## Troubleshooting
 
-### Environment Variables on Vercel
+### Common Issues
 
-Add all required environment variables in the Vercel project settings under "Environment Variables".
+1. **"TARGET_LARK_DEPARTMENT_ID not set"**: Set this env var to your Lark org's Department ID for access control.
 
-## 🛠️ API Endpoints
+2. **Email lookup fails**: Ensure the email exists in your Lark organization. Use actual Lark account emails.
 
-### Employee Endpoints
-- `POST /generate-headshot` - Generate AI headshot from uploaded photo
-- `POST /remove-background` - Remove background from image
-- `POST /submit` - Submit employee registration
+3. **AI headshot not generating**: Check `BYTEPLUS_API_KEY` is valid. Run `python scripts/diagnose_ai_preview.py` to test.
 
-### HR Endpoints
-- `POST /hr/login` - HR authentication
-- `GET /hr/logout` - Logout
-- `GET /hr/api/employees` - Get all employees
-- `POST /hr/api/employees/{id}/approve` - Approve application
-- `POST /hr/api/employees/{id}/remove-background` - Remove photo background
-- `DELETE /hr/api/employees/{id}` - Delete employee
-- `POST /hr/api/sync-sheets` - Sync to Google Sheets
+4. **Lark Bitable sync fails**: Run `python scripts/diagnose_lark.py` to check table configuration.
 
-## 📄 License
+## Scripts
 
-MIT License - feel free to use and modify for your projects.
+| Script | Purpose |
+|--------|---------|
+| `scripts/bulk_card_router_bot.py` | Batch send ID cards to POCs via Lark messages |
+| `scripts/diagnose_lark.py` | Check Lark Bitable field configuration |
+| `scripts/diagnose_ai_preview.py` | Test BytePlus/Cloudinary connectivity |
 
-## 🤝 Contributing
+## License
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
-
-Built with ❤️ using FastAPI and modern web technologies.
+MIT License

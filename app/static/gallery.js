@@ -188,13 +188,16 @@ document.addEventListener('DOMContentLoaded', () => {
     emptyState: document.getElementById('emptyState'),
     searchInput: document.getElementById('searchInput'),
     positionFilter: document.getElementById('positionFilter'),
+    totalRendered: document.getElementById('totalRendered'),
     totalApproved: document.getElementById('totalApproved'),
-    totalCompleted: document.getElementById('totalCompleted'),
+    totalSentToPOC: document.getElementById('totalSentToPOC'),
     previewModal: document.getElementById('previewModal'),
     modalBody: document.getElementById('modalBody'),
     closeModal: document.getElementById('closeModal'),
     downloadBtn: document.getElementById('downloadBtn'),
     downloadAllBtn: document.getElementById('downloadAllBtn'),
+    approveAllBtn: document.getElementById('approveAllBtn'),
+    sendToPOCsBtn: document.getElementById('sendToPOCsBtn'),
     toast: document.getElementById('toast'),
     toastMessage: document.getElementById('toastMessage')
   };
@@ -237,6 +240,14 @@ function initEventListeners() {
     elements.downloadAllBtn.addEventListener('click', downloadAllPdfs);
   }
 
+  // Bulk action buttons
+  if (elements.approveAllBtn) {
+    elements.approveAllBtn.addEventListener('click', approveAllRendered);
+  }
+  if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.addEventListener('click', sendAllToPOCs);
+  }
+
   // Escape key to close modal
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closePreviewModal();
@@ -256,9 +267,9 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
   if (!forceRefresh) {
     const cachedData = loadGalleryCachedData();
     if (cachedData) {
-      // Filter Rendered, Approved and Completed IDs from cache
+      // Filter Rendered, Approved and Sent to POC IDs from cache
       galleryState.employees = cachedData.filter(
-        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Completed'
+        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Sent to POC'
       );
       galleryState.filteredEmployees = [...galleryState.employees];
       galleryState.lastFetchTime = Date.now();
@@ -329,7 +340,7 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
     console.log('fetchGalleryData: Employee array length:', data.employees?.length);
 
     if (data.success) {
-      // Filter Rendered, Approved and Completed IDs
+      // Filter Rendered, Approved and Sent to POC IDs
       const allEmployees = data.employees || [];
       console.log('fetchGalleryData: Total employees:', allEmployees.length);
       
@@ -338,9 +349,9 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
       galleryState.lastFetchTime = Date.now();
       
       galleryState.employees = allEmployees.filter(
-        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Completed'
+        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Sent to POC'
       );
-      console.log('fetchGalleryData: Filtered employees (Rendered/Approved/Completed):', galleryState.employees.length);
+      console.log('fetchGalleryData: Filtered employees (Rendered/Approved/Sent to POC):', galleryState.employees.length);
       
       galleryState.filteredEmployees = [...galleryState.employees];
       updateStats();
@@ -380,7 +391,7 @@ async function fetchGalleryData(forceRefresh = false, retryCount = 0) {
     if (cachedData && cachedData.length > 0) {
       console.log('Gallery: Using cached data after fetch error');
       galleryState.employees = cachedData.filter(
-        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Completed'
+        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Sent to POC'
       );
       galleryState.filteredEmployees = [...galleryState.employees];
       updateStats();
@@ -418,7 +429,7 @@ async function fetchGalleryDataBackground() {
     if (data.success && data.employees) {
       const allEmployees = data.employees;
       const filteredNew = allEmployees.filter(
-        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Completed'
+        emp => emp.status === 'Rendered' || emp.status === 'Approved' || emp.status === 'Sent to POC'
       );
       
       // Only update if data changed
@@ -471,14 +482,17 @@ function showLoading(show) {
 function updateStats() {
   const rendered = galleryState.employees.filter(e => e.status === 'Rendered').length;
   const approved = galleryState.employees.filter(e => e.status === 'Approved').length;
-  const completed = galleryState.employees.filter(e => e.status === 'Completed').length;
+  const sentToPOC = galleryState.employees.filter(e => e.status === 'Sent to POC' || e.status === 'Completed').length;
   
-  // Combine Rendered + Approved for display (both are "awaiting final approval")
-  if (elements.totalApproved) {
-    elements.totalApproved.textContent = rendered + approved;
+  // Update each counter separately
+  if (elements.totalRendered) {
+    elements.totalRendered.textContent = rendered;
   }
-  if (elements.totalCompleted) {
-    elements.totalCompleted.textContent = completed;
+  if (elements.totalApproved) {
+    elements.totalApproved.textContent = approved;
+  }
+  if (elements.totalSentToPOC) {
+    elements.totalSentToPOC.textContent = sentToPOC;
   }
 }
 
@@ -503,10 +517,16 @@ function renderGallery() {
   }
 
   const cards = employees.map(emp => {
-    const statusClass = emp.status.toLowerCase();
+    const statusClass = emp.status.toLowerCase().replace(/\s+/g, '-');
     const isFieldOfficer = emp.position === 'Field Officer';
-    // Can approve if Rendered or Approved (Rendered = new, Approved = legacy)
-    const canApprove = emp.status === 'Rendered' || emp.status === 'Approved';
+    
+    // Determine button based on status
+    // Rendered -> Approve button
+    // Approved -> Send to POC button
+    // Sent to POC / Completed -> Completed (disabled)
+    const isRendered = emp.status === 'Rendered';
+    const isApproved = emp.status === 'Approved';
+    const isSentOrCompleted = emp.status === 'Sent to POC' || emp.status === 'Completed';
     
     // Dual template badge for ALL Field Officers
     const dualBadge = isFieldOfficer 
@@ -516,6 +536,35 @@ function renderGallery() {
     // Determine wrapper class for proper scaling
     // Show portrait template in gallery grid for all Field Officers
     const wrapperClass = 'id-card-image-wrapper';
+    
+    // Generate action button based on status
+    let actionButton = '';
+    if (isRendered) {
+      actionButton = `
+        <button class="btn-approve" onclick="window.approveAndSaveID(${emp.id})">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Approve
+        </button>`;
+    } else if (isApproved) {
+      actionButton = `
+        <button class="btn-send-poc" onclick="window.sendToPOC(${emp.id})">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M1 4l7 4 7-4M1 4v8h14V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Send to POC
+        </button>`;
+    } else if (isSentOrCompleted) {
+      actionButton = `
+        <button class="btn-completed" disabled>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Completed
+        </button>`;
+    }
 
     return `
       <div class="id-gallery-card${isFieldOfficer ? ' field-officer-card' : ''}" data-id="${emp.id}">
@@ -543,13 +592,7 @@ function renderGallery() {
               </svg>
               Preview
             </button>
-            ${canApprove ? `
-            <button class="btn-approve" onclick="window.approveAndSaveID(${emp.id})">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Approve
-            </button>` : ''}
+            ${actionButton}
           </div>
         </div>
       </div>
@@ -809,12 +852,16 @@ function generateIDCardBackHtml(emp) {
   const lastNameInitial = emp.last_name ? emp.last_name.charAt(0).toLowerCase() : '';
   const middleInitial = emp.middle_initial ? emp.middle_initial.replace('.', '').charAt(0).toLowerCase() : '';
   const dynamicUrl = `www.okpo.com/spm/${firstName}${lastNameInitial}${middleInitial}`;
+  const fullWebUrl = `https://${dynamicUrl}`;
   const contactLabel = `${emp.first_name || emp.employee_name.split(' ')[0] || ''}'s Contact`;
   
   // Emergency contact details
   const emergencyName = emp.emergency_name || 'Not provided';
   const emergencyContact = emp.emergency_contact || 'Not provided';
   const emergencyAddress = emp.emergency_address || 'Not provided';
+  
+  // Generate vCard for contact QR code
+  const vCardData = generateVCard(emp);
 
   return `
     <div class="id-card id-card-back gallery-id-card-back">
@@ -834,10 +881,10 @@ function generateIDCardBackHtml(emp) {
         </div>
       </div>
 
-      <!-- QR Code Section -->
+      <!-- QR Code Section - vCard Contact QR -->
       <div class="id-back-qr-section">
         <div class="id-back-qr-code">
-          <span>QR Code Here</span>
+          ${generateQRCodeHtml(vCardData, 'id-back-qr-image', { size: 120, ecLevel: 'M' })}
         </div>
         <div class="id-back-vcard-row">
           <div class="id-back-vcard-icon">
@@ -886,10 +933,15 @@ function generateIDCardBackHtml(emp) {
         </div>
       </div>
 
-      <!-- Bottom QR and Website -->
+      <!-- Bottom QR and Website - Website URL QR with OKPO logo overlay -->
       <div class="id-back-bottom">
         <div class="id-back-bottom-qr">
-          <span>QR Code Here</span>
+          ${generateQRCodeHtml(fullWebUrl, 'id-back-bottom-qr-image', { 
+            size: 200, 
+            ecLevel: 'H', 
+            centerImageUrl: 'https://239dc453931a663c0cfa3bb867f1aaae.cdn.bubble.io/cdn-cgi/image/w=,h=,f=auto,dpr=1,fit=contain/f1727917655428x617042099316169600/okpologo.jpg',
+            centerImageSizeRatio: 0.25
+          })}
         </div>
         <div class="id-back-website-row">
           <div class="id-back-website-icon">
@@ -1633,9 +1685,9 @@ async function downloadIDPdf(emp) {
     // Cleanup
     document.body.removeChild(tempContainer);
     
-    // Update local state to reflect "Completed" status
+    // Update local state to reflect "Sent to POC" status
     if (emp.status === 'Approved') {
-      emp.status = 'Completed';
+      emp.status = 'Sent to POC';
       renderGallery();
       // updateStats() refreshes the status counts in the sidebar
       if (typeof updateStats === 'function') {
@@ -1835,21 +1887,21 @@ async function downloadAllPdfs() {
   }
 }
 
-async function markAsCompleted(id) {
+async function markAsSentToPOC(id) {
   try {
-    const response = await fetch(`/hr/api/employees/${id}/complete`, {
+    const response = await fetch(`/hr/api/employees/${id}/send-to-poc`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
 
     if (response.ok) {
       const emp = galleryState.employees.find(e => e.id === id);
-      if (emp) emp.status = 'Completed';
+      if (emp) emp.status = 'Sent to POC';
       updateStats();
       renderGallery();
     }
   } catch (error) {
-    console.error('Error marking as completed:', error);
+    console.error('Error marking as sent to POC:', error);
   }
 }
 
@@ -1938,6 +1990,104 @@ function generateBarcodeHtml(idNumber, cssClass = 'id-barcode-image', options = 
   `;
 }
 
+/**
+ * Generate a QR code image URL using QuickChart.io QR API.
+ * API Documentation: https://quickchart.io/documentation/qr-codes/
+ * 
+ * @param {string} data - The data to encode in the QR code (URL, vCard, etc.)
+ * @param {Object} options - Optional configuration
+ * @param {number} options.size - Size in pixels (default: 150)
+ * @param {string} options.ecLevel - Error correction level: L, M, Q, H (default: M)
+ * @param {string} options.format - Output format: png, svg (default: png)
+ * @param {string} options.centerImageUrl - URL to embed in center of QR (for logo)
+ * @param {number} options.centerImageSizeRatio - Size ratio for center image (default: 0.25)
+ * @returns {string} URL to the QR code image
+ * 
+ * @example
+ * getQRCodeUrl('https://example.com')
+ * // Returns: 'https://quickchart.io/qr?text=https%3A%2F%2Fexample.com&size=150&format=png'
+ */
+function getQRCodeUrl(data, options = {}) {
+  if (!data) return '';
+  
+  // Default settings
+  const size = options.size || 150;
+  const ecLevel = options.ecLevel || 'M';
+  const format = options.format || 'png';
+  
+  // URL-encode the data
+  const encodedData = encodeURIComponent(data);
+  
+  // QuickChart QR API URL
+  let url = `https://quickchart.io/qr?text=${encodedData}&size=${size}&ecLevel=${ecLevel}&format=${format}&margin=1`;
+  
+  // Add center image (logo) if provided
+  if (options.centerImageUrl) {
+    const encodedLogoUrl = encodeURIComponent(options.centerImageUrl);
+    const sizeRatio = options.centerImageSizeRatio || 0.25;
+    url += `&centerImageUrl=${encodedLogoUrl}&centerImageSizeRatio=${sizeRatio}`;
+  }
+  
+  return url;
+}
+
+/**
+ * Generate a vCard string for QR code encoding.
+ * 
+ * @param {Object} emp - Employee object
+ * @returns {string} vCard formatted string
+ */
+function generateVCard(emp) {
+  const fullName = emp.employee_name || '';
+  const firstName = emp.first_name || fullName.split(' ')[0] || '';
+  const lastName = emp.last_name || (fullName.split(' ').slice(1).join(' ')) || '';
+  const email = emp.email || '';
+  const phone = emp.personal_number || '';
+  const position = emp.position || '';
+  const company = 'S.P. Madrid & Co.';
+  
+  // vCard 3.0 format
+  const vcard = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${fullName}`,
+    `N:${lastName};${firstName};;;`,
+    `ORG:${company}`,
+    `TITLE:${position}`,
+    email ? `EMAIL:${email}` : '',
+    phone ? `TEL:${phone}` : '',
+    'END:VCARD'
+  ].filter(line => line).join('\n');
+  
+  return vcard;
+}
+
+/**
+ * Generate the HTML for a QR code image with error handling.
+ * 
+ * @param {string} data - The data to encode (URL or vCard string)
+ * @param {string} cssClass - CSS class for the QR image
+ * @param {Object} options - QR code options (size, ecLevel)
+ * @returns {string} HTML string for the QR code image
+ */
+function generateQRCodeHtml(data, cssClass = 'id-qr-image', options = {}) {
+  if (!data) {
+    return `<span class="qr-placeholder">QR Code</span>`;
+  }
+  
+  const qrUrl = getQRCodeUrl(data, options);
+  
+  return `
+    <img 
+      src="${qrUrl}" 
+      alt="QR Code" 
+      class="${cssClass}"
+      crossorigin="anonymous"
+      onerror="this.parentElement.innerHTML='<span class=\\'qr-placeholder\\'>QR</span>';"
+    >
+  `;
+}
+
 // Format comma-separated campaign values with proper spacing
 function formatCampaignValues(campaigns) {
   if (!campaigns || campaigns === '-') return '-';
@@ -1965,10 +2115,65 @@ window.showPreviewSide = showPreviewSide;
 window.previewID = previewID;
 window.closePreviewModal = closePreviewModal;
 window.approveAndSaveID = approveAndSaveID;
+window.sendToPOC = sendToPOC;
 
 /**
- * Approve and Save ID - Generates ID URL, stores in Lark Base id_card column, marks as Completed
- * This replaces the old download action. No local file download occurs.
+ * Send a single employee to POC - Changes status from Approved to Sent to POC
+ * Uses the same backend endpoint as bulk send
+ */
+async function sendToPOC(id) {
+  const emp = galleryState.employees.find(e => e.id == id);
+  
+  if (!emp) {
+    showToast('Employee not found', 'error');
+    return;
+  }
+
+  if (emp.status !== 'Approved') {
+    showToast('Only approved IDs can be sent to POC', 'error');
+    return;
+  }
+
+  if (!confirm(`Send ${emp.employee_name}'s ID to their nearest POC branch?`)) return;
+
+  try {
+    const response = await fetch(`/hr/api/employees/${id}/send-to-poc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
+    
+    const data = await response.json();
+    
+    // Check both HTTP status and response success flag
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || `Failed to send to POC (HTTP ${response.status})`);
+    }
+    
+    // Update local state
+    emp.status = 'Sent to POC';
+    
+    // Refresh UI
+    updateStats();
+    renderGallery();
+    
+    showToast(`✅ Sent to POC: ${data.nearest_poc || 'Unknown branch'}`, 'success');
+  } catch (error) {
+    console.error('Error sending to POC:', error);
+    showToast(`❌ Failed to send to POC: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Approve ID - Generates PDF, uploads to LarkBase, then changes status from Rendered → Approved
+ * This is the source of truth for approval - bulk approve uses the same helper function
+ * 
+ * FLOW:
+ * 1. Generate ID Card PDF(s) using the existing renderer
+ * 2. Upload PDF to Cloudinary via /upload-pdf
+ * 3. Update LarkBase id_card field with PDF URL
+ * 4. Change status to Approved via /approve
+ * 5. UI shows "Send to POC" button
  */
 async function approveAndSaveID(id) {
   const emp = galleryState.employees.find(e => e.id == id);
@@ -1978,44 +2183,76 @@ async function approveAndSaveID(id) {
     return;
   }
 
-  if (!confirm(`Approve ${emp.employee_name}'s ID and save to Lark Base?`)) return;
+  if (emp.status !== 'Rendered') {
+    showToast('Only rendered IDs can be approved', 'error');
+    return;
+  }
+
+  if (!confirm(`Approve ${emp.employee_name}'s ID? This will generate and upload the PDF.`)) return;
 
   const isFieldOfficer = emp.position === 'Field Officer';
   const pageCount = isFieldOfficer ? 4 : 2;
   
-  showToast(`Generating ${pageCount}-page ID and saving to Lark Base...`, 'success');
+  showToast(`⏳ Generating ${pageCount}-page PDF and uploading to LarkBase...`, 'success');
 
   try {
-    // Log PDF configuration for debugging
-    console.log('PDF Config:', {
-      dimensions: `${PDF_CONFIG.WIDTH_INCHES}" × ${PDF_CONFIG.HEIGHT_INCHES}"`,
-      dimensionsMm: `${PDF_CONFIG.WIDTH_MM.toFixed(2)}mm × ${PDF_CONFIG.HEIGHT_MM.toFixed(2)}mm`,
-      renderPx: `${PDF_CONFIG.RENDER_WIDTH_PX}px × ${PDF_CONFIG.RENDER_HEIGHT_PX}px`,
-      dpi: PDF_CONFIG.PRINT_DPI,
-      scale: PDF_CONFIG.CANVAS_SCALE.toFixed(3),
-      isFieldOfficer: isFieldOfficer,
-      pageCount: pageCount
-    });
+    // Use the shared helper function for generate + upload + approve
+    const result = await generateUploadAndApprove(emp);
+    
+    if (result.success) {
+      // Update local state
+      emp.status = 'Approved';
+      
+      // Refresh UI
+      updateStats();
+      renderGallery();
+      
+      if (result.larkSynced) {
+        showToast(`✅ ${emp.employee_name} approved with PDF uploaded to LarkBase`, 'success');
+      } else {
+        showToast(`✅ ${emp.employee_name} approved (LarkBase sync pending)`, 'warning');
+      }
+    } else {
+      throw new Error(result.error || 'Failed to approve');
+    }
+  } catch (error) {
+    console.error('Error approving ID:', error);
+    showToast(`❌ Failed to approve: ${error.message}`, 'error');
+  }
+}
 
-    // Create a temporary container - position off-screen but rendered
-    const tempContainer = document.createElement('div');
-    tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px';
-    tempContainer.style.top = '0';
-    tempContainer.style.width = `${PDF_CONFIG.RENDER_WIDTH_PX + 20}px`;
-    tempContainer.style.background = '#ffffff';
-    document.body.appendChild(tempContainer);
-    
-    // Use actual ID card dimensions (512×800) - matches preview exactly
-    const designWidth = PDF_CONFIG.PREVIEW_WIDTH_PX;   // 512px
-    const designHeight = PDF_CONFIG.PREVIEW_HEIGHT_PX; // 800px
-    const scaleToFit = PDF_CONFIG.CANVAS_SCALE;        // ~3.125 for 300 DPI
-    
-    // Use exact PDF dimensions from config (2.13" × 3.33")
+// ============================================
+// Bulk Actions
+// ============================================
+
+// OKPO logo URL for QR codes (used in bulk PDF generation)
+const OKPO_LOGO_URL = 'https://239dc453931a663c0cfa3bb867f1aaae.cdn.bubble.io/cdn-cgi/image/w=,h=,f=auto,dpr=1,fit=contain/f1727917655428x617042099316169600/okpologo.jpg';
+
+/**
+ * Helper function to generate PDF for an employee
+ * Reusable by both single approve and bulk approve
+ * @param {Object} emp - Employee object
+ * @returns {Promise<Blob>} - PDF blob or throws error
+ */
+async function generatePDFForEmployee(emp) {
+  const isFieldOfficer = emp.position === 'Field Officer';
+  
+  // Create temp container
+  const tempContainer = document.createElement('div');
+  tempContainer.style.position = 'absolute';
+  tempContainer.style.left = '-9999px';
+  tempContainer.style.top = '0';
+  tempContainer.style.width = `${PDF_CONFIG.RENDER_WIDTH_PX + 20}px`;
+  tempContainer.style.background = '#ffffff';
+  document.body.appendChild(tempContainer);
+  
+  try {
+    const designWidth = PDF_CONFIG.PREVIEW_WIDTH_PX;
+    const designHeight = PDF_CONFIG.PREVIEW_HEIGHT_PX;
+    const scaleToFit = PDF_CONFIG.CANVAS_SCALE;
     const pdfWidthMm = PDF_CONFIG.WIDTH_MM;
     const pdfHeightMm = PDF_CONFIG.HEIGHT_MM;
     
-    // Create PDF with exact ID card dimensions
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -2025,38 +2262,13 @@ async function approveAndSaveID(id) {
     });
 
     if (isFieldOfficer) {
-      // 4-page PDF for ALL Field Officers: Original Portrait (front/back) + Field Office Landscape (front/back)
-      console.log('Generating 4-page PDF for Field Officer...');
+      // 4-page PDF
+      const originalFrontCanvas = await captureCardCanvas(tempContainer, generateRegularIDCardHtml(emp), designWidth, designHeight, scaleToFit, 1500);
+      pdf.addImage(originalFrontCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY), 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
       
-      // Page 1: Original template front
-      console.log('Capturing Original template front...');
-      const originalFrontCanvas = await captureCardCanvas(
-        tempContainer, 
-        generateRegularIDCardHtml(emp), 
-        designWidth, 
-        designHeight, 
-        scaleToFit, 
-        1500
-      );
-      const originalFrontImgData = originalFrontCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
-      pdf.addImage(originalFrontImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
-      
-      // Page 2: Original template back
-      console.log('Capturing Original template back...');
       pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
-      const originalBackCanvas = await captureCardCanvas(
-        tempContainer, 
-        generateIDCardBackHtml(emp), 
-        designWidth, 
-        designHeight, 
-        scaleToFit, 
-        1000
-      );
-      const originalBackImgData = originalBackCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
-      pdf.addImage(originalBackImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
-      
-      // Page 3: Field Officer template front (LANDSCAPE page - 3.33" × 2.13")
-      console.log('Capturing Field Officer template front (landscape)...');
+      const originalBackCanvas = await captureCardCanvas(tempContainer, generateIDCardBackHtml(emp), designWidth, designHeight, scaleToFit, 1000);
+      pdf.addImage(originalBackCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY), 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
       
       const landscapeWidthMm = PDF_CONFIG_LANDSCAPE.WIDTH_MM;
       const landscapeHeightMm = PDF_CONFIG_LANDSCAPE.HEIGHT_MM;
@@ -2065,130 +2277,253 @@ async function approveAndSaveID(id) {
       const landscapeScale = 3;
       
       pdf.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
+      const foFrontCanvas = await captureCardCanvas(tempContainer, generateFieldOfficeIDCardHtml(emp), landscapeDesignWidth, landscapeDesignHeight, landscapeScale, 2000);
+      pdf.addImage(foFrontCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'SLOW');
       
-      const foFrontCanvas = await captureCardCanvas(
-        tempContainer, 
-        generateFieldOfficeIDCardHtml(emp), 
-        landscapeDesignWidth, 
-        landscapeDesignHeight, 
-        landscapeScale, 
-        2000
-      );
-      
-      const foFrontImgData = foFrontCanvas.toDataURL('image/jpeg', 0.92);
-      pdf.addImage(foFrontImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'SLOW');
-      
-      // Page 4: Field Officer template back
-      console.log('Capturing Field Officer template back (landscape)...');
       pdf.addPage([landscapeWidthMm, landscapeHeightMm], 'landscape');
-      
-      const foBackCanvas = await captureCardCanvas(
-        tempContainer, 
-        generateFieldOfficeIDCardBackHtml(emp), 
-        landscapeDesignWidth, 
-        landscapeDesignHeight, 
-        landscapeScale, 
-        1500
-      );
-      
-      const foBackImgData = foBackCanvas.toDataURL('image/jpeg', 0.92);
-      pdf.addImage(foBackImgData, 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'SLOW');
-      
+      const foBackCanvas = await captureCardCanvas(tempContainer, generateFieldOfficeIDCardBackHtml(emp), landscapeDesignWidth, landscapeDesignHeight, landscapeScale, 1500);
+      pdf.addImage(foBackCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, landscapeWidthMm, landscapeHeightMm, undefined, 'SLOW');
     } else {
-      // Standard 2-page PDF
-      console.log('Generating 2-page PDF (portrait)...');
+      // 2-page PDF
+      const frontCanvas = await captureCardCanvas(tempContainer, generateIDCardHtml(emp), designWidth, designHeight, scaleToFit, 1500);
+      pdf.addImage(frontCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY), 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
       
-      // Page 1: Front side
-      console.log('Capturing front side...');
-      const frontCanvas = await captureCardCanvas(
-        tempContainer, 
-        generateIDCardHtml(emp), 
-        designWidth, 
-        designHeight, 
-        scaleToFit, 
-        1500
-      );
-      const frontImgData = frontCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
-      pdf.addImage(frontImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
-      
-      // Page 2: Back side
-      console.log('Capturing back side...');
       pdf.addPage([pdfWidthMm, pdfHeightMm], 'portrait');
-      const backCanvas = await captureCardCanvas(
-        tempContainer, 
-        getBackHtml(emp), 
-        designWidth, 
-        designHeight, 
-        scaleToFit, 
-        1000
-      );
-      const backImgData = backCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY);
-      pdf.addImage(backImgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+      const backCanvas = await captureCardCanvas(tempContainer, getBackHtml(emp), designWidth, designHeight, scaleToFit, 1000);
+      pdf.addImage(backCanvas.toDataURL('image/jpeg', PDF_CONFIG.JPEG_QUALITY), 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
     }
     
-    // Get PDF as binary blob for backend upload
-    const pdfBlob = pdf.output('blob');
-    console.log('PDF blob size:', pdfBlob.size, 'bytes');
+    return pdf.output('blob');
+  } finally {
+    document.body.removeChild(tempContainer);
+  }
+}
+
+/**
+ * Helper function to generate PDF, upload, and approve an employee
+ * Used by both single approve and bulk approve
+ * @param {Object} emp - Employee object
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function generateUploadAndApprove(emp) {
+  try {
+    // Step 1: Generate PDF
+    const pdfBlob = await generatePDFForEmployee(emp);
     
-    // Check file size - Cloudinary free tier limit is 10MB
-    const maxFileSizeMB = 10;
-    const fileSizeMB = pdfBlob.size / (1024 * 1024);
-    console.log(`PDF size: ${fileSizeMB.toFixed(2)} MB (max: ${maxFileSizeMB} MB)`);
-    
-    if (fileSizeMB > maxFileSizeMB) {
-      document.body.removeChild(tempContainer);
-      showToast(`❌ PDF too large: ${fileSizeMB.toFixed(1)}MB (max: ${maxFileSizeMB}MB). Try again.`, 'error');
-      return;
+    // Check size
+    if (pdfBlob.size > 10 * 1024 * 1024) {
+      throw new Error('PDF too large (>10MB)');
     }
     
-    // Upload PDF to backend for Cloudinary and LarkBase sync (NO LOCAL DOWNLOAD)
-    showToast('Uploading ID to cloud storage and Lark Base...', 'success');
-    console.log('Uploading PDF to backend for employee:', emp.id);
-    
+    // Step 2: Upload
     const uploadResponse = await fetch(`/hr/api/employees/${emp.id}/upload-pdf`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/pdf'
-      },
+      headers: { 'Content-Type': 'application/pdf' },
       body: pdfBlob,
       credentials: 'include'
     });
     
     if (!uploadResponse.ok) {
       const errorText = await uploadResponse.text();
-      console.error('Upload failed with status:', uploadResponse.status, errorText);
-      throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
+      throw new Error(`Upload failed: ${uploadResponse.status}`);
     }
     
     const uploadResult = await uploadResponse.json();
-    console.log('PDF upload result:', uploadResult);
-    
-    if (!uploadResult.success || !uploadResult.pdf_url) {
-      throw new Error(uploadResult.error || 'Upload failed - no URL returned');
+    if (!uploadResult.success) {
+      throw new Error(uploadResult.error || 'Upload failed');
     }
     
-    const pdfUrl = uploadResult.pdf_url;
-    const larkSynced = uploadResult.lark_synced || false;
+    // Step 3: Approve
+    const approveResponse = await fetch(`/hr/api/employees/${emp.id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
     
-    console.log('PDF uploaded successfully:', pdfUrl, 'LarkBase synced:', larkSynced);
-    
-    // Cleanup
-    document.body.removeChild(tempContainer);
-    
-    // Update local state to reflect "Completed" status
-    emp.status = 'Completed';
-    renderGallery();
-    updateStats();
-
-    // Show success message
-    let message = `✅ ID approved and saved to Lark Base`;
-    if (!larkSynced) {
-      message = `⚠️ ID uploaded but Lark Base sync pending`;
+    const approveData = await approveResponse.json();
+    if (!approveData.success) {
+      throw new Error(approveData.error || 'Approval failed');
     }
-    showToast(message, larkSynced ? 'success' : 'warning');
     
+    return { success: true, larkSynced: uploadResult.lark_synced && approveData.lark_synced };
   } catch (error) {
-    console.error('Error approving and saving ID:', error);
-    showToast(`Failed to approve ID: ${error.message}`, 'error');
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Approve all employees with "Rendered" status (respects current filters)
+ * Uses the same generate+upload+approve flow as individual approvals
+ * Includes concurrency limiting, retries, and progress tracking
+ * 
+ * NOTE: Each approval generates a PDF, which is slower than just status change.
+ * Concurrency is limited to 2 to avoid browser memory issues.
+ */
+async function approveAllRendered() {
+  // Use FILTERED employees to respect search/filter criteria
+  const renderedEmployees = galleryState.filteredEmployees.filter(e => e.status === 'Rendered');
+  
+  if (renderedEmployees.length === 0) {
+    showToast('No employees with "Rendered" status to approve in current view', 'error');
+    return;
+  }
+  
+  const confirmApprove = confirm(`Are you sure you want to approve ${renderedEmployees.length} employee(s)?\n\nThis will generate and upload PDFs for each, which may take a few minutes.`);
+  if (!confirmApprove) return;
+  
+  // Disable button during operation
+  if (elements.approveAllBtn) {
+    elements.approveAllBtn.disabled = true;
+    elements.approveAllBtn.innerHTML = '⏳ Approving 0/' + renderedEmployees.length + '...';
+  }
+  
+  // Lower concurrency for PDF generation (memory intensive)
+  const MAX_CONCURRENT = 2;
+  const MAX_RETRIES = 1;
+  
+  let successCount = 0;
+  let failCount = 0;
+  const failures = [];
+  
+  // Process employees with concurrency limiting
+  const queue = [...renderedEmployees];
+  const processing = [];
+  
+  async function processEmployee(emp) {
+    let lastError = null;
+    
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        // Use the same generate+upload+approve flow as single approve
+        const result = await generateUploadAndApprove(emp);
+        
+        if (result.success) {
+          emp.status = 'Approved';
+          successCount++;
+          // Update progress
+          if (elements.approveAllBtn) {
+            elements.approveAllBtn.innerHTML = `⏳ Approving ${successCount + failCount}/${renderedEmployees.length}...`;
+          }
+          return true;
+        } else {
+          lastError = result.error || 'Unknown error';
+        }
+      } catch (error) {
+        lastError = error.message;
+        console.error(`Error approving employee ${emp.id} (attempt ${attempt + 1}):`, error);
+      }
+      
+      // Wait before retry
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+    
+    // All retries failed
+    failCount++;
+    failures.push({ id: emp.id, name: emp.employee_name, error: lastError });
+    return false;
+  }
+  
+  // Process with concurrency limit
+  while (queue.length > 0 || processing.length > 0) {
+    // Start new tasks up to concurrency limit
+    while (queue.length > 0 && processing.length < MAX_CONCURRENT) {
+      const emp = queue.shift();
+      const promise = processEmployee(emp).finally(() => {
+        const index = processing.indexOf(promise);
+        if (index > -1) processing.splice(index, 1);
+      });
+      processing.push(promise);
+    }
+    
+    // Wait for at least one to complete
+    if (processing.length > 0) {
+      await Promise.race(processing);
+    }
+  }
+  
+  // Re-enable button
+  if (elements.approveAllBtn) {
+    elements.approveAllBtn.disabled = false;
+    elements.approveAllBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg> Approve All Rendered`;
+  }
+  
+  updateStats();
+  renderGallery();
+  
+  // Show summary with detailed results
+  if (failCount === 0) {
+    showToast(`✅ Successfully approved ${successCount} employee(s) with PDFs uploaded`, 'success');
+  } else {
+    // Log failures for debugging
+    console.error('Bulk approve failures:', failures);
+    showToast(`⚠️ Approved ${successCount}, failed ${failCount}. Check console for details.`, 'error');
+  }
+}
+
+/**
+ * Send all "Approved" employees to their POCs based on nearest branch
+ */
+async function sendAllToPOCs() {
+  const approvedEmployees = galleryState.employees.filter(e => e.status === 'Approved');
+  
+  if (approvedEmployees.length === 0) {
+    showToast('No employees with "Approved" status to send to POCs', 'error');
+    return;
+  }
+  
+  const confirmSend = confirm(`Are you sure you want to send ${approvedEmployees.length} employee(s) to their nearest branch POCs?`);
+  if (!confirmSend) return;
+  
+  // Disable button during operation
+  if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.disabled = true;
+    elements.sendToPOCsBtn.innerHTML = '⏳ Sending...';
+  }
+  
+  try {
+    // Call the bulk POC routing endpoint
+    const response = await fetch('/hr/api/send-all-to-pocs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
+    
+    const data = await response.json();
+    
+    // Check both HTTP status and response success flag
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || `Failed to send to POCs (HTTP ${response.status})`);
+    }
+    
+    // Update local state for all sent employees
+    for (const emp of approvedEmployees) {
+      emp.status = 'Sent to POC';
+    }
+    updateStats();
+    renderGallery();
+    
+    let message = `✅ Sent ${data.sent_count} employee(s) to POCs`;
+    if (data.failed_count > 0) {
+      message += ` (${data.failed_count} failed)`;
+      showToast(message, 'warning');
+    } else {
+      showToast(message, 'success');
+    }
+  } catch (error) {
+    console.error('Error sending to POCs:', error);
+    showToast('❌ Failed to send employees to POCs: ' + error.message, 'error');
+  }
+  
+  // Re-enable button
+  if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.disabled = false;
+    elements.sendToPOCsBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 5l8 5 8-5M2 5v10h16V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg> Send All to POCs`;
   }
 }

@@ -88,7 +88,8 @@ def init_sqlite_db():
         field_clearance TEXT,
         fo_division TEXT,
         fo_department TEXT,
-        fo_campaign TEXT
+        fo_campaign TEXT,
+        resolved_printer_branch TEXT
     )
     """)
     
@@ -125,7 +126,8 @@ def init_sqlite_db():
         "ALTER TABLE employees ADD COLUMN field_clearance TEXT",
         "ALTER TABLE employees ADD COLUMN fo_division TEXT",
         "ALTER TABLE employees ADD COLUMN fo_department TEXT",
-        "ALTER TABLE employees ADD COLUMN fo_campaign TEXT"
+        "ALTER TABLE employees ADD COLUMN fo_campaign TEXT",
+        "ALTER TABLE employees ADD COLUMN resolved_printer_branch TEXT"
     ]
     for sql in migrations:
         try:

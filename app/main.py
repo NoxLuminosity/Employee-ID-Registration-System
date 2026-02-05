@@ -54,17 +54,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Blocks inline scripts (except for legitimate uses), restricts frame sources
         # VERCEL FIX: Added cdnjs.cloudflare.com for jsPDF and html2canvas libraries
         # BARCODE: barcodeapi.org is allowed via https: wildcard in img-src and connect-src
+        # QR: quickchart.io added for QR code generation
         csp = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https: blob:; "
-            "connect-src 'self' https://api.cloudinary.com https://api.larksuite.com https://barcodeapi.org; "
+            "connect-src 'self' https://api.cloudinary.com https://api.larksuite.com https://barcodeapi.org https://quickchart.io; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self'; "
-            "upgrade-insecure-requests; "
+            "upgrade-insecure-requests"
         )
         response.headers["Content-Security-Policy"] = csp
         

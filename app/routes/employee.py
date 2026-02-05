@@ -73,7 +73,7 @@ def verify_employee_auth(employee_session: str) -> bool:
 # Request model for generate-headshot endpoint
 class GenerateHeadshotRequest(BaseModel):
     image: str  # Base64-encoded image
-    prompt_type: str = "male_1"  # One of: male_1, male_2, female_1, female_2
+    prompt_type: str = "male_1"  # One of: male_1-4, female_1-4 (smart casual attire)
 
 
 @router.post("/generate-headshot")
@@ -90,7 +90,7 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
     
     Expects JSON body with:
         image: Base64-encoded image data (with or without data URI prefix)
-        prompt_type: One of 'male_1', 'male_2', 'female_1', 'female_2' (default: male_1)
+        prompt_type: One of 'male_1' through 'male_4' or 'female_1' through 'female_4' (default: male_1)
     
     Returns:
         JSON with generated_image (Cloudinary URL of transparent PNG) on success
@@ -113,8 +113,8 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
                 content={"success": False, "error": "No image data provided"}
             )
         
-        # Validate prompt_type
-        valid_prompt_types = ["male_1", "male_2", "female_1", "female_2"]
+        # Validate prompt_type (8 smart casual attire options)
+        valid_prompt_types = ["male_1", "male_2", "male_3", "male_4", "female_1", "female_2", "female_3", "female_4"]
         prompt_type = request.prompt_type if request.prompt_type in valid_prompt_types else "male_1"
         
         # Step 1: Upload original to Cloudinary to get a public URL

@@ -30,6 +30,9 @@ from app.database import (
 from app.services.background_removal_service import remove_background_from_url
 from app.services.cloudinary_service import upload_bytes_to_cloudinary
 
+# Import POC routing service
+from app.services.poc_routing_service import compute_nearest_poc_branch, is_valid_poc_branch
+
 # Import Lark OAuth service
 from app.services.lark_auth_service import (
     get_authorization_url,
@@ -717,10 +720,10 @@ def api_approve_employee(employee_id: int, hr_session: str = Cookie(None)):
                 content={"success": False, "error": "Employee not found"}
             )
 
-        if row.get("status") != "Reviewing":
+        if row.get("status") != "Rendered":
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": f"Cannot approve. Current status: {row.get('status')}"}
+                content={"success": False, "error": f"Cannot approve. Current status: {row.get('status')}. Only 'Rendered' IDs can be approved."}
             )
 
         # Update status to Approved
@@ -737,11 +740,13 @@ def api_approve_employee(employee_id: int, hr_session: str = Cookie(None)):
 
         # Sync status to Lark Bitable (one-way authoritative from HR side)
         lark_synced = False
+        lark_error = None
         try:
             from app.services.lark_service import find_and_update_employee_status
             id_number = row.get("id_number")
             old_status = row.get("status")
             if id_number:
+                logger.info(f"📤 Syncing status 'Approved' to Lark for id_number: {id_number}")
                 lark_synced = find_and_update_employee_status(
                     id_number, 
                     "Approved",
@@ -751,19 +756,309 @@ def api_approve_employee(employee_id: int, hr_session: str = Cookie(None)):
                 if lark_synced:
                     logger.info(f"✅ Lark Bitable status synced to 'Approved' for employee {id_number}")
                 else:
+                    lark_error = "Lark update returned False - check logs for details"
                     logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Approved' for employee {id_number}")
+            else:
+                lark_error = "No id_number found for employee"
+                logger.warning(f"⚠️ Cannot sync to Lark - employee {employee_id} has no id_number")
         except Exception as lark_e:
+            lark_error = str(lark_e)
             logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
 
         logger.info(f"Employee {employee_id} approved (Lark synced: {lark_synced})")
         return JSONResponse(content={
             "success": True, 
             "message": "Application approved",
-            "lark_synced": lark_synced
+            "lark_synced": lark_synced,
+            "lark_error": lark_error
         })
 
     except Exception as e:
         logger.error(f"Error approving employee {employee_id}: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@router.post("/api/employees/{employee_id}/send-to-poc")
+def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
+    """
+    Send a single employee's ID card to nearest POC branch.
+    Changes status from "Approved" to "Sent to POC".
+    Uses haversine distance to find nearest POC.
+    """
+    session = get_session(hr_session)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
+    
+    # Verify org access on each request
+    if session.get("auth_type") == "lark":
+        from app.services.lark_auth_service import is_descendant_of_people_support
+        open_id = session.get("lark_open_id")
+        is_authorized, reason = is_descendant_of_people_support(open_id)
+        
+        if not is_authorized:
+            logger.warning(f"API /api/employees/{employee_id}/send-to-poc: Org access denied - {reason}")
+            return JSONResponse(status_code=403, content={
+                "success": False, 
+                "error": "Access denied. You are not authorized to access the HR Portal."
+            })
+    
+    try:
+        row = get_employee_by_id(employee_id)
+        if not row:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "error": "Employee not found"}
+            )
+        
+        current_status = row.get("status")
+        if current_status != "Approved":
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": f"Cannot send to POC. Current status: {current_status}. Must be 'Approved'."}
+            )
+        
+        # Compute nearest POC branch based on employee's location
+        location_branch = row.get("location_branch", "")
+        nearest_poc = compute_nearest_poc_branch(location_branch)
+        
+        # Update employee status and resolved POC branch
+        id_number = row.get("id_number")
+        success = update_employee(employee_id, {
+            "status": "Sent to POC",
+            "resolved_printer_branch": nearest_poc,
+            "date_last_modified": datetime.now().isoformat()
+        })
+        
+        if not success:
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": "Failed to update employee status"}
+            )
+        
+        # Sync status to Lark Bitable
+        lark_synced = False
+        try:
+            from app.services.lark_service import find_and_update_employee_status
+            if id_number:
+                lark_synced = find_and_update_employee_status(
+                    id_number,
+                    "Sent to POC",
+                    old_status=current_status,
+                    source="HR Portal Send to POC"
+                )
+                if lark_synced:
+                    logger.info(f"✅ Lark Bitable status synced to 'Sent to POC' for employee {id_number}")
+                else:
+                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Sent to POC' for employee {id_number}")
+        except Exception as lark_e:
+            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+        
+        # Send actual Lark message to POC (or test recipient if in test mode)
+        message_sent = False
+        email_sent_updated = False
+        test_mode = False
+        send_error = None
+        try:
+            from app.services.lark_service import send_to_poc, update_employee_email_sent, is_poc_test_mode
+            from app.services.poc_routing_service import get_poc_email
+            
+            test_mode = is_poc_test_mode()
+            poc_email = get_poc_email(nearest_poc)
+            
+            # Prepare employee data for message
+            employee_data = {
+                "id_number": id_number,
+                "employee_name": row.get("employee_name", ""),
+                "position": row.get("position", ""),
+                "location_branch": location_branch,
+            }
+            
+            # Send the message
+            send_result = send_to_poc(employee_data, nearest_poc, poc_email)
+            
+            if send_result.get("success"):
+                message_sent = True
+                logger.info(f"✅ POC message sent for employee {id_number} to {nearest_poc}" + 
+                           (f" (TEST MODE - sent to {send_result.get('recipient', 'test recipient')})" if test_mode else ""))
+                
+                # Update email_sent in Lark Bitable
+                try:
+                    email_sent_updated = update_employee_email_sent(
+                        id_number, 
+                        email_sent=True,
+                        resolved_printer_branch=nearest_poc
+                    )
+                    if email_sent_updated:
+                        logger.info(f"✅ email_sent updated to True in Lark Bitable for {id_number}")
+                    else:
+                        logger.warning(f"⚠️ Failed to update email_sent in Lark Bitable for {id_number}")
+                except Exception as email_e:
+                    logger.warning(f"⚠️ Could not update email_sent in Lark Bitable: {str(email_e)}")
+            else:
+                send_error = send_result.get("error", "Unknown error")
+                logger.warning(f"⚠️ Failed to send POC message for employee {id_number}: {send_error}")
+        except Exception as msg_e:
+            send_error = str(msg_e)
+            logger.warning(f"⚠️ Could not send POC message: {send_error}")
+        
+        logger.info(f"Employee {employee_id} sent to POC '{nearest_poc}' (Lark synced: {lark_synced}, message sent: {message_sent})")
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Sent to POC: {nearest_poc}",
+            "nearest_poc": nearest_poc,
+            "lark_synced": lark_synced,
+            "message_sent": message_sent,
+            "email_sent_updated": email_sent_updated,
+            "test_mode": test_mode,
+            "send_error": send_error
+        })
+    
+    except Exception as e:
+        logger.error(f"Error sending employee {employee_id} to POC: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@router.post("/api/send-all-to-pocs")
+def api_send_all_to_pocs(hr_session: str = Cookie(None)):
+    """
+    Bulk send all "Approved" employees to their nearest POC branches.
+    Changes status from "Approved" to "Sent to POC" for all applicable employees.
+    Uses haversine distance to find nearest POC for each employee.
+    """
+    session = get_session(hr_session)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
+    
+    # Verify org access on each request
+    if session.get("auth_type") == "lark":
+        from app.services.lark_auth_service import is_descendant_of_people_support
+        open_id = session.get("lark_open_id")
+        is_authorized, reason = is_descendant_of_people_support(open_id)
+        
+        if not is_authorized:
+            logger.warning(f"API /api/send-all-to-pocs: Org access denied - {reason}")
+            return JSONResponse(status_code=403, content={
+                "success": False, 
+                "error": "Access denied. You are not authorized to access the HR Portal."
+            })
+    
+    try:
+        # Get all employees
+        all_employees = get_all_employees()
+        approved_employees = [emp for emp in all_employees if emp.get("status") == "Approved"]
+        
+        if not approved_employees:
+            return JSONResponse(content={
+                "success": True,
+                "message": "No approved employees to send to POCs",
+                "sent_count": 0
+            })
+        
+        success_count = 0
+        failed_count = 0
+        message_sent_count = 0
+        poc_routing = {}  # Track how many employees sent to each POC
+        
+        # Import messaging functions once
+        from app.services.lark_service import find_and_update_employee_status, send_to_poc, update_employee_email_sent, is_poc_test_mode
+        from app.services.poc_routing_service import get_poc_email
+        test_mode = is_poc_test_mode()
+        
+        for emp in approved_employees:
+            employee_id = emp.get("id")
+            location_branch = emp.get("location_branch", "")
+            id_number = emp.get("id_number")
+            
+            try:
+                # Compute nearest POC
+                nearest_poc = compute_nearest_poc_branch(location_branch)
+                
+                # Update employee
+                success = update_employee(employee_id, {
+                    "status": "Sent to POC",
+                    "resolved_printer_branch": nearest_poc,
+                    "date_last_modified": datetime.now().isoformat()
+                })
+                
+                if success:
+                    success_count += 1
+                    poc_routing[nearest_poc] = poc_routing.get(nearest_poc, 0) + 1
+                    
+                    # Sync to Lark Bitable
+                    try:
+                        if id_number:
+                            find_and_update_employee_status(
+                                id_number,
+                                "Sent to POC",
+                                old_status="Approved",
+                                source="HR Portal Bulk Send to POCs"
+                            )
+                    except Exception as lark_e:
+                        logger.warning(f"⚠️ Could not sync status to Lark for {id_number}: {str(lark_e)}")
+                    
+                    # Send actual Lark message to POC
+                    try:
+                        poc_email = get_poc_email(nearest_poc)
+                        employee_data = {
+                            "id_number": id_number,
+                            "employee_name": emp.get("employee_name", ""),
+                            "position": emp.get("position", ""),
+                            "location_branch": location_branch,
+                        }
+                        send_result = send_to_poc(employee_data, nearest_poc, poc_email)
+                        
+                        if send_result.get("success"):
+                            message_sent_count += 1
+                            # Update email_sent in Lark Bitable
+                            try:
+                                update_employee_email_sent(id_number, email_sent=True, resolved_printer_branch=nearest_poc)
+                            except Exception as email_e:
+                                logger.warning(f"⚠️ Could not update email_sent for {id_number}: {str(email_e)}")
+                        else:
+                            logger.warning(f"⚠️ Failed to send POC message for {id_number}: {send_result.get('error')}")
+                    except Exception as msg_e:
+                        logger.warning(f"⚠️ Could not send POC message for {id_number}: {str(msg_e)}")
+                else:
+                    failed_count += 1
+                    
+            except Exception as emp_e:
+                logger.error(f"Error sending employee {employee_id} to POC: {str(emp_e)}")
+                failed_count += 1
+        
+        logger.info(f"Bulk send to POCs complete: {success_count} sent, {failed_count} failed")
+        logger.info(f"POC routing breakdown: {poc_routing}")
+        
+        # Return appropriate response based on results
+        # If ALL failed, return error (500). If some succeeded, return partial success (200).
+        if success_count == 0 and failed_count > 0:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "error": f"All {failed_count} employee(s) failed to send to POC",
+                    "sent_count": 0,
+                    "failed_count": failed_count
+                }
+            )
+        
+        return JSONResponse(content={
+            "success": success_count > 0,
+            "message": f"Sent {success_count} employee(s) to POCs" + (f", {failed_count} failed" if failed_count > 0 else ""),
+            "sent_count": success_count,
+            "failed_count": failed_count,
+            "message_sent_count": message_sent_count,
+            "test_mode": test_mode,
+            "poc_routing": poc_routing
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in bulk send to POCs: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": str(e)}
@@ -823,10 +1118,12 @@ def api_render_employee(employee_id: int, hr_session: str = Cookie(None)):
 
         # Sync status to Lark Bitable
         lark_synced = False
+        lark_error = None
         try:
             from app.services.lark_service import find_and_update_employee_status
             id_number = row.get("id_number")
             if id_number:
+                logger.info(f"📤 Syncing status 'Rendered' to Lark for id_number: {id_number}")
                 lark_synced = find_and_update_employee_status(
                     id_number, 
                     "Rendered",
@@ -836,15 +1133,21 @@ def api_render_employee(employee_id: int, hr_session: str = Cookie(None)):
                 if lark_synced:
                     logger.info(f"✅ Lark Bitable status synced to 'Rendered' for employee {id_number}")
                 else:
+                    lark_error = "Lark update returned False - check logs for details"
                     logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Rendered' for employee {id_number}")
+            else:
+                lark_error = "No id_number found for employee"
+                logger.warning(f"⚠️ Cannot sync to Lark - employee {employee_id} has no id_number")
         except Exception as lark_e:
+            lark_error = str(lark_e)
             logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
 
         logger.info(f"Employee {employee_id} rendered (Lark synced: {lark_synced})")
         return JSONResponse(content={
             "success": True, 
             "message": "ID marked as Rendered - ready for Gallery approval",
-            "lark_synced": lark_synced
+            "lark_synced": lark_synced,
+            "lark_error": lark_error
         })
 
     except Exception as e:
@@ -1060,10 +1363,10 @@ def api_complete_employee(employee_id: int, hr_session: str = Cookie(None)):
             )
 
         old_status = row.get("status")
-        if old_status not in ["Approved", "Completed"]:
+        if old_status not in ["Sent to POC", "Completed"]:
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": f"Cannot mark as complete. Current status: {old_status}"}
+                content={"success": False, "error": f"Cannot mark as complete. Current status: {old_status}. Must be 'Sent to POC'."}
             )
 
         # Update status to Completed
@@ -1258,39 +1561,20 @@ async def api_upload_pdf(employee_id: int, request: Request, hr_session: str = C
                 }
             )
         
-        # Step 3: Update local database with PDF URL
+        # Step 3: Update local database with PDF URL and mark as generated
         success = update_employee(employee_id, {
             "render_url": pdf_url,
+            "id_generated": 1,
             "date_last_modified": datetime.now().isoformat()
         })
         
         if not success:
             logger.warning(f"⚠️ Failed to update local database with PDF URL for employee {employee_id}")
         
-        # Step 4: Mark as Approved then Completed
-        # This handles both old workflow (Approved -> Completed) and new workflow (Rendered -> Approved -> Completed)
-        current_status = row.get("status")
-        if current_status in ["Rendered", "Approved"]:
-            # For new workflow: Rendered -> set to Approved first (this is the actual approval)
-            # Then mark as Completed
-            update_employee(employee_id, {
-                "status": "Completed",
-                "id_generated": 1,
-                "date_last_modified": datetime.now().isoformat()
-            })
-            
-            # Also sync status to LarkBase
-            try:
-                from app.services.lark_service import find_and_update_employee_status
-                find_and_update_employee_status(
-                    id_number,
-                    "Completed",
-                    old_status=current_status,
-                    source="Gallery Approval"
-                )
-                logger.info(f"✅ Status synced to Completed for employee {id_number}")
-            except Exception as e:
-                logger.warning(f"⚠️ Could not sync status to LarkBase: {str(e)}")
+        # NOTE: Status is NOT changed here. The workflow is:
+        # Rendered -> Approved (via "Approve All Rendered" button)
+        # Approved -> Sent to POC (via "Send All to POCs" button)
+        # Sent to POC -> Completed (manually when POC receives ID cards)
         
         logger.info(f"✅ PDF upload complete for employee {employee_id} - LarkBase synced: {lark_synced}")
         

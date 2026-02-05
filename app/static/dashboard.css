@@ -587,6 +587,38 @@
   flex-shrink: 0;
 }
 
+/* Action button variants */
+.action-btn-success {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.action-btn-success:hover {
+  background: linear-gradient(135deg, #bbf7d0 0%, #86efac 100%);
+  border-color: #22c55e;
+  color: #166534;
+}
+
+.action-btn-primary {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.action-btn-primary:hover {
+  background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
+  border-color: #3b82f6;
+  color: #1e40af;
+}
+
+.action-btn:disabled,
+.action-btn-success:disabled,
+.action-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ============================================
    Modal
    ============================================ */

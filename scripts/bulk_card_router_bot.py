@@ -18,7 +18,7 @@ This script uses the **Lark IM Bot API** instead, which:
 - Is the official, production-ready approach for notifications
 
 WORKFLOW:
-1. Fetch pending records (status=="Completed", email_sent=false, id_card not empty)
+1. Fetch pending records (status=="Sent to POC", email_sent=false, id_card not empty)
 2. Resolve printer branch using haversine proximity fallback logic
 3. Group records by resolved_printer_branch
 4. Send ONE bot message per group with all ID card links
@@ -128,6 +128,7 @@ BRANCH_COORDS: dict[str, tuple[float, float]] = {
     
     # Non-POC Branches (need fallback to nearest POC)
     "Parañaque": (14.4793, 121.0198),            # Excluded - uses fallback
+    "Paranaque": (14.4793, 121.0198),            # Alias without ñ
     "Manila": (14.5995, 120.9842),               # NCR
     "Makati": (14.5547, 121.0244),               # NCR
     "Pasig": (14.5764, 121.0851),                # NCR
@@ -534,7 +535,7 @@ def fetch_pending_requests() -> list[IDCardRecord]:
     Fetch pending ID card requests from Lark Base.
     
     Criteria:
-    - status == "Completed"
+    - status == "Sent to POC"
     - email_sent == false (checkbox unchecked)
     - id_card is not empty
     
@@ -551,7 +552,7 @@ def fetch_pending_requests() -> list[IDCardRecord]:
     # Build filter formula
     # CHECKBOX: Use NOT() instead of =FALSE (Lark quirk)
     # ID_CARD: Check it's not empty
-    filter_formula = 'AND(CurrentValue.[status]="Completed",NOT(CurrentValue.[email_sent]),CurrentValue.[id_card]!="")'
+    filter_formula = 'AND(CurrentValue.[status]="Sent to POC",NOT(CurrentValue.[email_sent]),CurrentValue.[id_card]!="")'
     
     url = f"{config.BITABLE_BASE_URL}/{config.BITABLE_APP_TOKEN}/tables/{config.ID_REQUESTS_TABLE_ID}/records"
     

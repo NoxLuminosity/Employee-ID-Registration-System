@@ -35,6 +35,11 @@ LARK_APP_ID_SPMA = os.environ.get('LARK_APP_ID_SPMA', os.environ.get('LARK_APP_I
 LARK_APP_SECRET_SPMA = os.environ.get('LARK_APP_SECRET_SPMA', os.environ.get('LARK_APP_SECRET'))
 LARK_BITABLE_ID_SPMA = os.environ.get('LARK_BITABLE_ID_SPMA', os.environ.get('LARK_BITABLE_ID'))
 
+# POC Test Mode Configuration
+# When TEST_MODE is True, all POC messages are sent to TEST_RECIPIENT instead of real POCs
+POC_TEST_MODE = os.environ.get('POC_TEST_MODE', 'true').lower() in ('true', '1', 'yes')
+POC_TEST_RECIPIENT_EMAIL = os.environ.get('POC_TEST_RECIPIENT_EMAIL', 'manuelmiguel0726@gmail.com')
+
 # Lark API endpoints
 LARK_TOKEN_URL = "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal"
 LARK_BITABLE_BASE_URL = "https://open.larksuite.com/open-apis/bitable/v1/apps"
@@ -422,8 +427,9 @@ def log_status_transition(id_number: str, old_status: str, new_status: str, sour
 
 # Valid status values for Lark Bitable dropdown field
 # NOTE: These must match EXACTLY with the dropdown options in Lark Base
-# Order: Reviewing -> Rendered -> Approved -> Completed
-VALID_STATUS_VALUES = ["Reviewing", "Rendered", "Approved", "Completed"]
+# Order: Reviewing -> Rendered -> Approved -> Sent to POC -> Completed
+# IMPORTANT: "Completed" is used for final completion status after POC delivery
+VALID_STATUS_VALUES = ["Reviewing", "Rendered", "Approved", "Sent to POC", "Completed"]
 
 # Maximum retry attempts for handling race conditions
 MAX_RETRY_ATTEMPTS = 3
@@ -450,6 +456,48 @@ def validate_status_value(status: str) -> Tuple[bool, str]:
         return False, f"Invalid status '{status}'. Must be one of: {', '.join(VALID_STATUS_VALUES)}"
     
     return True, ""
+
+
+def find_record_by_id_number(id_number: str, token: Optional[str] = None) -> Optional[dict]:
+    """Find a record in Lark Bitable by id_number.
+    
+    Args:
+        id_number: The employee's ID number to search for
+        token: Optional access token (will fetch if not provided)
+    
+    Returns:
+        The matching record dict or None if not found
+    """
+    if not id_number:
+        logger.warning("find_record_by_id_number: No id_number provided")
+        return None
+    
+    app_token = LARK_BITABLE_ID or os.environ.get('LARK_BITABLE_APP_TOKEN')
+    table_id = LARK_TABLE_ID or os.environ.get('LARK_BITABLE_TABLE_ID')
+    
+    if not app_token or not table_id:
+        logger.error("find_record_by_id_number: Lark Bitable credentials not configured")
+        return None
+    
+    # Use filter to find the record
+    filter_formula = f'CurrentValue.[id_number]="{id_number}"'
+    records = get_bitable_records(app_token, table_id, filter_formula=filter_formula)
+    
+    if not records:
+        logger.warning(f"find_record_by_id_number: No record found for {id_number}")
+        return None
+    
+    # Find exact match
+    for record in records:
+        fields = record.get("fields", {})
+        record_id_number = fields.get("id_number", "").strip()
+        
+        if record_id_number == id_number.strip():
+            logger.info(f"find_record_by_id_number: Found record for {id_number}")
+            return record
+    
+    logger.warning(f"find_record_by_id_number: No exact match for {id_number}")
+    return None
 
 
 def find_and_update_employee_status(id_number: str, new_status: str, old_status: str = None, source: str = "HR System") -> bool:
@@ -1090,3 +1138,371 @@ def append_spma_employee_submission(
     
     # Use SPMA-specific token for append
     return append_record_to_bitable(app_token, target_table_id, fields, token=spma_token)
+
+
+# ============================================
+# POC Messaging Functions
+# ============================================
+
+# Lark IM API URL for sending messages
+LARK_IM_MESSAGE_URL = "https://open.larksuite.com/open-apis/im/v1/messages"
+LARK_USER_LOOKUP_URL = "https://open.larksuite.com/open-apis/contact/v3/users/batch_get_id"
+
+
+def lookup_lark_user_by_email(email: str, token: Optional[str] = None) -> Optional[str]:
+    """
+    Look up Lark user's open_id by email address.
+    
+    Args:
+        email: User's email address
+        token: Optional access token (will fetch if not provided)
+    
+    Returns:
+        Lark user's open_id or None if not found
+    """
+    if not email:
+        logger.warning("lookup_lark_user_by_email: No email provided")
+        return None
+    
+    if token is None:
+        token = get_tenant_access_token()
+    
+    if not token:
+        logger.error("lookup_lark_user_by_email: Failed to get access token")
+        return None
+    
+    try:
+        logger.info(f"Looking up Lark user for email: {email}")
+        
+        url = f"{LARK_USER_LOOKUP_URL}?user_id_type=open_id"
+        
+        payload = json.dumps({"emails": [email]}).encode('utf-8')
+        
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        
+        logger.info(f"Lark user lookup raw response: {json.dumps(data, indent=2)[:500]}")
+        
+        if data.get("code") != 0:
+            logger.error(f"Lark user lookup error: {data.get('msg')}")
+            return None
+        
+        # Extract user_id from response
+        user_list = data.get("data", {}).get("user_list", [])
+        if user_list and len(user_list) > 0:
+            user_info = user_list[0]
+            logger.info(f"User info found: {user_info}")
+            user_id = user_info.get("user_id")
+            if user_id:
+                logger.info(f"✅ Found Lark user: {user_id[:15]}...")
+                return user_id
+        
+        logger.warning(f"No Lark user found for email: {email}")
+        return None
+        
+    except urllib.error.HTTPError as e:
+        logger.error(f"HTTP error looking up Lark user: {e.code} - {e.reason}")
+        return None
+    except Exception as e:
+        logger.error(f"Error looking up Lark user: {e}")
+        return None
+
+
+def send_lark_dm(recipient_id: str, message_text: str, token: Optional[str] = None, id_type: str = "open_id") -> bool:
+    """
+    Send a direct message to a Lark user.
+    
+    Args:
+        recipient_id: Lark user's open_id or email
+        message_text: Text message to send
+        token: Optional access token (will fetch if not provided)
+        id_type: Type of recipient ID - "open_id" or "email"
+    
+    Returns:
+        True if message sent successfully, False otherwise
+    """
+    if not recipient_id:
+        logger.error("send_lark_dm: No recipient_id provided")
+        return False
+    
+    if not message_text:
+        logger.error("send_lark_dm: No message_text provided")
+        return False
+    
+    if token is None:
+        token = get_tenant_access_token()
+    
+    if not token:
+        logger.error("send_lark_dm: Failed to get access token")
+        return False
+    
+    try:
+        logger.info(f"Sending Lark DM to user ({id_type}): {recipient_id[:30]}...")
+        
+        url = f"{LARK_IM_MESSAGE_URL}?receive_id_type={id_type}"
+        
+        # Text message format for Lark IM
+        content = json.dumps({"text": message_text})
+        
+        payload = json.dumps({
+            "receive_id": recipient_id,
+            "msg_type": "text",
+            "content": content
+        }).encode('utf-8')
+        
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        
+        logger.info(f"Lark IM send response: code={data.get('code')}, msg={data.get('msg')}")
+        
+        if data.get("code") != 0:
+            logger.error(f"Lark message send error: {data.get('msg')}")
+            return False
+        
+        message_id = data.get("data", {}).get("message_id", "unknown")
+        logger.info(f"✅ Lark message sent successfully (message_id: {message_id[:15]}...)")
+        return True
+        
+    except urllib.error.HTTPError as e:
+        error_body = ""
+        try:
+            error_body = e.read().decode('utf-8')
+        except:
+            pass
+        logger.error(f"HTTP error sending Lark DM: {e.code} - {e.reason} - {error_body}")
+        return False
+    except Exception as e:
+        logger.error(f"Error sending Lark DM: {e}")
+        return False
+
+
+def is_poc_test_mode() -> bool:
+    """Check if POC test mode is enabled."""
+    return POC_TEST_MODE
+
+
+def get_poc_test_recipient() -> str:
+    """Get the test recipient email for POC messages."""
+    return POC_TEST_RECIPIENT_EMAIL
+
+
+def send_to_poc(
+    employee_data: dict,
+    poc_branch: str,
+    poc_email: Optional[str] = None
+) -> dict:
+    """
+    Send an ID card notification to a POC (Point of Contact).
+    
+    When test mode is enabled (POC_TEST_MODE=true), all messages are sent
+    to the test recipient instead of the real POC.
+    
+    Args:
+        employee_data: Employee data including id_number, employee_name, etc.
+        poc_branch: The resolved POC branch name
+        poc_email: POC's email address (required if not in test mode)
+    
+    Returns:
+        Dict with 'success', 'message', 'test_mode', and optionally 'error'
+    """
+    id_number = employee_data.get("id_number", "Unknown")
+    employee_name = employee_data.get("employee_name", "Unknown")
+    position = employee_data.get("position", "")
+    location_branch = employee_data.get("location_branch", "")
+    render_url = employee_data.get("render_url", "")
+    pdf_url = employee_data.get("pdf_url", "")
+    
+    logger.info(f"send_to_poc: Processing {employee_name} ({id_number}) -> {poc_branch}")
+    logger.info(f"  Test Mode: {POC_TEST_MODE}")
+    
+    # Determine actual recipient
+    if POC_TEST_MODE:
+        target_email = POC_TEST_RECIPIENT_EMAIL
+        recipient_label = f"{POC_TEST_RECIPIENT_EMAIL} (TEST MODE)"
+        logger.info(f"  📧 TEST MODE: Sending to {target_email} instead of real POC")
+    else:
+        if not poc_email:
+            error_msg = f"No POC email configured for branch: {poc_branch}"
+            logger.error(f"  ❌ {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg,
+                "test_mode": False
+            }
+        target_email = poc_email
+        recipient_label = f"{poc_email} ({poc_branch})"
+        logger.info(f"  📧 Sending to real POC: {target_email}")
+    
+    # Get access token
+    token = get_tenant_access_token()
+    if not token:
+        return {
+            "success": False,
+            "error": "Failed to get Lark access token",
+            "test_mode": POC_TEST_MODE
+        }
+    
+    # Try to look up recipient's Lark user ID, but fall back to sending by email
+    recipient_id = lookup_lark_user_by_email(target_email, token=token)
+    use_email = recipient_id is None
+    
+    if use_email:
+        logger.info(f"  📧 No open_id found, will send by email directly")
+        recipient_for_send = target_email
+    else:
+        recipient_for_send = recipient_id
+    
+    # Build message content
+    message_lines = [
+        f"📋 NEW ID CARD FOR PRINTING",
+        f"",
+        f"🏢 POC Branch: {poc_branch}",
+        f"👤 Employee: {employee_name}",
+        f"🔢 ID Number: {id_number}",
+        f"💼 Position: {position}",
+        f"📍 Location: {location_branch}",
+    ]
+    
+    if pdf_url:
+        message_lines.append(f"")
+        message_lines.append(f"📄 PDF: {pdf_url}")
+    
+    if render_url:
+        message_lines.append(f"🖼️ Preview: {render_url}")
+    
+    if POC_TEST_MODE:
+        message_lines.append(f"")
+        message_lines.append(f"⚠️ TEST MODE - This is a test message")
+    
+    message_text = "\n".join(message_lines)
+    
+    # Send the message (use email as id_type if no open_id was found)
+    id_type = "email" if use_email else "open_id"
+    if send_lark_dm(recipient_for_send, message_text, token=token, id_type=id_type):
+        logger.info(f"  ✅ Message sent to {recipient_label}")
+        return {
+            "success": True,
+            "message": f"Sent to {recipient_label}",
+            "recipient": target_email,
+            "test_mode": POC_TEST_MODE
+        }
+    else:
+        error_msg = f"Failed to send Lark message to {target_email}"
+        logger.error(f"  ❌ {error_msg}")
+        return {
+            "success": False,
+            "error": error_msg,
+            "test_mode": POC_TEST_MODE
+        }
+
+def update_employee_email_sent(
+    id_number: str, 
+    email_sent: bool = True,
+    batch_id: Optional[str] = None,
+    resolved_printer_branch: Optional[str] = None,
+    source: str = "HR Portal"
+) -> bool:
+    """
+    Update an employee's email_sent field in Lark Bitable.
+    Also optionally updates batch_id and resolved_printer_branch.
+    
+    Args:
+        id_number: Employee ID number for lookup
+        email_sent: Boolean value for email_sent checkbox
+        batch_id: Optional batch ID string
+        resolved_printer_branch: Optional POC branch name
+        source: Source of the update for logging
+    
+    Returns:
+        True if update successful, False otherwise
+    """
+    if not id_number:
+        logger.warning("update_employee_email_sent: No id_number provided")
+        return False
+    
+    token = get_tenant_access_token()
+    if not token:
+        logger.error("update_employee_email_sent: Failed to get access token")
+        return False
+    
+    # Find the record first
+    record = find_record_by_id_number(id_number, token=token)
+    if not record:
+        logger.error(f"update_employee_email_sent: No record found for id_number={id_number}")
+        return False
+    
+    record_id = record.get("record_id")
+    if not record_id:
+        logger.error("update_employee_email_sent: Record has no record_id")
+        return False
+    
+    # Build update fields
+    update_fields = {
+        "email_sent": email_sent  # CHECKBOX field - boolean value
+    }
+    
+    if batch_id:
+        update_fields["batch_id"] = batch_id
+    
+    if resolved_printer_branch:
+        update_fields["resolved_printer_branch"] = resolved_printer_branch
+    
+    logger.info(f"Updating email_sent for {id_number}: {update_fields}")
+    
+    # Update the record
+    url = f"{LARK_BITABLE_BASE_URL}/{LARK_BITABLE_ID}/tables/{LARK_TABLE_ID}/records/{record_id}"
+    
+    try:
+        payload = json.dumps({"fields": update_fields}).encode('utf-8')
+        
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            method="PUT"
+        )
+        
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        
+        if data.get("code") != 0:
+            logger.error(f"Lark update error: {data.get('msg')}")
+            return False
+        
+        logger.info(f"✅ {source}: email_sent updated for {id_number}")
+        return True
+        
+    except urllib.error.HTTPError as e:
+        error_body = ""
+        try:
+            error_body = e.read().decode('utf-8')
+        except:
+            pass
+        logger.error(f"HTTP error updating email_sent: {e.code} - {e.reason} - {error_body}")
+        return False
+    except Exception as e:
+        logger.error(f"Error updating email_sent: {e}")
+        return False

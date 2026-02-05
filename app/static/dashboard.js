@@ -103,7 +103,7 @@ const elements = {
   totalCount: document.getElementById('totalCount'),
   reviewingCount: document.getElementById('reviewingCount'),
   approvedCount: document.getElementById('approvedCount'),
-  completedCount: document.getElementById('completedCount'),
+  sentToPOCCount: document.getElementById('sentToPOCCount'),
   detailsModal: document.getElementById('detailsModal'),
   modalBody: document.getElementById('modalBody'),
   modalFooter: document.getElementById('modalFooter'),
@@ -112,7 +112,9 @@ const elements = {
   toastMessage: document.getElementById('toastMessage'),
   viewGalleryBtn: document.getElementById('viewGalleryBtn'),
   exportDataBtn: document.getElementById('exportDataBtn'),
-  refreshDataBtn: document.getElementById('refreshDataBtn')
+  refreshDataBtn: document.getElementById('refreshDataBtn'),
+  approveAllBtn: document.getElementById('approveAllBtn'),
+  sendToPOCsBtn: document.getElementById('sendToPOCsBtn')
 };
 
 // ============================================
@@ -178,6 +180,15 @@ function initEventListeners() {
       fetchEmployeeData(true);
       showToast('Data refreshed successfully', 'success');
     });
+  }
+
+  // Bulk action buttons
+  if (elements.approveAllBtn) {
+    elements.approveAllBtn.addEventListener('click', approveAllRendered);
+  }
+  
+  if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.addEventListener('click', sendAllToPOCs);
   }
 
   // Escape key to close modal
@@ -338,12 +349,12 @@ function updateStatusCounts() {
   const total = employees.length;
   const reviewing = employees.filter(e => e.status === 'Reviewing').length;
   const approved = employees.filter(e => e.status === 'Approved').length;
-  const completed = employees.filter(e => e.status === 'Completed').length;
+  const sentToPOC = employees.filter(e => e.status === 'Sent to POC').length;
 
   elements.totalCount.textContent = total;
   elements.reviewingCount.textContent = reviewing;
   elements.approvedCount.textContent = approved;
-  elements.completedCount.textContent = completed;
+  elements.sentToPOCCount.textContent = sentToPOC;
 }
 
 function renderEmployeeTable() {
@@ -387,8 +398,8 @@ function renderEmployeeTable() {
 
     // Show Render ID for Reviewing, Pending, or Submitted status
     const canRenderID = ['Reviewing', 'Pending', 'Submitted'].includes(emp.status);
-    // Show Preview for Rendered, Approved, or Completed status
-    const canPreview = ['Rendered', 'Approved', 'Completed'].includes(emp.status);
+    // Show Preview for Rendered, Approved, or Sent to POC status
+    const canPreview = ['Rendered', 'Approved', 'Sent to POC'].includes(emp.status);
     const viewed = hasViewedDetails(emp.id);
     
     // Disable Render ID and Remove buttons until Details has been viewed
@@ -693,7 +704,7 @@ function viewDetails(id) {
       <button class="btn btn-secondary" onclick="closeModal()">Close</button>
       <button class="btn btn-primary" onclick="renderAndApprove(${emp.id}); closeModal();">Render ID</button>
     `;
-  } else if (emp.status === 'Approved' || emp.status === 'Completed') {
+  } else if (emp.status === 'Approved' || emp.status === 'Sent to POC') {
     footerHtml = `
       <button class="btn btn-danger" onclick="removeEmployee(${emp.id}); closeModal();">Remove</button>
       <button class="btn btn-secondary" onclick="closeModal()">Close</button>
@@ -770,9 +781,9 @@ function previewID(id) {
   window.location.href = `/hr/gallery?preview=${encodeURIComponent(id)}`;
 }
 
-async function markAsCompleted(id) {
+async function markAsSentToPOC(id) {
   try {
-    const response = await fetch(`/hr/api/employees/${id}/complete`, {
+    const response = await fetch(`/hr/api/employees/${id}/send-to-poc`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include'
@@ -780,12 +791,134 @@ async function markAsCompleted(id) {
 
     if (response.ok) {
       const emp = dashboardState.employees.find(e => e.id === id);
-      if (emp) emp.status = 'Completed';
+      if (emp) emp.status = 'Sent to POC';
       updateStatusCounts();
       filterEmployees();
     }
   } catch (error) {
-    console.error('Error marking as completed:', error);
+    console.error('Error marking as sent to POC:', error);
+  }
+}
+
+// ============================================
+// Bulk Actions
+// ============================================
+
+/**
+ * Approve all employees with "Rendered" status
+ * Changes their status to "Approved"
+ */
+async function approveAllRendered() {
+  const renderedEmployees = dashboardState.employees.filter(e => e.status === 'Rendered');
+  
+  if (renderedEmployees.length === 0) {
+    showToast('No employees with "Rendered" status to approve', 'error');
+    return;
+  }
+  
+  const confirmApprove = confirm(`Are you sure you want to approve ${renderedEmployees.length} employee(s) with "Rendered" status?`);
+  if (!confirmApprove) return;
+  
+  // Disable button during operation
+  if (elements.approveAllBtn) {
+    elements.approveAllBtn.disabled = true;
+    elements.approveAllBtn.innerHTML = '⏳ Approving...';
+  }
+  
+  let successCount = 0;
+  let failCount = 0;
+  
+  for (const emp of renderedEmployees) {
+    try {
+      const response = await fetch(`/hr/api/employees/${emp.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        emp.status = 'Approved';
+        successCount++;
+      } else {
+        failCount++;
+      }
+    } catch (error) {
+      console.error(`Error approving employee ${emp.id}:`, error);
+      failCount++;
+    }
+  }
+  
+  // Re-enable button
+  if (elements.approveAllBtn) {
+    elements.approveAllBtn.disabled = false;
+    elements.approveAllBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg> Approve All Rendered`;
+  }
+  
+  updateStatusCounts();
+  filterEmployees();
+  
+  if (failCount === 0) {
+    showToast(`Successfully approved ${successCount} employee(s)`, 'success');
+  } else {
+    showToast(`Approved ${successCount}, failed ${failCount}`, 'error');
+  }
+}
+
+/**
+ * Send all "Approved" employees to their POCs based on nearest branch
+ */
+async function sendAllToPOCs() {
+  const approvedEmployees = dashboardState.employees.filter(e => e.status === 'Approved');
+  
+  if (approvedEmployees.length === 0) {
+    showToast('No employees with "Approved" status to send to POCs', 'error');
+    return;
+  }
+  
+  const confirmSend = confirm(`Are you sure you want to send ${approvedEmployees.length} employee(s) to their nearest branch POCs?`);
+  if (!confirmSend) return;
+  
+  // Disable button during operation
+  if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.disabled = true;
+    elements.sendToPOCsBtn.innerHTML = '⏳ Sending...';
+  }
+  
+  try {
+    // Call the bulk POC routing endpoint
+    const response = await fetch('/hr/api/send-all-to-pocs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      // Update local state for all sent employees
+      for (const emp of approvedEmployees) {
+        emp.status = 'Sent to POC';
+      }
+      updateStatusCounts();
+      filterEmployees();
+      showToast(`Successfully sent ${data.sent_count || approvedEmployees.length} employee(s) to POCs`, 'success');
+    } else {
+      throw new Error(data.error || 'Failed to send to POCs');
+    }
+  } catch (error) {
+    console.error('Error sending to POCs:', error);
+    showToast('Failed to send employees to POCs: ' + error.message, 'error');
+  }
+  
+  // Re-enable button
+  if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.disabled = false;
+    elements.sendToPOCsBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 5l8 5 8-5M2 5v10h16V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg> Send All to POCs`;
   }
 }
 

@@ -477,7 +477,9 @@
 
 .id-card-actions .btn-preview,
 .id-card-actions .btn-download,
-.id-card-actions .btn-approve {
+.id-card-actions .btn-approve,
+.id-card-actions .btn-send-poc,
+.id-card-actions .btn-completed {
   flex: 1;
   display: flex;
   align-items: center;
@@ -520,6 +522,25 @@
 
 .id-card-actions .btn-approve:hover {
   background: var(--color-primary-hover);
+}
+
+.id-card-actions .btn-send-poc {
+  background: #3b82f6;
+  color: white;
+}
+
+.id-card-actions .btn-send-poc:hover {
+  background: #2563eb;
+}
+
+.id-card-actions .btn-completed {
+  background: #e5e7eb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.id-card-actions .btn-completed:disabled {
+  opacity: 0.8;
 }
 
 /* Preview Modal Updates */
@@ -1238,5 +1259,83 @@
   .dual-template-badge {
     font-size: 0.55rem;
     padding: 1px 6px;
+  }
+}
+
+/* ============================================
+   Bulk Actions Section
+   ============================================ */
+.bulk-actions-section {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.action-btn:hover {
+  background: var(--color-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.action-btn svg {
+  flex-shrink: 0;
+}
+
+/* Action button variants */
+.action-btn-success {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.action-btn-success:hover {
+  background: linear-gradient(135deg, #bbf7d0 0%, #86efac 100%);
+  border-color: #22c55e;
+  color: #166534;
+}
+
+.action-btn-primary {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.action-btn-primary:hover {
+  background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
+  border-color: #3b82f6;
+  color: #1e40af;
+}
+
+.action-btn:disabled,
+.action-btn-success:disabled,
+.action-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .bulk-actions-section {
+    flex-direction: column;
+  }
+  
+  .action-btn {
+    width: 100%;
+    justify-content: center;
   }
 }

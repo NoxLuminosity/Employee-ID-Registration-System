@@ -79,13 +79,17 @@
 
       <!-- Gallery Stats -->
       <section class="gallery-stats">
-        <div class="stat-item">
-          <span class="stat-value" id="totalApproved">-</span>
-          <span class="stat-label">Approved IDs</span>
+        <div class="stat-item" id="statRendered" data-filter="Rendered">
+          <span class="stat-value" id="totalRendered">-</span>
+          <span class="stat-label">Rendered</span>
         </div>
-        <div class="stat-item">
-          <span class="stat-value" id="totalCompleted">-</span>
-          <span class="stat-label">Completed IDs</span>
+        <div class="stat-item" id="statApproved" data-filter="Approved">
+          <span class="stat-value" id="totalApproved">-</span>
+          <span class="stat-label">Approved</span>
+        </div>
+        <div class="stat-item" id="statSentToPOC" data-filter="Sent to POC">
+          <span class="stat-value" id="totalSentToPOC">-</span>
+          <span class="stat-label">Sent to POC</span>
         </div>
       </section>
 
@@ -107,6 +111,23 @@
             <option value="Others">Others (Agents, Solutions, etc.)</option>
           </select>
         </div>
+      </section>
+
+      <!-- Bulk Actions -->
+      <section class="bulk-actions-section">
+        <button class="action-btn action-btn-success" id="approveAllBtn">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Approve All Rendered
+        </button>
+        <button class="action-btn action-btn-primary" id="sendToPOCsBtn">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 5l8 5 8-5M2 5v10h16V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Send All to POCs
+        </button>
       </section>
 
       <!-- Loading State -->
