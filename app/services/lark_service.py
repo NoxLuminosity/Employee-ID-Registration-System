@@ -421,7 +421,9 @@ def log_status_transition(id_number: str, old_status: str, new_status: str, sour
 
 
 # Valid status values for Lark Bitable dropdown field
-VALID_STATUS_VALUES = ["Reviewing", "Approved", "Completed"]
+# NOTE: These must match EXACTLY with the dropdown options in Lark Base
+# Order: Reviewing -> Rendered -> Approved -> Completed
+VALID_STATUS_VALUES = ["Reviewing", "Rendered", "Approved", "Completed"]
 
 # Maximum retry attempts for handling race conditions
 MAX_RETRY_ATTEMPTS = 3
