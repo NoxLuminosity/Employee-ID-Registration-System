@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Bulk ID Card Router - SPMC (Base Assistant / Bot Messaging)
-===========================================================
-Production-ready Python 3.10+ script that automates bulk ID card routing
-using Lark Base (Bitable) as the data source and sends notifications via
-Lark Bot messaging.
+Bulk ID Card Router V2 - SPMC (Base Assistant / Bot Messaging)
+================================================================
+Production-ready Python 3.10+ script that processes ID Requests from
+Lark Base and routes notifications to printing POCs using branch
+proximity fallback logic with haversine distance calculation.
 
 NOTE ON "BASE ASSISTANT":
 The Lark "Base Assistant" is a built-in notification system that sends
@@ -19,10 +19,15 @@ This script uses the **Lark IM Bot API** instead, which:
 
 WORKFLOW:
 1. Fetch pending records (status=="Completed", email_sent=false, id_card not empty)
-2. Resolve printer branch for each record (POC fallback logic)
+2. Resolve printer branch using haversine proximity fallback logic
 3. Group records by resolved_printer_branch
 4. Send ONE bot message per group with all ID card links
 5. Update records: email_sent=true, batch_id, resolved_printer_branch
+
+BRANCH PROXIMITY LOGIC:
+- If location_branch is in POC_BRANCHES (and not Parañaque): use as-is
+- Otherwise: compute nearest POC branch using haversine distance
+- Parañaque is explicitly excluded and falls back to nearest
 
 SAFETY FEATURES:
 - DRY_RUN mode: Prints message content instead of sending
@@ -33,10 +38,12 @@ USAGE:
     python scripts/bulk_card_router_bot.py              # DRY_RUN mode
     python scripts/bulk_card_router_bot.py --send       # Actually send messages
     python scripts/bulk_card_router_bot.py --verbose    # Debug logging
+    python scripts/bulk_card_router_bot.py --test-email kzyrellyan@gmail.com
     python scripts/bulk_card_router_bot.py --help       # Show help
 
 Author: SPMC IT Team
 Python: 3.10+
+Version: 2.0.0 (with haversine proximity)
 """
 from __future__ import annotations
 
@@ -48,6 +55,7 @@ import uuid
 import time
 import logging
 import argparse
+import math
 from datetime import datetime
 from typing import Optional, Any
 from dataclasses import dataclass, field
@@ -72,6 +80,131 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+
+# ============================================
+# BRANCH COORDINATES AND POC CONFIGURATION
+# ============================================
+
+# List of valid POC branches (branches with printing POCs)
+# NOTE: Parañaque has a real POC but MUST be excluded for now - uses fallback
+POC_BRANCHES: set[str] = {
+    "San Carlos",
+    "Pagadian City",
+    "Zamboanga City",
+    "Malolos City",
+    "San Fernando City",
+    "Cagayan De Oro",
+    "Tagum City",
+    "Davao City",
+    "Cebu City",
+    "Batangas",
+    "General Santos City",
+    "Bacolod",
+    "Ilo-Ilo",
+    "Quezon City",
+    "Calamba City",
+}
+
+# Branch coordinates mapping (latitude, longitude)
+# TODO: Verify and update coordinates with actual office locations
+# These are approximate city/municipality center coordinates
+BRANCH_COORDS: dict[str, tuple[float, float]] = {
+    # POC Branches (with printing capabilities)
+    "San Carlos": (15.9290, 120.3510),           # Pangasinan
+    "Pagadian City": (7.8242, 123.4375),         # Zamboanga del Sur
+    "Zamboanga City": (6.9214, 122.0790),        # Zamboanga Peninsula
+    "Malolos City": (14.8431, 120.8082),         # Bulacan
+    "San Fernando City": (15.0286, 120.6851),    # Pampanga
+    "Cagayan De Oro": (8.4542, 124.6319),        # Misamis Oriental
+    "Tagum City": (7.4480, 125.8078),            # Davao del Norte
+    "Davao City": (7.1907, 125.4553),            # Davao Region
+    "Cebu City": (10.3157, 123.8854),            # Cebu
+    "Batangas": (13.7565, 121.0583),             # Batangas City
+    "General Santos City": (6.1164, 125.1716),   # South Cotabato
+    "Bacolod": (10.6407, 122.9320),              # Negros Occidental
+    "Ilo-Ilo": (10.7202, 122.5621),              # Iloilo City
+    "Quezon City": (14.6760, 121.0437),          # NCR
+    "Calamba City": (14.2112, 121.1654),         # Laguna
+    
+    # Non-POC Branches (need fallback to nearest POC)
+    "Parañaque": (14.4793, 121.0198),            # Excluded - uses fallback
+    "Manila": (14.5995, 120.9842),               # NCR
+    "Makati": (14.5547, 121.0244),               # NCR
+    "Pasig": (14.5764, 121.0851),                # NCR
+    "Taguig": (14.5176, 121.0509),               # NCR
+    "Mandaluyong": (14.5794, 121.0359),          # NCR
+    "Pasay": (14.5378, 121.0014),                # NCR
+    "Las Piñas": (14.4445, 120.9929),            # NCR
+    "Muntinlupa": (14.4081, 121.0415),           # NCR
+    "Marikina": (14.6507, 121.1029),             # NCR
+    "San Juan": (14.6027, 121.0356),             # NCR
+    "Valenzuela": (14.7004, 120.9830),           # NCR
+    "Navotas": (14.6667, 120.9417),              # NCR
+    "Pateros": (14.5456, 121.0673),              # NCR
+    "Antipolo": (14.5860, 121.1761),             # Rizal
+    "Cainta": (14.5779, 121.1222),               # Rizal
+    "Taytay": (14.5594, 121.1354),               # Rizal
+    "Angono": (14.5286, 121.1536),               # Rizal
+    "Binangonan": (14.4655, 121.1996),           # Rizal
+    "Rodriguez": (14.7467, 121.1392),            # Rizal (Montalban)
+    "San Mateo": (14.6987, 121.1176),            # Rizal
+    "Cavite City": (14.4791, 120.8961),          # Cavite
+    "Bacoor": (14.4624, 120.9645),               # Cavite
+    "Imus": (14.4297, 120.9367),                 # Cavite
+    "Dasmariñas": (14.3294, 120.9367),           # Cavite
+    "General Trias": (14.3874, 120.8814),        # Cavite
+    "Tagaytay": (14.1153, 120.9621),             # Cavite
+    "Santa Rosa": (14.3122, 121.1114),           # Laguna
+    "Biñan": (14.3419, 121.0846),                # Laguna
+    "San Pedro": (14.3595, 121.0476),            # Laguna
+    "Los Baños": (14.1680, 121.2415),            # Laguna
+    "Lipa City": (13.9411, 121.1635),            # Batangas
+    "Tanauan": (14.0854, 121.1484),              # Batangas
+    "Lucena City": (13.9316, 121.6170),          # Quezon Province
+    "Naga City": (13.6218, 123.1948),            # Camarines Sur
+    "Legazpi": (13.1391, 123.7438),              # Albay
+    "Tacloban": (11.2543, 124.9631),             # Leyte
+    "Ormoc": (11.0064, 124.6077),                # Leyte
+    "Dumaguete": (9.3068, 123.3054),             # Negros Oriental
+    "Baguio": (16.4023, 120.5960),               # Benguet
+    "Dagupan": (16.0433, 120.3345),              # Pangasinan
+    "Olongapo": (14.8292, 120.2830),             # Zambales
+    "Angeles City": (15.1450, 120.5887),         # Pampanga
+    "Tarlac City": (15.4755, 120.5963),          # Tarlac
+    "Cabanatuan": (15.4869, 120.9699),           # Nueva Ecija
+    "Puerto Princesa": (9.7489, 118.7464),       # Palawan
+    "Butuan": (8.9475, 125.5406),                # Agusan del Norte
+    "Surigao": (9.7896, 125.4988),               # Surigao del Norte
+    "Dipolog": (8.5893, 123.3420),               # Zamboanga del Norte
+    "Ozamiz": (8.1481, 123.8411),                # Misamis Occidental
+    "Iligan": (8.2280, 124.2452),                # Lanao del Norte
+    "Marawi": (7.9986, 124.2928),                # Lanao del Sur
+    "Cotabato City": (7.2047, 124.2310),         # Maguindanao
+    "Koronadal": (6.5027, 124.8467),             # South Cotabato
+    "Kidapawan": (7.0084, 125.0894),             # Cotabato
+}
+
+# POC Labels for reference (not used for credentials/recipients)
+# These are human-readable labels for documentation purposes only
+POC_LABELS: dict[str, str] = {
+    "San Carlos": "SPM - @Zacarias, Reynaldo Jr Mamaril(HR PITX)",
+    "Pagadian City": "SPM @Melvin Calugay | PIF | GENSAN (PMCY)",
+    "Zamboanga City": "SPM @Mira Mukim | PIF ZMB (QNAM)",
+    "Malolos City": "SPM @Aeron Tasic | PIF |MAL |MAPT",
+    "San Fernando City": "SPM @Jojo Salomon | PIF | PAM (MJSM)",
+    "Cagayan De Oro": "SPM @Aldrin Bautista │ PIF │ CDO (QADB)",
+    "Tagum City": "SPM @Kemy Revilla",
+    "Davao City": "SPM @Rona Sindatoc(BNB-MSME NWOFF DAVAO)",
+    "Cebu City": "SPM - @Jenemae Manila(HR Services Ceb)",
+    "Batangas": "SPM @Queenie Caraulia | PIF |BATANGAS | PQGC",
+    "General Santos City": "SPM @As-addah Maminasacan | PIF | GEN(GASM)",
+    "Bacolod": "SPM @Nerio, Louie Rose Ponciano(PIF BACOLOD| BLON)",
+    "Ilo-Ilo": "SPM @Maerci del Monte | PIF | ILOILO(MMDD)",
+    "Quezon City": "SPM - @Queen Mary Bernaldez (HR QC)",
+    "Calamba City": "SPM - @Cherrylyn Albis | PIF | CALAMBA (MCRA)",
+}
+
+
 # ============================================
 # Configuration
 # ============================================
@@ -87,9 +220,6 @@ class Config:
     # Lark Base (Bitable) Configuration
     BITABLE_APP_TOKEN: str = field(default_factory=lambda: os.getenv('LARK_BITABLE_ID', ''))
     ID_REQUESTS_TABLE_ID: str = field(default_factory=lambda: os.getenv('LARK_TABLE_ID', ''))
-    
-    # Branch Routing Table (optional)
-    ROUTING_TABLE_ID: str = field(default_factory=lambda: os.getenv('LARK_ROUTING_TABLE_ID', ''))
     
     # Test Recipient (all messages go here in test mode)
     TEST_RECIPIENT_EMAIL: str = 'mmanuel@spmadridlaw.com'
@@ -135,18 +265,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 # ============================================
 # Data Models
 # ============================================
-
-@dataclass
-class BranchRouting:
-    """Represents branch routing configuration."""
-    branch: str
-    has_poc: bool
-    poc_email: str
-    nearest_poc_branch: str
-
 
 @dataclass
 class IDCardRecord:
@@ -215,6 +337,90 @@ class IDCardRecord:
             resolved_printer_branch=get_str('resolved_printer_branch'),
             status=get_str('status'),
         )
+
+
+# ============================================
+# Haversine Distance Calculation
+# ============================================
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the great-circle distance between two points on Earth
+    using the Haversine formula.
+    
+    Args:
+        lat1, lon1: Latitude and longitude of point 1 (in degrees)
+        lat2, lon2: Latitude and longitude of point 2 (in degrees)
+    
+    Returns:
+        Distance in kilometers
+    """
+    # Earth's radius in kilometers
+    R = 6371.0
+    
+    # Convert degrees to radians
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+    
+    # Haversine formula
+    a = math.sin(delta_lat / 2) ** 2 + \
+        math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    
+    distance = R * c
+    return distance
+
+
+def compute_nearest_poc_branch(location_branch: str) -> str:
+    """
+    Compute the nearest POC branch for a given location.
+    
+    Algorithm:
+    1. If location_branch is in POC_BRANCHES and NOT Parañaque: return as-is
+    2. Otherwise: compute haversine distance to all POC branches and return nearest
+    
+    Args:
+        location_branch: The employee's branch location
+    
+    Returns:
+        The resolved printer branch (either same as input or nearest POC)
+    """
+    # Normalize input
+    location_branch = location_branch.strip()
+    
+    # Rule 1: If in POC branches and NOT Parañaque, use as-is
+    if location_branch in POC_BRANCHES and location_branch != "Parañaque":
+        logger.debug(f"Branch '{location_branch}' is a POC branch - using as-is")
+        return location_branch
+    
+    # Rule 2: Need to find nearest POC branch
+    if location_branch not in BRANCH_COORDS:
+        logger.warning(f"Branch '{location_branch}' not found in BRANCH_COORDS - defaulting to 'Quezon City'")
+        # Default to Quezon City if coordinates unknown
+        return "Quezon City"
+    
+    # Get source coordinates
+    src_lat, src_lon = BRANCH_COORDS[location_branch]
+    
+    # Find nearest POC branch
+    min_distance = float('inf')
+    nearest_branch = "Quezon City"  # Default fallback
+    
+    for poc_branch in POC_BRANCHES:
+        if poc_branch not in BRANCH_COORDS:
+            continue
+        
+        poc_lat, poc_lon = BRANCH_COORDS[poc_branch]
+        distance = haversine_distance(src_lat, src_lon, poc_lat, poc_lon)
+        
+        if distance < min_distance:
+            min_distance = distance
+            nearest_branch = poc_branch
+    
+    logger.info(f"Branch '{location_branch}' -> nearest POC: '{nearest_branch}' ({min_distance:.1f} km)")
+    return nearest_branch
 
 
 # ============================================
@@ -349,451 +555,173 @@ def fetch_pending_requests() -> list[IDCardRecord]:
     
     url = f"{config.BITABLE_BASE_URL}/{config.BITABLE_APP_TOKEN}/tables/{config.ID_REQUESTS_TABLE_ID}/records"
     
-    logger.info(f"Fetching pending records...")
-    logger.debug(f"Filter: {filter_formula}")
-    
-    all_records: list[IDCardRecord] = []
-    page_token: Optional[str] = None
-    
-    while len(all_records) < config.MAX_RECORDS_PER_RUN:
-        params = {
-            "filter": filter_formula,
-            "page_size": min(500, config.MAX_RECORDS_PER_RUN - len(all_records))
-        }
-        if page_token:
-            params["page_token"] = page_token
-        
-        try:
-            response = requests.get(
-                url,
-                params=params,
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=config.REQUEST_TIMEOUT_SECONDS
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-        except requests.RequestException as e:
-            logger.error(f"Lark API request failed: {e}")
-            break
+    try:
+        response = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            params={
+                "filter": filter_formula,
+                "page_size": config.MAX_RECORDS_PER_RUN
+            },
+            timeout=config.REQUEST_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
+        data = response.json()
         
         if data.get("code") != 0:
-            logger.error(f"Lark Bitable read error (code {data.get('code')}): {data.get('msg')}")
-            break
+            logger.error(f"Bitable query error: {data.get('msg')}")
+            return []
         
-        # Safely get items
-        response_data = data.get("data") or {}
-        items = response_data.get("items") or []
+        # Handle Lark API returning null instead of empty array
+        items = data.get("data", {}).get("items") or []
         
-        for item in items:
-            record = IDCardRecord.from_lark_record(item)
-            # Double-check criteria
-            if (record.status == "Completed" and 
-                not record.email_sent and 
-                record.id_card):
-                all_records.append(record)
+        records = [IDCardRecord.from_lark_record(item) for item in items]
+        logger.info(f"Fetched {len(records)} pending ID card requests")
         
-        # Check for more pages
-        page_token = response_data.get("page_token")
-        if not page_token:
-            break
-    
-    logger.info(f"Fetched {len(all_records)} pending records")
-    return all_records
+        return records
+        
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch pending requests: {e}")
+        return []
 
 
-def fetch_branch_routing() -> dict[str, BranchRouting]:
+def update_records(records: list[IDCardRecord], updates: dict[str, Any]) -> bool:
     """
-    Fetch branch routing configuration.
-    
-    Returns:
-        Dict mapping branch names to BranchRouting objects
-    """
-    # If routing table is configured, fetch from Lark Base
-    if config.ROUTING_TABLE_ID:
-        return _fetch_routing_from_lark()
-    
-    # Fallback: Hardcoded routing configuration
-    # TODO: Update with your actual branch routing data
-    logger.warning("Using hardcoded branch routing (no ROUTING_TABLE_ID configured)")
-    return {
-        "Main Office": BranchRouting(
-            branch="Main Office",
-            has_poc=True,
-            poc_email="mainoffice@spmadridlaw.com",
-            nearest_poc_branch=""
-        ),
-        "Batangas": BranchRouting(
-            branch="Batangas",
-            has_poc=True,
-            poc_email="batangas@spmadridlaw.com",
-            nearest_poc_branch=""
-        ),
-        "Paranaque": BranchRouting(
-            branch="Paranaque",
-            has_poc=True,
-            poc_email="paranaque@spmadridlaw.com",
-            nearest_poc_branch=""
-        ),
-        # Add more branches as needed
-    }
-
-
-def _fetch_routing_from_lark() -> dict[str, BranchRouting]:
-    """Fetch routing configuration from Lark Base routing table."""
-    token = get_tenant_access_token()
-    if not token:
-        return {}
-    
-    url = f"{config.BITABLE_BASE_URL}/{config.BITABLE_APP_TOKEN}/tables/{config.ROUTING_TABLE_ID}/records"
-    routing: dict[str, BranchRouting] = {}
-    page_token: Optional[str] = None
-    
-    while True:
-        params = {"page_size": 500}
-        if page_token:
-            params["page_token"] = page_token
-        
-        try:
-            response = requests.get(
-                url,
-                params=params,
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=config.REQUEST_TIMEOUT_SECONDS
-            )
-            response.raise_for_status()
-            data = response.json()
-        except requests.RequestException as e:
-            logger.error(f"Failed to fetch routing table: {e}")
-            break
-        
-        if data.get("code") != 0:
-            logger.error(f"Routing table read error: {data.get('msg')}")
-            break
-        
-        response_data = data.get("data") or {}
-        items = response_data.get("items") or []
-        
-        for item in items:
-            fields = item.get('fields', {})
-            branch = str(fields.get('branch', ''))
-            if branch:
-                has_poc = fields.get('has_poc', False)
-                if isinstance(has_poc, str):
-                    has_poc = has_poc.lower() in ('true', 'yes', '1')
-                
-                routing[branch] = BranchRouting(
-                    branch=branch,
-                    has_poc=bool(has_poc),
-                    poc_email=str(fields.get('poc_email', '')),
-                    nearest_poc_branch=str(fields.get('nearest_poc_branch', ''))
-                )
-        
-        page_token = response_data.get("page_token")
-        if not page_token:
-            break
-    
-    logger.info(f"Loaded {len(routing)} branch routing entries")
-    return routing
-
-
-def resolve_printer_branch(record: IDCardRecord, routing: dict[str, BranchRouting]) -> str:
-    """
-    Resolve the printer branch using POC fallback logic.
-    
-    Routing rules:
-    - If has_poc == true → resolved_printer_branch = location_branch
-    - If has_poc == false → resolved_printer_branch = nearest_poc_branch
+    Update multiple records in Lark Base with the same updates.
     
     Args:
-        record: The ID card record
-        routing: Branch routing configuration
+        records: List of records to update
+        updates: Dictionary of field updates to apply
     
     Returns:
-        Resolved printer branch name
+        True if all updates successful, False otherwise
     """
-    location = record.location_branch
-    
-    if location in routing:
-        branch_info = routing[location]
-        if not branch_info.has_poc and branch_info.nearest_poc_branch:
-            logger.debug(f"Routing {location} to {branch_info.nearest_poc_branch} (no POC)")
-            return branch_info.nearest_poc_branch
-    
-    return location
-
-
-def update_records(records: list[IDCardRecord], batch_id: str, 
-                   resolved_branch: str) -> bool:
-    """
-    Update records in Lark Base after message is sent.
-    
-    Updates:
-    - email_sent = True (CHECK the checkbox)
-    - batch_id = generated UUID
-    - resolved_printer_branch = computed branch
-    
-    Args:
-        records: List of IDCardRecord objects to update
-        batch_id: Unique batch identifier
-        resolved_branch: The resolved printer branch
-    
-    Returns:
-        True if all updates succeeded, False otherwise
-    """
-    if config.DRY_RUN:
-        logger.info(f"[DRY_RUN] Would update {len(records)} records:")
-        for record in records:
-            logger.info(f"  - {record.record_id}: email_sent=True, batch_id={batch_id[:8]}...")
-        return True
-    
     token = get_tenant_access_token()
     if not token:
-        logger.error("Failed to get Lark access token for updates")
         return False
     
-    success_count = 0
-    for record in records:
-        url = (f"{config.BITABLE_BASE_URL}/{config.BITABLE_APP_TOKEN}"
-               f"/tables/{config.ID_REQUESTS_TABLE_ID}/records/{record.record_id}")
-        
-        # CHECKBOX field: Send boolean True to check it
-        update_fields = {
-            "email_sent": True,
-            "batch_id": batch_id,
-            "resolved_printer_branch": resolved_branch
-        }
-        
-        try:
-            response = requests.put(
-                url,
-                headers={"Authorization": f"Bearer {token}"},
-                json={"fields": update_fields},
-                timeout=config.REQUEST_TIMEOUT_SECONDS
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get("code") == 0:
-                success_count += 1
-                logger.debug(f"Updated record {record.record_id}")
-            else:
-                logger.error(f"Failed to update {record.record_id}: {data.get('msg')}")
-                
-        except requests.RequestException as e:
-            logger.error(f"Failed to update {record.record_id}: {e}")
+    url = f"{config.BITABLE_BASE_URL}/{config.BITABLE_APP_TOKEN}/tables/{config.ID_REQUESTS_TABLE_ID}/records/batch_update"
     
-    logger.info(f"Updated {success_count}/{len(records)} records")
-    return success_count == len(records)
+    # Build batch update request
+    records_data = []
+    for record in records:
+        records_data.append({
+            "record_id": record.record_id,
+            "fields": updates
+        })
+    
+    try:
+        response = requests.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            json={"records": records_data},
+            timeout=config.REQUEST_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get("code") != 0:
+            logger.error(f"Batch update error: {data.get('msg')}")
+            return False
+        
+        logger.info(f"Updated {len(records)} records successfully")
+        return True
+        
+    except requests.RequestException as e:
+        logger.error(f"Failed to update records: {e}")
+        return False
 
 
 # ============================================
 # Bot Messaging Functions
 # ============================================
 
-def build_message_text(records: list[IDCardRecord], branch: str, batch_id: str) -> str:
+def build_message_content(resolved_branch: str, records: list[IDCardRecord]) -> str:
     """
-    Build plain text message content for a batch of ID cards.
+    Build message content for a group of records.
     
     Format:
-    ID Cards Ready for Printing – <BRANCH> (<COUNT> items)
-    
-    1) <employee_name> | <id_number> | <position>
-       <id_card_url>
+    Header: "ID Cards Ready for Printing – <RESOLVED_BRANCH> (<COUNT> items)"
+    Then numbered list:
+    "1) <employee_name> | <id_number> | <position>"
+    "   <id_card_url>"
     
     Args:
-        records: List of IDCardRecord objects
-        branch: The resolved printer branch
-        batch_id: Unique batch identifier
+        resolved_branch: The resolved printer branch
+        records: List of records in this group
     
     Returns:
         Formatted message text
     """
-    header = f"ID Cards Ready for Printing – {branch} ({len(records)} items)"
+    lines = []
     
-    lines = [header, ""]
+    # Header
+    lines.append(f"🆔 ID Cards Ready for Printing – {resolved_branch} ({len(records)} items)")
+    lines.append("")
     
+    # Numbered list
     for i, record in enumerate(records, 1):
-        name = record.employee_name or "Unknown"
-        id_num = record.id_number or "N/A"
-        position = record.position or "N/A"
-        url = record.id_card
-        
-        lines.append(f"{i}) {name} | {id_num} | {position}")
-        lines.append(f"   {url}")
+        lines.append(f"{i}) {record.employee_name} | {record.id_number} | {record.position}")
+        lines.append(f"   📄 {record.id_card}")
         lines.append("")
     
-    lines.append(f"Batch ID: {batch_id}")
-    lines.append(f"Sent: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    # Footer
+    lines.append(f"📅 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     return "\n".join(lines)
 
 
-def build_rich_message(records: list[IDCardRecord], branch: str, batch_id: str) -> dict:
+def send_base_assistant_dm(recipient_id: str, message_text: str) -> bool:
     """
-    Build a rich text (interactive card) message for Lark.
-    
-    Uses Lark's Interactive Card format for better formatting.
+    Send a direct message via Lark IM Bot API.
     
     Args:
-        records: List of IDCardRecord objects
-        branch: The resolved printer branch
-        batch_id: Unique batch identifier
-    
-    Returns:
-        Message card payload dict
-    """
-    # Build card elements
-    elements = []
-    
-    # Header
-    elements.append({
-        "tag": "div",
-        "text": {
-            "tag": "plain_text",
-            "content": f"📋 ID Cards Ready for Printing – {branch}"
-        }
-    })
-    
-    elements.append({
-        "tag": "div",
-        "text": {
-            "tag": "plain_text",
-            "content": f"Total: {len(records)} card(s)"
-        }
-    })
-    
-    elements.append({"tag": "hr"})
-    
-    # Card items
-    for i, record in enumerate(records, 1):
-        name = record.employee_name or "Unknown"
-        id_num = record.id_number or "N/A"
-        position = record.position or "N/A"
-        
-        elements.append({
-            "tag": "div",
-            "text": {
-                "tag": "lark_md",
-                "content": f"**{i}. {name}**\n{id_num} | {position}"
-            }
-        })
-        
-        # Download button
-        elements.append({
-            "tag": "action",
-            "actions": [
-                {
-                    "tag": "button",
-                    "text": {
-                        "tag": "plain_text",
-                        "content": "📥 Download PDF"
-                    },
-                    "type": "primary",
-                    "url": record.id_card
-                }
-            ]
-        })
-        
-        elements.append({"tag": "hr"})
-    
-    # Footer
-    elements.append({
-        "tag": "note",
-        "elements": [
-            {
-                "tag": "plain_text",
-                "content": f"Batch: {batch_id[:8]}... | {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-            }
-        ]
-    })
-    
-    # Build card
-    card = {
-        "config": {"wide_screen_mode": True},
-        "header": {
-            "title": {
-                "tag": "plain_text",
-                "content": "🪪 SPMC ID Card Notification"
-            },
-            "template": "blue"
-        },
-        "elements": elements
-    }
-    
-    return card
-
-
-def send_base_assistant_message(user_id: str, message_text: str, 
-                                  card: Optional[dict] = None) -> bool:
-    """
-    Send a message via Lark IM Bot API.
-    
-    This sends messages from the Lark App's bot, which is the standard
-    way to send programmatic notifications in Lark.
-    
-    Args:
-        user_id: Lark open_id of the recipient
-        message_text: Plain text fallback message
-        card: Optional interactive card payload
+        recipient_id: Lark user_id (open_id format)
+        message_text: The message content to send
     
     Returns:
         True if message sent successfully, False otherwise
     """
-    if config.DRY_RUN:
-        logger.info("=" * 60)
-        logger.info("[DRY_RUN] Would send bot message:")
-        logger.info(f"  To user_id: {user_id[:10]}...")
-        logger.info(f"  Message preview:")
-        for line in message_text.split('\n')[:10]:
-            logger.info(f"    {line}")
-        if len(message_text.split('\n')) > 10:
-            logger.info(f"    ... ({len(message_text.split(chr(10)))} total lines)")
-        logger.info("=" * 60)
-        return True
-    
     token = get_tenant_access_token()
     if not token:
-        logger.error("Failed to get Lark access token for messaging")
         return False
     
-    # Use interactive card if provided, otherwise plain text
-    if card:
-        payload = {
-            "receive_id": user_id,
-            "msg_type": "interactive",
-            "content": json.dumps(card)
-        }
-    else:
-        payload = {
-            "receive_id": user_id,
-            "msg_type": "text",
-            "content": json.dumps({"text": message_text})
-        }
+    # Build message payload - using text message type
+    message_content = json.dumps({
+        "text": message_text
+    })
     
     try:
         response = requests.post(
             config.IM_MESSAGE_URL,
-            headers={"Authorization": f"Bearer {token}"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
             params={"receive_id_type": "open_id"},
-            json=payload,
+            json={
+                "receive_id": recipient_id,
+                "msg_type": "text",
+                "content": message_content
+            },
             timeout=config.REQUEST_TIMEOUT_SECONDS
         )
         response.raise_for_status()
         data = response.json()
         
-        if data.get("code") == 0:
-            message_id = data.get("data", {}).get("message_id", "unknown")
-            logger.info(f"✅ Message sent successfully (message_id: {message_id[:10]}...)")
-            return True
-        else:
-            error_code = data.get("code")
-            error_msg = data.get("msg", "Unknown error")
-            logger.error(f"❌ Message send failed (code {error_code}): {error_msg}")
+        if data.get("code") != 0:
+            logger.error(f"Message send error: {data.get('msg')}")
             return False
-            
+        
+        message_id = data.get("data", {}).get("message_id", "unknown")
+        logger.info(f"Message sent successfully (message_id: {message_id[:10]}...)")
+        return True
+        
     except requests.RequestException as e:
-        logger.error(f"❌ Message API request failed: {e}")
+        logger.error(f"Failed to send message: {e}")
         return False
 
 
@@ -801,255 +729,188 @@ def send_base_assistant_message(user_id: str, message_text: str,
 # Main Processing Logic
 # ============================================
 
-def process_pending_requests() -> dict[str, Any]:
+def main():
     """
-    Main processing function for bulk ID card routing.
+    Main entry point for the bulk card router.
     
-    1. Fetch pending records
-    2. Fetch branch routing
-    3. Resolve printer branches
-    4. Group by branch
-    5. Send one bot message per branch
-    6. Update records
-    
-    Returns:
-        Summary dict with processing statistics
+    Processing flow:
+    1. Validate configuration
+    2. Resolve test recipient (if in test mode)
+    3. Fetch pending records
+    4. Compute resolved_printer_branch for each using haversine fallback
+    5. Group by resolved_printer_branch
+    6. Send ONE message per group
+    7. Update records: email_sent=true, batch_id, resolved_printer_branch
     """
-    summary: dict[str, Any] = {
-        'total_pending': 0,
-        'total_processed': 0,
-        'total_messages': 0,
-        'branches_processed': [],
-        'errors': [],
-        'dry_run': config.DRY_RUN
-    }
-    
-    logger.info("=" * 60)
-    logger.info("SPMC Bulk ID Card Router (Bot Messaging)")
-    logger.info(f"Mode: {'DRY_RUN (no messages sent)' if config.DRY_RUN else 'LIVE'}")
-    logger.info(f"Test Mode: {'ON (all messages to ' + config.TEST_RECIPIENT_EMAIL + ')' if config.TEST_MODE else 'OFF'}")
-    logger.info("=" * 60)
-    
-    # Step 1: Resolve test recipient user_id first
-    logger.info("\n👤 Resolving test recipient...")
-    test_user_id = resolve_user_for_base_assistant(config.TEST_RECIPIENT_EMAIL)
-    if not test_user_id:
-        logger.error(f"Cannot resolve test recipient: {config.TEST_RECIPIENT_EMAIL}")
-        logger.error("Make sure this email exists in your Lark organization.")
-        summary['errors'].append(f"Cannot resolve test recipient: {config.TEST_RECIPIENT_EMAIL}")
-        return summary
-    logger.info(f"Test recipient resolved: {test_user_id[:15]}...")
-    
-    # Step 2: Fetch pending records
-    logger.info("\n📥 Fetching pending requests...")
-    pending_records = fetch_pending_requests()
-    summary['total_pending'] = len(pending_records)
-    
-    if not pending_records:
-        logger.info("No pending records found. Nothing to process.")
-        return summary
-    
-    logger.info(f"Found {len(pending_records)} pending records")
-    
-    # Step 3: Fetch branch routing
-    logger.info("\n🗺️ Loading branch routing configuration...")
-    routing = fetch_branch_routing()
-    logger.info(f"Loaded {len(routing)} branch routing entries")
-    
-    # Step 4: Resolve printer branches and group
-    logger.info("\n🔀 Resolving printer branches and grouping...")
-    grouped_records: dict[str, list[IDCardRecord]] = defaultdict(list)
-    
-    for record in pending_records:
-        resolved_branch = resolve_printer_branch(record, routing)
-        if not resolved_branch:
-            logger.warning(f"No branch resolved for {record.id_number}, skipping")
-            summary['errors'].append(f"No branch for {record.id_number}")
-            continue
-        grouped_records[resolved_branch].append(record)
-    
-    logger.info(f"Grouped into {len(grouped_records)} branches:")
-    for branch, records in grouped_records.items():
-        logger.info(f"  - {branch}: {len(records)} cards")
-    
-    # Step 5: Send message per branch and update records
-    logger.info("\n📨 Sending messages and updating records...")
-    
-    for branch, records in grouped_records.items():
-        batch_id = str(uuid.uuid4())
-        logger.info(f"\nProcessing branch: {branch} ({len(records)} cards)")
-        logger.info(f"Batch ID: {batch_id}")
-        
-        # Build message
-        message_text = build_message_text(records, branch, batch_id)
-        card = build_rich_message(records, branch, batch_id)
-        
-        # Get recipient (test mode uses test user)
-        recipient_id = test_user_id  # Always use test user in this version
-        
-        # Send message
-        message_sent = send_base_assistant_message(recipient_id, message_text, card)
-        
-        if message_sent:
-            summary['total_messages'] += 1
-            summary['branches_processed'].append(branch)
-            
-            # Update records in Lark Base
-            update_success = update_records(records, batch_id, branch)
-            
-            if update_success:
-                summary['total_processed'] += len(records)
-            else:
-                summary['errors'].append(f"Failed to update records for {branch}")
-        else:
-            summary['errors'].append(f"Failed to send message for {branch}")
-    
-    # Final summary
-    logger.info("\n" + "=" * 60)
-    logger.info("📊 PROCESSING SUMMARY")
-    logger.info("=" * 60)
-    logger.info(f"Total pending records: {summary['total_pending']}")
-    logger.info(f"Total messages sent: {summary['total_messages']}")
-    logger.info(f"Total records processed: {summary['total_processed']}")
-    logger.info(f"Branches processed: {', '.join(summary['branches_processed']) or 'None'}")
-    
-    if summary['errors']:
-        logger.warning(f"Errors encountered: {len(summary['errors'])}")
-        for error in summary['errors']:
-            logger.warning(f"  - {error}")
-    
-    if config.DRY_RUN:
-        logger.info("\n⚠️  DRY_RUN mode - No messages sent, no records updated")
-        logger.info("   Run with --send flag to send messages and update records")
-    
-    return summary
-
-
-def main() -> None:
-    """Main entry point with CLI argument parsing."""
+    # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description='SPMC Bulk ID Card Router (Bot Messaging)',
+        description='Bulk ID Card Router - Route ID cards to printing POCs via Lark Bot',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python scripts/bulk_card_router_bot.py              # DRY_RUN mode
-  python scripts/bulk_card_router_bot.py --send       # Send messages
+  python scripts/bulk_card_router_bot.py              # DRY_RUN mode (preview)
+  python scripts/bulk_card_router_bot.py --send       # Actually send messages
   python scripts/bulk_card_router_bot.py --verbose    # Debug logging
-
-NOTES:
-  - Messages are sent via Lark IM Bot API (not Base Assistant directly)
-  - Base Assistant is a built-in Lark feature with no public API
-  - Bot messages appear from your Lark App's bot identity
-  - This is the official, production-ready approach for notifications
+  python scripts/bulk_card_router_bot.py --test-email someone@example.com
         """
     )
-    
-    parser.add_argument(
-        '--send', 
-        action='store_true',
-        help='Send messages and update records (disables DRY_RUN)'
-    )
-    
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose debug logging'
-    )
-    
-    parser.add_argument(
-        '--test-email',
-        type=str,
-        default=config.TEST_RECIPIENT_EMAIL,
-        help=f'Override test recipient email (default: {config.TEST_RECIPIENT_EMAIL})'
-    )
-    
+    parser.add_argument('--send', action='store_true',
+                        help='Actually send messages (default is DRY_RUN mode)')
+    parser.add_argument('--verbose', '-v', action='store_true',
+                        help='Enable verbose/debug logging')
+    parser.add_argument('--test-email', type=str,
+                        help=f'Override test recipient email (default: {config.TEST_RECIPIENT_EMAIL})')
     args = parser.parse_args()
     
-    # Apply CLI arguments
+    # Configure based on args
     if args.send:
         config.DRY_RUN = False
-    
     if args.verbose:
+        logger.setLevel(logging.DEBUG)
         logging.getLogger().setLevel(logging.DEBUG)
-    
     if args.test_email:
         config.TEST_RECIPIENT_EMAIL = args.test_email
     
+    # Print banner
+    print("=" * 60)
+    print("BULK ID CARD ROUTER V2 (Base Assistant / Bot Messaging)")
+    print("=" * 60)
+    print(f"Mode: {'DRY_RUN (preview only)' if config.DRY_RUN else '🚀 LIVE SEND'}")
+    print(f"Test Mode: {config.TEST_MODE} (recipient: {config.TEST_RECIPIENT_EMAIL})")
+    print(f"POC Branches: {len(POC_BRANCHES)} configured")
+    print(f"Branch Coordinates: {len(BRANCH_COORDS)} mapped")
+    print("=" * 60)
+    print()
+    
     # Validate configuration
     if not config.validate():
-        logger.error("Configuration validation failed. Exiting.")
+        print("ERROR: Configuration validation failed. Check .env file.")
         sys.exit(1)
     
-    try:
-        summary = process_pending_requests()
-        
-        # Exit with error code if there were failures
-        if summary['errors']:
+    # Step 1: Resolve test recipient
+    if config.TEST_MODE:
+        print(f"[1/5] Resolving test recipient: {config.TEST_RECIPIENT_EMAIL}")
+        test_user_id = resolve_user_for_base_assistant(config.TEST_RECIPIENT_EMAIL)
+        if not test_user_id:
+            print(f"ERROR: Could not resolve test recipient email: {config.TEST_RECIPIENT_EMAIL}")
+            print("       Make sure this email is registered in your Lark organization.")
             sys.exit(1)
+        print(f"       ✓ Resolved to user_id: {test_user_id[:20]}...")
+        print()
+    else:
+        test_user_id = None
+    
+    # Step 2: Fetch pending requests
+    print("[2/5] Fetching pending ID card requests from Lark Base...")
+    records = fetch_pending_requests()
+    
+    if not records:
+        print("       No pending records found. Nothing to process.")
+        print()
+        print("=" * 60)
+        print("COMPLETED - 0 messages to send")
+        print("=" * 60)
+        return
+    
+    print(f"       ✓ Found {len(records)} pending records")
+    print()
+    
+    # Step 3: Compute resolved_printer_branch for each record
+    print("[3/5] Computing resolved printer branch for each record...")
+    for record in records:
+        record.resolved_printer_branch = compute_nearest_poc_branch(record.location_branch)
+    print()
+    
+    # Step 4: Group by resolved_printer_branch
+    print("[4/5] Grouping records by resolved printer branch...")
+    groups: dict[str, list[IDCardRecord]] = defaultdict(list)
+    for record in records:
+        groups[record.resolved_printer_branch].append(record)
+    
+    print(f"       Grouped into {len(groups)} batches:")
+    for branch, branch_records in groups.items():
+        print(f"         - {branch}: {len(branch_records)} records")
+    print()
+    
+    # Step 5: Send messages and update records
+    print("[5/5] Processing batches...")
+    print()
+    
+    batch_id = str(uuid.uuid4())
+    total_sent = 0
+    total_failed = 0
+    
+    for resolved_branch, branch_records in groups.items():
+        print(f"--- Batch: {resolved_branch} ({len(branch_records)} records) ---")
         
-        sys.exit(0)
+        # Build message content
+        message_text = build_message_content(resolved_branch, branch_records)
         
-    except KeyboardInterrupt:
-        logger.info("\nInterrupted by user")
-        sys.exit(130)
-    except Exception as e:
-        logger.error(f"Unhandled exception: {e}", exc_info=True)
-        sys.exit(1)
-
-
-# ============================================
-# NOTES
-# ============================================
-"""
-HOW BASE ASSISTANT DIFFERS FROM IM BOT MESSAGING:
--------------------------------------------------
-"Base Assistant" is Lark's built-in notification system that sends automatic
-updates for Base (Bitable) events like:
-- Record creation/update/deletion
-- @mentions in records
-- Automation triggers
-
-However, there is NO public API to send messages AS the Base Assistant.
-The Base Assistant is a Lark-internal feature.
-
-This script uses the Lark IM Bot API instead:
-- Messages come from your Lark App's bot (with your app's name/icon)
-- Full control over message content and formatting
-- Can send to any Lark user via email resolution
-- Supports rich text and interactive cards
-- This is the official, production-ready approach for custom notifications
-
-HOW TO SWITCH FROM TEST USER TO REAL BRANCH POC USERS:
-------------------------------------------------------
-1. Set `config.TEST_MODE = False` or modify the code
-2. Update the routing data to include real `poc_email` values:
-   - Either configure `LARK_ROUTING_TABLE_ID` and add POC emails to that table
-   - Or update the hardcoded routing in `fetch_branch_routing()`
-3. Modify `process_pending_requests()` to use the branch's POC email:
-   
-   Instead of:
-       recipient_id = test_user_id
-   
-   Use:
-       if config.TEST_MODE:
-           recipient_id = test_user_id
-       else:
-           poc_email = routing[branch].poc_email if branch in routing else None
-           if poc_email:
-               recipient_id = resolve_user_for_base_assistant(poc_email)
-           else:
-               logger.warning(f"No POC email for {branch}")
-               continue
-
-4. Ensure all POC emails are valid Lark users in your organization.
-
-CHECKBOX HANDLING:
------------------
-The `email_sent` field is a CHECKBOX type in Lark Base:
-- Reading: Returns boolean True (checked) or False (unchecked)
-- Writing: Send boolean True to check, False to uncheck
-- Filtering: Use NOT(CurrentValue.[field]) instead of =FALSE (Lark quirk)
-"""
+        # Display message preview
+        print("Message Preview:")
+        print("-" * 40)
+        print(message_text)
+        print("-" * 40)
+        
+        # Determine recipient
+        if config.TEST_MODE:
+            recipient_id = test_user_id
+            recipient_label = f"{config.TEST_RECIPIENT_EMAIL} (test mode)"
+        else:
+            # TODO: Look up real POC email for this branch
+            recipient_id = test_user_id  # Fallback to test for now
+            recipient_label = f"{config.TEST_RECIPIENT_EMAIL} (POC lookup TODO)"
+        
+        print(f"Recipient: {recipient_label}")
+        
+        if config.DRY_RUN:
+            print("Action: SKIPPED (DRY_RUN mode)")
+            print()
+            continue
+        
+        # Send message
+        print("Sending message...")
+        if send_base_assistant_dm(recipient_id, message_text):
+            print("Action: ✓ MESSAGE SENT")
+            
+            # Prepare updates
+            updates = {
+                "email_sent": True,  # CHECKBOX: use boolean True, not string
+                "batch_id": batch_id,
+                "resolved_printer_branch": resolved_branch
+            }
+            
+            # Update records
+            print("Updating records...")
+            if update_records(branch_records, updates):
+                print("Action: ✓ RECORDS UPDATED")
+                total_sent += len(branch_records)
+            else:
+                print("Action: ✗ RECORD UPDATE FAILED")
+                total_failed += len(branch_records)
+        else:
+            print("Action: ✗ MESSAGE SEND FAILED")
+            total_failed += len(branch_records)
+        
+        print()
+    
+    # Summary
+    print("=" * 60)
+    print("SUMMARY")
+    print("=" * 60)
+    print(f"Total Records Processed: {len(records)}")
+    print(f"Batches: {len(groups)}")
+    print(f"Batch ID: {batch_id}")
+    print()
+    
+    if config.DRY_RUN:
+        print("Mode: DRY_RUN (no messages sent, no records updated)")
+        print("To actually send messages, run with --send flag")
+    else:
+        print(f"Records Successfully Sent: {total_sent}")
+        print(f"Records Failed: {total_failed}")
+    
+    print("=" * 60)
 
 
 if __name__ == "__main__":
