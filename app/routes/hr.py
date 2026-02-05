@@ -401,6 +401,123 @@ def api_debug(hr_session: str = Cookie(None)):
     return JSONResponse(content=debug_info)
 
 
+@router.get("/api/debug/lark")
+def api_debug_lark():
+    """
+    Debug endpoint to check Lark Base configuration and test connection.
+    
+    This endpoint helps diagnose why Lark Base updates may be failing on Vercel.
+    It checks:
+    1. Environment variables are set
+    2. Access token can be obtained
+    3. Records can be fetched from Lark Base
+    
+    Access: Public (for debugging purposes)
+    """
+    import os
+    from app.services.lark_service import (
+        LARK_APP_ID, LARK_APP_SECRET, LARK_BITABLE_ID, LARK_TABLE_ID,
+        get_tenant_access_token, get_bitable_records
+    )
+    
+    debug_info = {
+        "is_vercel": IS_VERCEL,
+        "env_vars": {
+            "LARK_APP_ID_set": bool(os.environ.get('LARK_APP_ID')),
+            "LARK_APP_ID_value": os.environ.get('LARK_APP_ID', '')[:10] + "..." if os.environ.get('LARK_APP_ID') else "NOT SET",
+            "LARK_APP_SECRET_set": bool(os.environ.get('LARK_APP_SECRET')),
+            "LARK_BITABLE_ID_set": bool(os.environ.get('LARK_BITABLE_ID')),
+            "LARK_BITABLE_ID_value": os.environ.get('LARK_BITABLE_ID', 'NOT SET'),
+            "LARK_TABLE_ID_set": bool(os.environ.get('LARK_TABLE_ID')),
+            "LARK_TABLE_ID_value": os.environ.get('LARK_TABLE_ID', 'NOT SET'),
+        },
+        "module_vars": {
+            "LARK_APP_ID": LARK_APP_ID[:10] + "..." if LARK_APP_ID else "NOT SET",
+            "LARK_APP_SECRET": "***" if LARK_APP_SECRET else "NOT SET",
+            "LARK_BITABLE_ID": LARK_BITABLE_ID or "NOT SET",
+            "LARK_TABLE_ID": LARK_TABLE_ID or "NOT SET",
+        },
+        "token_test": {
+            "success": False,
+            "token_prefix": None,
+            "error": None
+        },
+        "records_test": {
+            "success": False,
+            "record_count": 0,
+            "sample_id_numbers": [],
+            "error": None
+        }
+    }
+    
+    # Test 1: Can we get an access token?
+    try:
+        token = get_tenant_access_token()
+        if token:
+            debug_info["token_test"]["success"] = True
+            debug_info["token_test"]["token_prefix"] = token[:10] + "..."
+        else:
+            debug_info["token_test"]["error"] = "get_tenant_access_token returned None"
+    except Exception as e:
+        debug_info["token_test"]["error"] = str(e)
+    
+    # Test 2: Can we fetch records from Lark Base?
+    if debug_info["token_test"]["success"]:
+        try:
+            app_token = LARK_BITABLE_ID
+            table_id = LARK_TABLE_ID
+            
+            if app_token and table_id:
+                # Fetch first 5 records to verify connection
+                records = get_bitable_records(app_token, table_id, page_size=5)
+                
+                if records is not None:
+                    debug_info["records_test"]["success"] = True
+                    debug_info["records_test"]["record_count"] = len(records)
+                    
+                    # Get sample id_numbers for verification
+                    sample_ids = []
+                    for record in records[:3]:
+                        fields = record.get("fields", {})
+                        id_num = fields.get("id_number", "")
+                        status = fields.get("status", "")
+                        if id_num:
+                            sample_ids.append(f"{id_num} ({status})")
+                    debug_info["records_test"]["sample_id_numbers"] = sample_ids
+                else:
+                    debug_info["records_test"]["error"] = "get_bitable_records returned None"
+            else:
+                debug_info["records_test"]["error"] = f"Missing config: app_token={bool(app_token)}, table_id={bool(table_id)}"
+        except Exception as e:
+            debug_info["records_test"]["error"] = str(e)
+    
+    # Add recommendations
+    recommendations = []
+    
+    if not debug_info["env_vars"]["LARK_APP_ID_set"]:
+        recommendations.append("Set LARK_APP_ID environment variable in Vercel")
+    if not debug_info["env_vars"]["LARK_APP_SECRET_set"]:
+        recommendations.append("Set LARK_APP_SECRET environment variable in Vercel")
+    if not debug_info["env_vars"]["LARK_BITABLE_ID_set"]:
+        recommendations.append("Set LARK_BITABLE_ID environment variable in Vercel")
+    if not debug_info["env_vars"]["LARK_TABLE_ID_set"]:
+        recommendations.append("Set LARK_TABLE_ID environment variable in Vercel")
+    
+    if debug_info["token_test"]["success"] and not debug_info["records_test"]["success"]:
+        recommendations.append("Token works but records fetch failed - check Bitable permissions")
+    
+    if not recommendations:
+        if debug_info["records_test"]["success"]:
+            recommendations.append("✅ All Lark Base configuration looks good!")
+        else:
+            recommendations.append("Check Vercel function logs for more details")
+    
+    debug_info["recommendations"] = recommendations
+    
+    logger.info(f"Lark debug endpoint: token_ok={debug_info['token_test']['success']}, records_ok={debug_info['records_test']['success']}")
+    return JSONResponse(content=debug_info)
+
+
 @router.get("/api/employees")
 def api_get_employees(request: Request, hr_session: str = Cookie(None)):
     """Get all employees for the dashboard - Protected by org access
