@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employee ID Registration</title>
   <meta name="description" content="Employee ID Registration System - Submit your details for company ID card">
-  <link rel="stylesheet" href="/static/styles.css?v=16">
+  <link rel="stylesheet" href="/static/styles.css?v=21">
   <style>
     /* User Info Bar Styles */
     .user-info-bar {
@@ -429,6 +429,10 @@
                 <label class="checkbox-option">
                   <input type="radio" id="fo_type_reprocessor" name="field_officer_type" value="Reprocessor">
                   <span class="checkbox-label">Repossessor</span>
+                </label>
+                <label class="checkbox-option">
+                  <input type="radio" id="fo_type_shared" name="field_officer_type" value="Shared">
+                  <span class="checkbox-label">Shared</span>
                 </label>
                 <label class="checkbox-option">
                   <input type="radio" id="fo_type_others" name="field_officer_type" value="Others">
@@ -1043,7 +1047,8 @@
               <!-- QR Code Section -->
               <div class="id-back-qr-section">
                 <div class="id-back-qr-code">
-                  <span>QR Code Here</span>
+                  <img id="id_back_vcard_qr" src="" alt="vCard QR Code" style="width: 100%; height: 100%; display: none;">
+                  <span id="id_back_vcard_qr_placeholder">QR Code Here</span>
                 </div>
                 <div class="id-back-vcard-row">
                   <div class="id-back-vcard-icon">
@@ -1095,7 +1100,8 @@
               <!-- Bottom QR and Website -->
               <div class="id-back-bottom">
                 <div class="id-back-bottom-qr">
-                  <span>QR Code Here</span>
+                  <img id="id_back_url_qr" src="" alt="URL QR Code" style="width: 100%; height: 100%; display: none;">
+                  <span id="id_back_url_qr_placeholder">QR Code Here</span>
                 </div>
                 <div class="id-back-website-row">
                   <div class="id-back-website-icon">
@@ -1254,7 +1260,10 @@
                       </div>
                     </div>
                     <div class="id-back-qr-section">
-                      <div class="id-back-qr-code"><span>QR Code Here</span></div>
+                      <div class="id-back-qr-code">
+                        <img id="dual_original_vcard_qr" src="" alt="vCard QR Code" style="width: 100%; height: 100%; display: none;">
+                        <span id="dual_original_vcard_qr_placeholder">QR Code Here</span>
+                      </div>
                       <div class="id-back-vcard-row">
                         <div class="id-back-vcard-icon">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1297,7 +1306,10 @@
                       </div>
                     </div>
                     <div class="id-back-bottom">
-                      <div class="id-back-bottom-qr"><span>QR Code Here</span></div>
+                      <div class="id-back-bottom-qr">
+                        <img id="dual_original_url_qr" src="" alt="URL QR Code" style="width: 100%; height: 100%; display: none;">
+                        <span id="dual_original_url_qr_placeholder">QR Code Here</span>
+                      </div>
                       <div class="id-back-website-row">
                         <div class="id-back-website-icon">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1306,7 +1318,7 @@
                             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                           </svg>
                         </div>
-                        <span class="id-back-website-url">www.okpo.com/spm/</span>
+                        <span class="id-back-website-url" id="dual_original_back_website_url">www.okpo.com/spm/</span>
                       </div>
                     </div>
                   </div>
@@ -1600,7 +1612,7 @@
     });
   </script>
 
-  <script src="/static/app.js?v=13"></script>
+  <script src="/static/app.js?v=12"></script>
 
 </body>
 </html>

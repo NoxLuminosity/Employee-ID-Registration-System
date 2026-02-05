@@ -9,33 +9,30 @@
 
 /**
  * Generate a barcode image URL for the given employee ID number.
- * Uses BarcodeAPI.org to generate CODE128 barcodes on-the-fly.
+ * Uses QuickChart.io Barcode API to generate Code 128 barcodes.
+ * API Documentation: https://quickchart.io/documentation/barcode-api/
  * 
  * @param {string} idNumber - The employee ID number to encode
  * @param {Object} options - Optional configuration
- * @param {string} options.type - Barcode type: "128" (default), "qr", "39", "auto"
- * @param {number} options.height - Height in pixels for 1D barcodes (default: 35)
+ * @param {number} options.width - Width in pixels (default: 500)
+ * @param {number} options.height - Height in pixels (default: 50)
  * @returns {string} URL to the barcode image, or empty string if no ID
  */
 function getBarcodeUrl(idNumber, options = {}) {
   if (!idNumber || idNumber.trim() === '') return '';
   
-  const type = options.type || '128';  // Default to CODE128
-  // BarcodeAPI settings: DPI 500, Height 10, Text None
-  const height = options.height || 10;
-  const dpi = options.dpi || 500;
+  // Default dimensions - width=500 for high quality, height=50 for scan reliability
+  const width = options.width || 500;
+  const height = options.height || 150;
   
   // URL-encode the ID number to handle special characters
   const encodedId = encodeURIComponent(idNumber.trim());
   
-  // Base URL
-  let url = `https://barcodeapi.org/api/${type}/${encodedId}`;
-  
-  // Add parameters for 1D barcodes (not QR or DataMatrix)
-  // hidetext=1&text=none removes the human-readable text from the barcode image
-  if (type !== 'qr' && type !== 'dm') {
-    url += `?height=${height}&dpi=${dpi}&hidetext=1&text=none`;
-  }
+  // QuickChart Barcode API URL
+  // type=code128: Code 128 barcode (alphanumeric)
+  // Note: Omitting includeText parameter = no human-readable text (BWIPP default behavior)
+  // format=png: PNG output format
+  const url = `https://quickchart.io/barcode?type=code128&text=${encodedId}&width=${width}&height=${height}&format=png`;
   
   return url;
 }
@@ -394,16 +391,17 @@ function initPositionRadioButtons() {
   const fieldOfficerDetails = document.getElementById('field_officer_details');
   const foTypeRadios = document.querySelectorAll('input[name="field_officer_type"]');
   
-  // Handle Field Officer Type selection (Reprocessor/Others)
+  // Handle Field Officer Type selection (Reprocessor/Shared/Others)
+  // Note: "Shared" behaves exactly the same as "Reprocessor" (dual template mode)
   foTypeRadios.forEach(radio => {
     radio.addEventListener('change', () => {
       const selectedType = radio.value;
       
-      // Only show details section for Reprocessor
-      if (selectedType === 'Reprocessor') {
+      // Show details section for Reprocessor or Shared (both use dual template mode)
+      if (selectedType === 'Reprocessor' || selectedType === 'Shared') {
         if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'block';
         setFieldOfficerFieldsRequired(true);
-        // Show dual template preview for Reprocessor
+        // Show dual template preview for Reprocessor/Shared
         showDualTemplateMode(true);
       } else {
         // Hide for Others or any other value
@@ -587,9 +585,9 @@ function updateDualTemplatePreview() {
   const origFullname = document.getElementById('dual_original_fullname');
   if (origFullname) origFullname.textContent = fullName;
   
-  // Position
+  // Position - ALWAYS show "Field Officer" for Repossessor/Shared (not the sub-type)
   const origPosition = document.getElementById('dual_original_position');
-  if (origPosition) origPosition.textContent = 'Field Officer - Reprocessor';
+  if (origPosition) origPosition.textContent = 'Field Officer';
   
   // ID Number
   const origIdNumber = document.getElementById('dual_original_idnumber');
@@ -598,7 +596,7 @@ function updateDualTemplatePreview() {
   // Barcode - Original Template
   const origBarcodeImg = document.getElementById('dual_original_barcode');
   const origBarcodeFallback = document.getElementById('dual_original_barcode_fallback');
-  updateBarcodeDisplay(idNumber, origBarcodeImg, origBarcodeFallback, { height: 10, dpi: 500 });
+  updateBarcodeDisplay(idNumber, origBarcodeImg, origBarcodeFallback, { width: 500, height: 50 });
   
   // Photo - Original Template uses AI photo
   const origPhoto = document.getElementById('dual_original_photo');
@@ -642,13 +640,103 @@ function updateDualTemplatePreview() {
   const origEmergencyAddress = document.getElementById('dual_original_emergency_address');
   if (origEmergencyAddress) origEmergencyAddress.textContent = emergencyAddress || 'Contact Address';
   
+  // Update SPMC back website URL with correct format: www.okpo.com/spm/firstnamelastinitialmiddleinitial
+  const origBackWebsiteUrl = document.getElementById('dual_original_back_website_url');
+  if (origBackWebsiteUrl) {
+    const firstNameLower = firstName ? firstName.toLowerCase().replace(/\s+/g, '') : '';
+    const lastNameInitialLower = lastName ? lastName.charAt(0).toLowerCase() : '';
+    const middleInitialLower = middleInitial ? middleInitial.charAt(0).toLowerCase() : '';
+    const backDynamicUrl = `www.okpo.com/spm/${firstNameLower}${lastNameInitialLower}${middleInitialLower}`;
+    origBackWebsiteUrl.textContent = firstNameLower ? backDynamicUrl : 'www.okpo.com/spm/';
+  }
+  
+  // Generate vCard QR code for SPMC backside using QuickChart API
+  const vcardQrImg = document.getElementById('dual_original_vcard_qr');
+  const vcardQrPlaceholder = document.getElementById('dual_original_vcard_qr_placeholder');
+  if (vcardQrImg && vcardQrPlaceholder) {
+    // Get additional employee data for vCard
+    const email = getValue('email');
+    const phone = getValue('personal_number');
+    
+    // Build vCard 3.0 string
+    // N: Last;First;Middle;;
+    // FN: First M. Last
+    let vcardFn = firstName || '';
+    if (middleInitial) {
+      vcardFn += ' ' + middleInitial.charAt(0).toUpperCase() + '.';
+    }
+    if (lastName) vcardFn += ' ' + lastName;
+    if (suffix) vcardFn += ' ' + suffix;
+    vcardFn = vcardFn.trim();
+    
+    const vcardN = `${lastName || ''};${firstName || ''};${middleInitial ? middleInitial.charAt(0) : ''};;${suffix || ''}`;
+    
+    // Build complete vCard
+    let vcard = 'BEGIN:VCARD\n';
+    vcard += 'VERSION:3.0\n';
+    vcard += `N:${vcardN}\n`;
+    vcard += `FN:${vcardFn || 'Employee'}\n`;
+    vcard += 'ORG:S.P. Madrid & Associates\n';
+    vcard += 'TITLE:Field Officer\n';
+    if (phone) vcard += `TEL:${phone}\n`;
+    if (email) vcard += `EMAIL:${email}\n`;
+    vcard += 'END:VCARD';
+    
+    // Generate QuickChart QR URL
+    const encodedVcard = encodeURIComponent(vcard);
+    const qrUrl = `https://quickchart.io/qr?text=${encodedVcard}&size=200&ecLevel=Q&format=png&margin=1`;
+    
+    // Update QR image
+    if (firstName || lastName) {
+      vcardQrImg.src = qrUrl;
+      vcardQrImg.style.display = 'block';
+      vcardQrPlaceholder.style.display = 'none';
+    } else {
+      vcardQrImg.style.display = 'none';
+      vcardQrPlaceholder.style.display = 'block';
+    }
+  }
+  
+  // Generate URL QR code for bottom of SPMC backside with embedded OKPO logo
+  const urlQrImg = document.getElementById('dual_original_url_qr');
+  const urlQrPlaceholder = document.getElementById('dual_original_url_qr_placeholder');
+  if (urlQrImg && urlQrPlaceholder) {
+    // Build URL using same format as the displayed URL text
+    const firstNameLower = firstName ? firstName.toLowerCase().replace(/\s+/g, '') : '';
+    const lastNameInitialLower = lastName ? lastName.charAt(0).toLowerCase() : '';
+    const middleInitialLower = middleInitial ? middleInitial.charAt(0).toLowerCase() : '';
+    const employeeUrl = `https://www.okpo.com/spm/${firstNameLower}${lastNameInitialLower}${middleInitialLower}`;
+    
+    if (firstNameLower) {
+      // OKPO logo URL (must be URL-encoded)
+      const logoUrl = 'https://239dc453931a663c0cfa3bb867f1aaae.cdn.bubble.io/cdn-cgi/image/w=,h=,f=auto,dpr=1,fit=contain/f1727917655428x617042099316169600/okpologo.jpg';
+      const encodedLogoUrl = encodeURIComponent(logoUrl);
+      const encodedEmployeeUrl = encodeURIComponent(employeeUrl);
+      
+      // Generate QuickChart QR URL with embedded logo using centerImageUrl parameter
+      const urlQrCode = `https://quickchart.io/qr?text=${encodedEmployeeUrl}&size=200&ecLevel=H&format=png&margin=1&centerImageUrl=${encodedLogoUrl}&centerImageSizeRatio=0.25`;
+      urlQrImg.src = urlQrCode;
+      urlQrImg.style.display = 'block';
+      urlQrPlaceholder.style.display = 'none';
+    } else {
+      urlQrImg.style.display = 'none';
+      urlQrPlaceholder.style.display = 'block';
+    }
+  }
+  
   // === Update Reprocessor Template (uses ORIGINAL uploaded photo, NOT AI) ===
-  // Name (with line break)
+  // Name (with line break) - Include middle initial with dot
   const reprocessorName = document.getElementById('dual_reprocessor_name');
   if (reprocessorName) {
     let displayName = '';
     if (firstName && lastName) {
-      displayName = firstName + '<br>' + lastName;
+      // Format: FirstName M.<br>LastName Suffix
+      displayName = firstName;
+      if (middleInitial) {
+        // Use first character of middle initial field, uppercase, with dot
+        displayName += ' ' + middleInitial.charAt(0).toUpperCase() + '.';
+      }
+      displayName += '<br>' + lastName;
       if (suffix) displayName += ' ' + suffix;
     } else {
       displayName = 'Name<br>Placeholder';
@@ -669,10 +757,11 @@ function updateDualTemplatePreview() {
   const reprocessorIdNumber = document.getElementById('dual_reprocessor_idnumber');
   if (reprocessorIdNumber) reprocessorIdNumber.textContent = idNumber || 'ID Number Placeholder';
   
-  // Barcode - Reprocessor Template
+  // Barcode - Reprocessor Template (SPMA card in dual mode)
+  // Container is 180x40, so with width=500 we need height≈111 to maintain aspect ratio and fill the container
   const reprocessorBarcodeImg = document.getElementById('dual_reprocessor_barcode');
   const reprocessorBarcodeFallback = document.getElementById('dual_reprocessor_barcode_fallback');
-  updateBarcodeDisplay(idNumber, reprocessorBarcodeImg, reprocessorBarcodeFallback, { height: 10, dpi: 500 });
+  updateBarcodeDisplay(idNumber, reprocessorBarcodeImg, reprocessorBarcodeFallback, { width: 500, height: 111 });
   
   // Photo - Reprocessor Template uses ORIGINAL uploaded photo (NOT AI)
   const reprocessorPhoto = document.getElementById('dual_reprocessor_photo');
@@ -1562,7 +1651,7 @@ function updateIdCardPreview() {
   const barcodeImg = document.getElementById('id_preview_barcode');
   const barcodeFallback = document.getElementById('id_barcode_fallback');
   console.log('[Preview] Barcode elements found:', { barcodeImg: !!barcodeImg, barcodeFallback: !!barcodeFallback });
-  updateBarcodeDisplay(idNumber, barcodeImg, barcodeFallback, { height: 10, dpi: 500 });
+  updateBarcodeDisplay(idNumber, barcodeImg, barcodeFallback, { width: 500, height: 55 });
 
   // Update Photo - prefer AI generated (with transparent bg), fallback to original
   const aiPreviewImg = document.getElementById('aiPreviewImg');
@@ -1651,9 +1740,14 @@ function updateIdCardPreview() {
     }
   }
 
-  // Update dynamic website URLs with first name
+  // Update dynamic website URLs
+  // Back-side URL format: www.okpo.com/spm/(FirstName + LastNameInitial + MiddleInitial)
+  // All lowercase, no spaces, no separators
+  // Example: Miguel Manuel Lacaden → www.okpo.com/spm/miguelml
   const firstNameLower = firstName ? firstName.toLowerCase() : '';
-  const backDynamicUrl = `www.okpo.com/spm/${firstNameLower}`;
+  const lastNameInitialLower = lastName ? lastName.charAt(0).toLowerCase() : '';
+  const middleInitialLower = middleInitial ? middleInitial.replace('.', '').charAt(0).toLowerCase() : '';
+  const backDynamicUrl = `www.okpo.com/spm/${firstNameLower}${lastNameInitialLower}${middleInitialLower}`;
   
   // Front-side website URL (always static)
   const frontWebsiteEl = document.getElementById('id_front_website_url');
@@ -1671,6 +1765,80 @@ function updateIdCardPreview() {
   const backContactLabel = document.getElementById('id_back_contact_label');
   if (backContactLabel) {
     backContactLabel.textContent = firstName ? `${firstName}'s Contact` : "'s Contact";
+  }
+  
+  // Generate vCard QR code for single template SPMC backside using QuickChart API
+  const vcardQrImg = document.getElementById('id_back_vcard_qr');
+  const vcardQrPlaceholder = document.getElementById('id_back_vcard_qr_placeholder');
+  if (vcardQrImg && vcardQrPlaceholder) {
+    // Get additional employee data for vCard
+    const email = getValue('email');
+    const phone = getValue('personal_number');
+    
+    // Build vCard 3.0 string
+    // N: Last;First;Middle;;
+    // FN: First M. Last
+    let vcardFn = firstName || '';
+    if (middleInitial) {
+      const mi = middleInitial.replace('.', '').charAt(0).toUpperCase();
+      vcardFn += ' ' + mi + '.';
+    }
+    if (lastName) vcardFn += ' ' + lastName;
+    if (suffix) vcardFn += ' ' + suffix;
+    vcardFn = vcardFn.trim();
+    
+    const vcardMiddle = middleInitial ? middleInitial.replace('.', '').charAt(0) : '';
+    const vcardN = `${lastName || ''};${firstName || ''};${vcardMiddle};;${suffix || ''}`;
+    
+    // Build complete vCard
+    let vcard = 'BEGIN:VCARD\n';
+    vcard += 'VERSION:3.0\n';
+    vcard += `N:${vcardN}\n`;
+    vcard += `FN:${vcardFn || 'Employee'}\n`;
+    vcard += 'ORG:S.P. Madrid & Associates\n';
+    // Use position for TITLE (Freelancer, Intern, Others, or default)
+    vcard += `TITLE:${position || 'Employee'}\n`;
+    if (phone) vcard += `TEL:${phone}\n`;
+    if (email) vcard += `EMAIL:${email}\n`;
+    vcard += 'END:VCARD';
+    
+    // Generate QuickChart QR URL
+    const encodedVcard = encodeURIComponent(vcard);
+    const qrUrl = `https://quickchart.io/qr?text=${encodedVcard}&size=200&ecLevel=Q&format=png&margin=1`;
+    
+    // Update QR image
+    if (firstName || lastName) {
+      vcardQrImg.src = qrUrl;
+      vcardQrImg.style.display = 'block';
+      vcardQrPlaceholder.style.display = 'none';
+    } else {
+      vcardQrImg.style.display = 'none';
+      vcardQrPlaceholder.style.display = 'block';
+    }
+  }
+  
+  // Generate URL QR code for bottom of single template SPMC backside with embedded OKPO logo
+  const urlQrImg = document.getElementById('id_back_url_qr');
+  const urlQrPlaceholder = document.getElementById('id_back_url_qr_placeholder');
+  if (urlQrImg && urlQrPlaceholder) {
+    // Reuse the same URL format as the displayed URL text
+    const employeeUrl = `https://${backDynamicUrl}`;
+    
+    if (firstNameLower) {
+      // OKPO logo URL (must be URL-encoded)
+      const logoUrl = 'https://239dc453931a663c0cfa3bb867f1aaae.cdn.bubble.io/cdn-cgi/image/w=,h=,f=auto,dpr=1,fit=contain/f1727917655428x617042099316169600/okpologo.jpg';
+      const encodedLogoUrl = encodeURIComponent(logoUrl);
+      const encodedEmployeeUrl = encodeURIComponent(employeeUrl);
+      
+      // Generate QuickChart QR URL with embedded logo using centerImageUrl parameter
+      const urlQrCode = `https://quickchart.io/qr?text=${encodedEmployeeUrl}&size=200&ecLevel=H&format=png&margin=1&centerImageUrl=${encodedLogoUrl}&centerImageSizeRatio=0.25`;
+      urlQrImg.src = urlQrCode;
+      urlQrImg.style.display = 'block';
+      urlQrPlaceholder.style.display = 'none';
+    } else {
+      urlQrImg.style.display = 'none';
+      urlQrPlaceholder.style.display = 'block';
+    }
   }
   
   // Also update dual template preview if in Reprocessor mode
@@ -2276,14 +2444,21 @@ function updateFieldOfficePreview() {
   // Only update Field Office placeholders if Field Officer is selected
   if (!isFieldOfficer) return;
   
-  // Update Employee Name (First Name + Last Name format for ID)
+  // Update Employee Name (First M. + Last Name format for ID) - Include middle initial with dot
   const firstName = getValue('first_name');
+  const middleInitial = getValue('middle_initial');
   const lastName = getValue('last_name');
   const suffix = getSuffixValue();
   
   let displayName = '';
   if (firstName && lastName) {
-    displayName = firstName + '\n' + lastName;
+    // Format: FirstName M.<br>LastName Suffix
+    displayName = firstName;
+    if (middleInitial) {
+      // Use first character of middle initial field, uppercase, with dot
+      displayName += ' ' + middleInitial.charAt(0).toUpperCase() + '.';
+    }
+    displayName += '\n' + lastName;
     if (suffix) {
       displayName += ' ' + suffix;
     }
@@ -2321,9 +2496,10 @@ function updateFieldOfficePreview() {
   }
 
   // Update Barcode - generates CODE128 barcode from ID number
+  // Container is 180x40, so with width=500 we need height≈111 to maintain aspect ratio and fill the container
   const foBarcodeImg = document.getElementById('id_fo_preview_barcode');
   const foBarcodeFallback = document.getElementById('id_fo_barcode_fallback');
-  updateBarcodeDisplay(idNumber, foBarcodeImg, foBarcodeFallback, { height: 10, dpi: 500 });
+  updateBarcodeDisplay(idNumber, foBarcodeImg, foBarcodeFallback, { width: 500, height: 111 });
   
   // Update Photo - prefer AI generated, fallback to original
   const aiPreviewImg = document.getElementById('aiPreviewImg');

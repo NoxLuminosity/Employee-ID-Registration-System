@@ -566,15 +566,15 @@ function renderGallery() {
 // Template selection source-of-truth:
 // - Freelancer, Intern, Others: Portrait template (512x800)
 // - Field Officer (Others): Landscape Field Office template (512x319)
-// - Field Officer (Reprocessor): DUAL templates (Portrait + Landscape) - shown in grid as portrait
+// - Field Officer (Reprocessor/Shared): DUAL templates (Portrait + Landscape) - shown in grid as portrait
 function generateIDCardHtml(emp) {
-  // Check if this is a Field Officer - Reprocessor (needs dual templates)
+  // Check if this is a Field Officer - Reprocessor/Shared (needs dual templates)
   const isFieldOfficer = emp.position === 'Field Officer';
-  const isReprocessor = isFieldOfficer && emp.field_officer_type === 'Reprocessor';
+  const isReprocessorOrShared = isFieldOfficer && (emp.field_officer_type === 'Reprocessor' || emp.field_officer_type === 'Shared');
   
-  // For Reprocessor: In gallery grid, show portrait template (original) as primary card
+  // For Reprocessor/Shared: In gallery grid, show portrait template (original) as primary card
   // The dual preview is shown in modal and PDF will include both
-  if (isReprocessor) {
+  if (isReprocessorOrShared) {
     return generateRegularIDCardHtml(emp);
   }
   
@@ -585,6 +585,27 @@ function generateIDCardHtml(emp) {
   
   // For non-Field Officers, use the regular template
   return generateRegularIDCardHtml(emp);
+}
+
+// Build full name from separate fields: FirstName + MiddleInitial + LastName + Suffix
+// If middle_initial exists, format as single uppercase letter with period
+// Falls back to employee_name if separate fields are not available
+function buildFullName(emp) {
+  // Check if we have the separate name fields
+  if (emp.first_name || emp.last_name) {
+    let fullName = '';
+    if (emp.first_name) fullName += emp.first_name;
+    if (emp.middle_initial) {
+      // Ensure middle initial is just one uppercase letter with period
+      const mi = emp.middle_initial.trim().replace('.', '').charAt(0).toUpperCase();
+      if (mi) fullName += ' ' + mi + '.';
+    }
+    if (emp.last_name) fullName += ' ' + emp.last_name;
+    if (emp.suffix) fullName += ' ' + emp.suffix;
+    return fullName.trim();
+  }
+  // Fallback to employee_name
+  return emp.employee_name;
 }
 
 // Generate Regular ID Card HTML (for Freelancer, Intern, Others)
@@ -609,12 +630,15 @@ function generateRegularIDCardHtml(emp) {
   const expDateStr = expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   // Get nickname or use first name
-  const nickname = emp.id_nickname || emp.employee_name.split(' ')[0];
+  const nickname = emp.id_nickname || (emp.first_name || emp.employee_name.split(' ')[0]);
   
-  // Get first name for dynamic back-side URL (lowercase)
-  const firstName = emp.employee_name.split(' ')[0] || '';
-  const firstNameLower = firstName.toLowerCase();
-  const backDynamicUrl = `www.okpo.com/spm/${firstNameLower}`;
+  // Generate dynamic back-side URL: www.okpo.com/spm/(FirstName + LastNameInitial + MiddleInitial)
+  // Format: all lowercase, no spaces, no separators
+  // Example: Miguel Manuel Lacaden → www.okpo.com/spm/miguelml
+  const firstName = (emp.first_name || emp.employee_name.split(' ')[0] || '').toLowerCase();
+  const lastNameInitial = emp.last_name ? emp.last_name.charAt(0).toLowerCase() : '';
+  const middleInitial = emp.middle_initial ? emp.middle_initial.replace('.', '').charAt(0).toLowerCase() : '';
+  const backDynamicUrl = `www.okpo.com/spm/${firstName}${lastNameInitial}${middleInitial}`;
   const frontStaticUrl = 'www.spmadrid.com';
 
   return `
@@ -649,7 +673,7 @@ function generateRegularIDCardHtml(emp) {
         <div class="id-info-container">
           <!-- Left side - Name, Title, Barcode -->
           <div class="id-info-left">
-            <h1 class="id-fullname">${escapeHtml(emp.employee_name)}</h1>
+            <h1 class="id-fullname">${escapeHtml(buildFullName(emp))}</h1>
             
             <div class="id-position-dept">
               <span>${escapeHtml(emp.position)}</span>
@@ -658,7 +682,7 @@ function generateRegularIDCardHtml(emp) {
             <!-- Barcode area -->
             <div class="id-barcode-area">
               <div class="id-barcode-container">
-                ${generateBarcodeHtml(emp.id_number, 'id-barcode-image', { height: 10, dpi: 500 })}
+                ${generateBarcodeHtml(emp.id_number, 'id-barcode-image', { width: 500, height: 55 })}
               </div>
               <p class="id-number-text">${escapeHtml(emp.id_number)}</p>
             </div>
@@ -748,9 +772,10 @@ function generateFieldOfficeIDCardHtml(emp) {
         </div>
 
         <!-- Barcode - Above ID Number -->
+        <!-- Container is 180x40, so with width=500 we need height≈111 to fill the container -->
         <div class="id-fo-barcode-section">
           <div class="id-fo-barcode-container">
-            ${generateBarcodeHtml(emp.id_number, 'id-fo-barcode-image', { height: 10, dpi: 500 })}
+            ${generateBarcodeHtml(emp.id_number, 'id-fo-barcode-image', { width: 500, height: 111 })}
           </div>
         </div>
 
@@ -775,14 +800,16 @@ function generateFieldOfficeIDCardBackHtml(emp) {
 // Generate ID Card Backside HTML
 function generateIDCardBackHtml(emp) {
   // Get username from nickname or first name
-  const nickname = emp.id_nickname || emp.employee_name.split(' ')[0];
+  const nickname = emp.id_nickname || (emp.first_name || emp.employee_name.split(' ')[0]);
   const username = nickname.toLowerCase().replace(/\s+/g, '');
   
-  // Get first name for dynamic URL and contact label
-  const firstName = emp.employee_name.split(' ')[0] || '';
-  const firstNameLower = firstName.toLowerCase();
-  const dynamicUrl = `www.okpo.com/spm/${firstNameLower}`;
-  const contactLabel = `${firstName}'s Contact`;
+  // Generate dynamic URL: www.okpo.com/spm/(FirstName + LastNameInitial + MiddleInitial)
+  // Format: all lowercase, no spaces, no separators
+  const firstName = (emp.first_name || emp.employee_name.split(' ')[0] || '').toLowerCase();
+  const lastNameInitial = emp.last_name ? emp.last_name.charAt(0).toLowerCase() : '';
+  const middleInitial = emp.middle_initial ? emp.middle_initial.replace('.', '').charAt(0).toLowerCase() : '';
+  const dynamicUrl = `www.okpo.com/spm/${firstName}${lastNameInitial}${middleInitial}`;
+  const contactLabel = `${emp.first_name || emp.employee_name.split(' ')[0] || ''}'s Contact`;
   
   // Emergency contact details
   const emergencyName = emp.emergency_name || 'Not provided';
@@ -1851,40 +1878,34 @@ function escapeHtml(text) {
 
 /**
  * Generate a barcode image URL for the given employee ID number.
- * Uses BarcodeAPI.org to generate CODE128 barcodes.
+ * Uses QuickChart.io Barcode API to generate Code 128 barcodes.
+ * API Documentation: https://quickchart.io/documentation/barcode-api/
  * 
  * @param {string} idNumber - The employee ID number to encode
  * @param {Object} options - Optional configuration
- * @param {string} options.type - Barcode type: "128" (default), "qr", "39", "auto"
- * @param {number} options.height - Height in pixels for 1D barcodes (default: 40)
+ * @param {number} options.width - Width in pixels (default: 500)
+ * @param {number} options.height - Height in pixels (default: 50)
  * @returns {string} URL to the barcode image
  * 
  * @example
  * getBarcodeUrl('EMP-12345')
- * // Returns: 'https://barcodeapi.org/api/128/EMP-12345?height=40'
- * 
- * getBarcodeUrl('EMP-12345', { type: 'qr' })
- * // Returns: 'https://barcodeapi.org/api/qr/EMP-12345'
+ * // Returns: 'https://quickchart.io/barcode?type=code128&text=EMP-12345&width=500&height=50&format=png'
  */
 function getBarcodeUrl(idNumber, options = {}) {
   if (!idNumber) return '';
   
-  const type = options.type || '128';  // Default to CODE128
-  // BarcodeAPI settings: DPI 500, Height 10, Text None
-  const height = options.height || 10;
-  const dpi = options.dpi || 500;
+  // Default dimensions - width=500 for high quality, height=50 for scan reliability
+  const width = options.width || 500;
+  const height = options.height || 50;
   
   // URL-encode the ID number to handle special characters
   const encodedId = encodeURIComponent(idNumber);
   
-  // Base URL
-  let url = `https://barcodeapi.org/api/${type}/${encodedId}`;
-  
-  // Add parameters for 1D barcodes (not QR or DataMatrix)
-  // hidetext=1&text=none removes the human-readable text from the barcode image
-  if (type !== 'qr' && type !== 'dm') {
-    url += `?height=${height}&dpi=${dpi}&hidetext=1&text=none`;
-  }
+  // QuickChart Barcode API URL
+  // type=code128: Code 128 barcode (alphanumeric)
+  // Note: Omitting includeText parameter = no human-readable text (BWIPP default behavior)
+  // format=png: PNG output format
+  const url = `https://quickchart.io/barcode?type=code128&text=${encodedId}&width=${width}&height=${height}&format=png`;
   
   return url;
 }

@@ -829,7 +829,7 @@ async def submit_spma_employee(
 async def get_employee_barcode(
     id_number: str,
     barcode_type: str = "128",
-    height: int = 40
+    height: int = 150
 ):
     """
     Generate a barcode URL for an employee ID number.

@@ -453,6 +453,10 @@ def api_get_employees(request: Request, hr_session: str = Cookie(None)):
             employees.append({
                 "id": row.get("id"),
                 "employee_name": row.get("employee_name"),
+                "first_name": row.get("first_name"),
+                "middle_initial": row.get("middle_initial"),
+                "last_name": row.get("last_name"),
+                "suffix": row.get("suffix"),
                 "id_nickname": row.get("id_nickname"),
                 "id_number": row.get("id_number"),
                 "position": row.get("position"),
@@ -524,6 +528,10 @@ def api_get_employee(employee_id: int, hr_session: str = Cookie(None)):
         employee = {
             "id": row.get("id"),
             "employee_name": row.get("employee_name"),
+            "first_name": row.get("first_name"),
+            "middle_initial": row.get("middle_initial"),
+            "last_name": row.get("last_name"),
+            "suffix": row.get("suffix"),
             "id_nickname": row.get("id_nickname"),
             "id_number": row.get("id_number"),
             "position": row.get("position"),

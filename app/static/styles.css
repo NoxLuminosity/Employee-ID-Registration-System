@@ -231,6 +231,8 @@ input[readonly]:focus {
   margin-right: calc(-1 * var(--spacing-xl));
   box-shadow: none;
   animation: slideDown 0.3s ease;
+  /* Span full width of parent grid */
+  grid-column: 1 / -1;
 }
 
 @keyframes slideDown {
@@ -2613,6 +2615,7 @@ input::placeholder {
 /* ============================================
    ID Card Responsive - Scale for different screen sizes
    Base: 512px × 800px at 97% scale
+   Using position:relative with left offset for proper centering of scaled elements
    ============================================ */
 
 /* Large screens / Laptops (≤1200px) - stack cards vertically */
@@ -2631,7 +2634,7 @@ input::placeholder {
     padding: var(--spacing-md);
     margin: var(--spacing-sm);
     border-radius: var(--radius-md);
-    overflow: hidden; /* Prevent horizontal scroll */
+    overflow: visible;
   }
   
   .id-preview-wrapper {
@@ -2648,15 +2651,15 @@ input::placeholder {
   }
   
   /* Scale down for tablet - 512 × 0.65 = 333px width, 800 × 0.65 = 520px height */
-  /* Horizontal margin offset: (512 - 333) / 2 = 89px each side */
+  /* Position offset for centering: (512 - 333) / 2 = 89.5px left */
   .id-card,
   .id-card-back {
     transform: scale(0.65);
-    transform-origin: top center;
+    transform-origin: top left;
+    position: relative;
+    left: calc(50% - 166.5px); /* 512 * 0.65 / 2 = 166.4px */
     margin-top: 0;
-    margin-bottom: -280px;  /* Compensate for scaled height: 800 - 520 = 280px */
-    margin-left: -89px;
-    margin-right: -89px;
+    margin-bottom: -280px;
     min-width: unset;
   }
   
@@ -2674,17 +2677,17 @@ input::placeholder {
 /* Mobile phones (≤480px) - smaller scale */
 @media (max-width: 480px) {
   .id-preview-section {
-    padding: var(--spacing-xs);
+    padding: var(--spacing-sm);
     margin: 0;
     border-radius: var(--radius-sm);
-    overflow: hidden;
+    overflow: visible;
     width: 100%;
     box-sizing: border-box;
   }
   
   .id-preview-wrapper {
     min-height: auto;
-    padding: 0;
+    padding: var(--spacing-xs);
     gap: 16px;
     max-width: 100%;
     width: 100%;
@@ -2695,17 +2698,16 @@ input::placeholder {
     justify-content: flex-start;
   }
   
-  /* Scale down for mobile - need to fit within ~375px viewport */
-  /* 512 × 0.52 = 266px width, 800 × 0.52 = 416px height */
-  /* Horizontal margin offset: (512 - 266) / 2 = 123px each side */
+  /* Scale down for mobile - 512 × 0.55 = 282px width, 800 × 0.55 = 440px height */
+  /* Position offset for centering: 512 * 0.55 / 2 = 141px */
   .id-card,
   .id-card-back {
-    transform: scale(0.52);
-    transform-origin: top center;
+    transform: scale(0.55);
+    transform-origin: top left;
+    position: relative;
+    left: calc(50% - 141px);
     margin-top: 0;
-    margin-bottom: -384px;  /* Compensate for scaled height: 800 - 416 = 384px */
-    margin-left: -123px;
-    margin-right: -123px;
+    margin-bottom: -360px;
     min-width: unset;
   }
   
@@ -2726,31 +2728,30 @@ input::placeholder {
 /* Extra small phones (≤360px) - minimum viable scale */
 @media (max-width: 360px) {
   .id-preview-section {
-    padding: 2px;
+    padding: var(--spacing-xs);
     margin: 0;
-    overflow: hidden;
+    overflow: visible;
     width: 100%;
   }
   
   .id-preview-wrapper {
-    padding: 0;
+    padding: var(--spacing-xs);
     gap: 12px;
     max-width: 100%;
     width: 100%;
     overflow: visible;
   }
   
-  /* Scale down for very small screens - 512 × 0.45 = 230px width */
-  /* 800 × 0.45 = 360px height, offset = 800 - 360 = 440px */
-  /* Horizontal margin offset: (512 - 230) / 2 = 141px each side */
+  /* Scale down for small screens - 512 × 0.48 = 246px width */
+  /* Position offset for centering: 512 * 0.48 / 2 = 123px */
   .id-card,
   .id-card-back {
-    transform: scale(0.45);
-    transform-origin: top center;
+    transform: scale(0.48);
+    transform-origin: top left;
+    position: relative;
+    left: calc(50% - 123px);
     margin-top: 0;
-    margin-bottom: -440px;
-    margin-left: -141px;
-    margin-right: -141px;
+    margin-bottom: -416px;
     min-width: unset;
   }
   
@@ -2763,26 +2764,25 @@ input::placeholder {
 /* Extra extra small phones (≤320px) - aggressive scaling */
 @media (max-width: 320px) {
   .id-preview-section {
-    padding: 0;
+    padding: 2px;
     margin: 0;
   }
   
   .id-preview-wrapper {
-    padding: 0;
+    padding: 2px;
     gap: 8px;
   }
   
-  /* Scale down for very small screens - 512 × 0.38 = 195px width */
-  /* 800 × 0.38 = 304px height, offset = 800 - 304 = 496px */
-  /* Horizontal margin offset: (512 - 195) / 2 = 158px each side */
+  /* Scale down for very small screens - 512 × 0.42 = 215px width */
+  /* Position offset for centering: 512 * 0.42 / 2 = 108px */
   .id-card,
   .id-card-back {
-    transform: scale(0.38);
-    transform-origin: top center;
+    transform: scale(0.42);
+    transform-origin: top left;
+    position: relative;
+    left: calc(50% - 108px);
     margin-top: 0;
-    margin-bottom: -496px;
-    margin-left: -158px;
-    margin-right: -158px;
+    margin-bottom: -464px;
     min-width: unset;
   }
   
@@ -3808,7 +3808,7 @@ input::placeholder {
   position: absolute;
   top: 220px;
   left: 160px;
-  z-index: 10;
+  z-index: 20;  /* Higher than other elements (z-index: 10) to ensure barcode is top layer */
 }
 
 .id-fo-barcode-placeholder {
@@ -3825,24 +3825,23 @@ input::placeholder {
   overflow: hidden;
 }
 
-/* Field Office Barcode Container */
+/* Field Office Barcode Container - sized to match reference image dimensions */
 .id-fo-barcode-container {
-  width: 160px;
-  height: 45px;
+  width: 180px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
-  border-radius: 4px;
+  background: transparent;  /* Removed white background - barcode has its own white background */
   overflow: hidden;
-  padding: 4px 6px;
+  padding: 0;  /* Removed internal padding to maximize barcode fill */
 }
 
-/* Field Office Barcode Image */
+/* Field Office Barcode Image - fills entire container */
 .id-fo-barcode-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: contain;  /* Preserve aspect ratio for scan reliability */
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
   image-rendering: pixelated;
@@ -3862,7 +3861,7 @@ input::placeholder {
 /* ID Number - Below barcode on landscape card */
 .id-fo-idnumber-section {
   position: absolute;
-  top: 250px;
+  top: 270px;  /* Moved down from 250px to prevent overlap with barcode */
   left: 165px;
   z-index: 10;
 }
@@ -3899,64 +3898,65 @@ input::placeholder {
 
 /* ============================================
    Field Office ID Card Responsive
+   Using position:relative with left offset for proper centering
    ============================================ */
 
 /* Tablets (≤768px) */
 @media (max-width: 768px) {
-  /* 512 × 0.65 = 333px width, horizontal offset: (512-333)/2 = 89px */
+  /* 512 × 0.65 = 333px width */
   /* 319 × 0.65 = 207px height, vertical offset: 319-207 = 112px */
   .id-card-field-office,
   .id-card-field-office-back {
     transform: scale(0.65);
-    transform-origin: top center;
+    transform-origin: top left;
+    position: relative;
+    left: calc(50% - 166.5px); /* 512 * 0.65 / 2 */
     margin-bottom: -112px;
-    margin-left: -89px;
-    margin-right: -89px;
     min-width: unset;
   }
 }
 
 /* Mobile phones (≤480px) */
 @media (max-width: 480px) {
-  /* 512 × 0.52 = 266px width, horizontal offset: (512-266)/2 = 123px */
-  /* 319 × 0.52 = 166px height, vertical offset: 319-166 = 153px */
+  /* 512 × 0.55 = 282px width */
+  /* 319 × 0.55 = 175px height, vertical offset: 319-175 = 144px */
   .id-card-field-office,
   .id-card-field-office-back {
-    transform: scale(0.52);
-    transform-origin: top center;
-    margin-bottom: -153px;
-    margin-left: -123px;
-    margin-right: -123px;
+    transform: scale(0.55);
+    transform-origin: top left;
+    position: relative;
+    left: calc(50% - 141px); /* 512 * 0.55 / 2 */
+    margin-bottom: -144px;
     min-width: unset;
   }
 }
 
 /* Extra small phones (≤360px) */
 @media (max-width: 360px) {
-  /* 512 × 0.45 = 230px width, horizontal offset: (512-230)/2 = 141px */
-  /* 319 × 0.45 = 144px height, vertical offset: 319-144 = 175px */
+  /* 512 × 0.48 = 246px width */
+  /* 319 × 0.48 = 153px height, vertical offset: 319-153 = 166px */
   .id-card-field-office,
   .id-card-field-office-back {
-    transform: scale(0.45);
-    transform-origin: top center;
-    margin-bottom: -175px;
-    margin-left: -141px;
-    margin-right: -141px;
+    transform: scale(0.48);
+    transform-origin: top left;
+    position: relative;
+    left: calc(50% - 123px); /* 512 * 0.48 / 2 */
+    margin-bottom: -166px;
     min-width: unset;
   }
 }
 
 /* Extra extra small phones (≤320px) */
 @media (max-width: 320px) {
-  /* 512 × 0.38 = 195px width, horizontal offset: (512-195)/2 = 158px */
-  /* 319 × 0.38 = 121px height, vertical offset: 319-121 = 198px */
+  /* 512 × 0.42 = 215px width */
+  /* 319 × 0.42 = 134px height, vertical offset: 319-134 = 185px */
   .id-card-field-office,
   .id-card-field-office-back {
-    transform: scale(0.38);
-    transform-origin: top center;
-    margin-bottom: -198px;
-    margin-left: -158px;
-    margin-right: -158px;
+    transform: scale(0.42);
+    transform-origin: top left;
+    position: relative;
+    left: calc(50% - 108px); /* 512 * 0.42 / 2 */
+    margin-bottom: -185px;
     min-width: unset;
   }
 }
@@ -3985,7 +3985,7 @@ input::placeholder {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: 600px;
+  max-width: 100%;
   /* Allow overflow for proper card display */
   overflow: visible;
 }
@@ -4015,9 +4015,6 @@ input::placeholder {
   /* Allow overflow for proper card display */
   overflow: visible;
   box-sizing: border-box;
-  /* Shift both cards left by 20px */
-  margin-right: 20px;
-  margin-left: -20px;
 }
 
 /* Portrait ID card (512x800) scaling - calculate proper margin */
@@ -4028,6 +4025,8 @@ input::placeholder {
   /* At 0.65 scale: 800px * 0.65 = 520px actual height
      Hidden space: 800px - 520px = 280px, need to offset */
   margin-bottom: -280px;
+  margin-left: auto;
+  margin-right: auto;
   width: 512px !important;
   height: 800px !important;
   min-width: 512px;
@@ -4042,6 +4041,8 @@ input::placeholder {
   /* At 0.75 scale: 319px * 0.75 = 239px actual height
      Hidden space: 319px - 239px = 80px, need to offset */
   margin-bottom: -80px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Mobile responsiveness for dual template */
@@ -4068,19 +4069,16 @@ input::placeholder {
     width: 100%;
     display: flex;
     overflow: visible;
-    /* Shift both cards left by 20px on mobile too */
-    margin-right: 20px;
-    margin-left: -20px;
   }
   
   .dual-preview-wrapper .id-card,
   .dual-preview-wrapper .id-card-back {
     transform: scale(0.55);
-    transform-origin: center top;
+    transform-origin: top left;
     /* At 0.55 scale: 512 × 0.55 = 282px width, 800 × 0.55 = 440px height */
     margin-bottom: -360px;
-    margin-left: 0;
-    margin-right: 0;
+    position: relative;
+    left: calc(50% - 141px); /* 282px / 2 = 141px */
     min-width: 512px;
     min-height: 800px;
     width: 512px !important;
@@ -4090,11 +4088,11 @@ input::placeholder {
   .dual-preview-wrapper .id-card-field-office,
   .dual-preview-wrapper .id-card-field-office-back {
     transform: scale(0.65);
-    transform-origin: center top;
-    /* At 0.65 scale: 319px * 0.65 = 207px actual height */
+    transform-origin: top left;
+    /* At 0.65 scale: 512px * 0.65 = 333px width, 319px * 0.65 = 207px height */
     margin-bottom: -112px;
-    margin-left: 0;
-    margin-right: 0;
+    position: relative;
+    left: calc(50% - 166px); /* 333px / 2 = 166px */
     min-width: unset;
   }
 }
@@ -4112,12 +4110,12 @@ input::placeholder {
   
   .dual-preview-wrapper .id-card,
   .dual-preview-wrapper .id-card-back {
-    transform: scale(0.45);
-    transform-origin: center top;
-    /* At 0.45 scale: 512 × 0.45 = 230px width, 800 × 0.45 = 360px height */
-    margin-bottom: -440px;
-    margin-left: 0;
-    margin-right: 0;
+    transform: scale(0.48);
+    transform-origin: top left;
+    /* At 0.48 scale: 512 × 0.48 = 246px width, 800 × 0.48 = 384px height */
+    margin-bottom: -416px;
+    position: relative;
+    left: calc(50% - 123px); /* 246px / 2 = 123px */
     min-width: 512px;
     min-height: 800px;
     width: 512px !important;
@@ -4126,12 +4124,12 @@ input::placeholder {
   
   .dual-preview-wrapper .id-card-field-office,
   .dual-preview-wrapper .id-card-field-office-back {
-    transform: scale(0.52);
-    transform-origin: center top;
-    /* At 0.52 scale: 319px * 0.52 = 166px actual height */
-    margin-bottom: -153px;
-    margin-left: 0;
-    margin-right: 0;
+    transform: scale(0.55);
+    transform-origin: top left;
+    /* At 0.55 scale: 512px * 0.55 = 282px width, 319px * 0.55 = 175px height */
+    margin-bottom: -144px;
+    position: relative;
+    left: calc(50% - 141px); /* 282px / 2 = 141px */
     min-width: unset;
   }
   
@@ -4158,23 +4156,23 @@ input::placeholder {
   
   .dual-preview-wrapper .id-card,
   .dual-preview-wrapper .id-card-back {
-    transform: scale(0.38);
-    transform-origin: center top;
-    /* At 0.38 scale: 512 × 0.38 = 195px width, 800 × 0.38 = 304px height */
-    margin-bottom: -496px;
-    margin-left: 0;
-    margin-right: 0;
+    transform: scale(0.42);
+    transform-origin: top left;
+    /* At 0.42 scale: 512 × 0.42 = 215px width, 800 × 0.42 = 336px height */
+    margin-bottom: -464px;
+    position: relative;
+    left: calc(50% - 107px); /* 215px / 2 = 107px */
     min-width: unset;
   }
   
   .dual-preview-wrapper .id-card-field-office,
   .dual-preview-wrapper .id-card-field-office-back {
-    transform: scale(0.45);
-    transform-origin: center top;
-    /* At 0.45 scale: 512 × 0.45 = 230px width */
-    margin-bottom: -175px;
-    margin-left: 0;
-    margin-right: 0;
+    transform: scale(0.48);
+    transform-origin: top left;
+    /* At 0.48 scale: 512 × 0.48 = 246px width, 319px * 0.48 = 153px height */
+    margin-bottom: -166px;
+    position: relative;
+    left: calc(50% - 123px); /* 246px / 2 = 123px */
     min-width: unset;
   }
   
@@ -4201,23 +4199,23 @@ input::placeholder {
   
   .dual-preview-wrapper .id-card,
   .dual-preview-wrapper .id-card-back {
-    transform: scale(0.32);
-    transform-origin: center top;
-    /* At 0.32 scale: 512 × 0.32 = 164px width, 800 × 0.32 = 256px height */
-    margin-bottom: -544px;
-    margin-left: 0;
-    margin-right: 0;
+    transform: scale(0.36);
+    transform-origin: top left;
+    /* At 0.36 scale: 512 × 0.36 = 184px width, 800 × 0.36 = 288px height */
+    margin-bottom: -512px;
+    position: relative;
+    left: calc(50% - 92px); /* 184px / 2 = 92px */
     min-width: unset;
   }
   
   .dual-preview-wrapper .id-card-field-office,
   .dual-preview-wrapper .id-card-field-office-back {
-    transform: scale(0.38);
-    transform-origin: center top;
-    /* At 0.38 scale: 512 × 0.38 = 195px width */
-    margin-bottom: -198px;
-    margin-left: 0;
-    margin-right: 0;
+    transform: scale(0.42);
+    transform-origin: top left;
+    /* At 0.42 scale: 512 × 0.42 = 215px width, 319 × 0.42 = 134px height */
+    margin-bottom: -185px;
+    position: relative;
+    left: calc(50% - 107px); /* 215px / 2 = 107px */
     min-width: unset;
   }
   

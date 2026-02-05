@@ -131,3 +131,5 @@ app/static/uploads/
 
 # Vercel
 .vercel
+
+.github
