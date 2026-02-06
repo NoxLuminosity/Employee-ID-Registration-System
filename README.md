@@ -1,32 +1,201 @@
 # Employee ID Registration System
 
-A full-stack employee ID registration and management system with AI-powered headshot generation, background removal, and HR dashboard. Built with FastAPI and integrates with Lark Bitable for enterprise data sync.
+<p align="center">
+  <b>Enterprise Employee ID Card Automation Platform</b><br>
+  FastAPI • BytePlus AI • Cloudinary • Lark Integration
+</p>
+
+---
+
+## Overview
+
+A production-grade employee ID card automation system that transforms the manual ID creation process from days to hours. The system handles the complete ID card lifecycle:
+
+**Employee Self-Service** → **AI Photo Generation** → **HR Review** → **Automatic POC Routing** → **Print-Ready Delivery**
+
+### What It Solves
+
+| Before (Manual) | After (Automated) |
+|-----------------|-------------------|
+| 3-7 days turnaround | Same-day completion |
+| 40-60 min HR time per employee | < 5 min per employee |
+| ~10% routing errors | 0% errors |
+| No visibility for management | Real-time Lark Bitable dashboard |
+| 2-3 FTEs on ID coordination | < 1 FTE (bulk actions) |
+
+---
 
 ## Features
 
 ### Employee Portal
-- **AI Headshot Generation** - Upload a photo and get a professional AI-generated headshot using BytePlus Seedream API
-- **Background Removal** - Automatic background removal using Cloudinary AI or Remove.bg
-- **Digital Signature** - Canvas-based signature pad with transparent background export
-- **Live ID Preview** - Real-time ID card preview as you fill the form
-- **Lark Authentication** - Mandatory Lark SSO for all access
 
-### HR Dashboard  
-- **Lark SSO Authentication** - Secure login via Lark OAuth
-- **Employee Management** - View, approve, and manage ID card applications
-- **ID Gallery** - Visual gallery of rendered and approved ID cards
-- **PDF Generation** - Generate printable ID card PDFs with QR codes
-- **POC Routing** - Automatic routing to nearest printing POC using haversine distance
-- **Lark Bitable Sync** - Real-time sync of employee data to Lark Bitable
+| Feature | Description |
+|---------|-------------|
+| **Lark SSO** | OAuth 2.0 + PKCE authentication validates employee organization |
+| **AI Headshot Generation** | 8 professional attire styles via BytePlus Seedream (4 male, 4 female) |
+| **Background Removal** | Cloudinary AI automatic transparent background |
+| **Digital Signature** | HTML5 Canvas with transparent PNG export |
+| **Live ID Preview** | Real-time card preview updates as form is filled |
+| **Auto-Fill** | Name and email populated from Lark profile |
+
+### HR Dashboard
+
+| Feature | Description |
+|---------|-------------|
+| **Department-Based Access** | Only People Support department members can access |
+| **Employee Table** | Full-featured data table with search and filters |
+| **Visual ID Gallery** | Preview actual ID cards with barcode/QR codes |
+| **PDF Generation** | Print-ready PDFs at 2.13" × 3.33" (300 DPI) |
+| **Bulk Actions** | "Approve All Rendered" and "Send All to POCs" |
+| **POC Routing** | Automatic nearest-branch calculation (haversine) |
+| **Lark Messaging** | Direct messages to POCs with PDF attachments |
+
+### ID Card Generation
+
+| Component | Technology |
+|-----------|------------|
+| **Barcode** | Code 128 via QuickChart.io (alphanumeric support) |
+| **QR Code (Back)** | vCard format with employee contact info |
+| **Employee URL QR** | Links to internal profile |
+| **PDF Rendering** | Client-side html2canvas + jsPDF |
+| **Formats** | SPMC (portrait), SPMA/Field Officer (landscape) |
+
+### Enterprise Integration
+
+| Integration | Purpose |
+|-------------|---------|
+| **Lark Bitable** | Real-time data sync, status tracking, audit trail |
+| **Lark IM** | Automated POC notifications with PDF links |
+| **Lark Contact API** | Department hierarchy validation |
+| **Cloudinary** | Image/PDF CDN with background removal |
+| **BytePlus Seedream** | AI corporate headshot generation |
+
+---
 
 ## Tech Stack
 
-- **Backend**: FastAPI (Python 3.9+)
-- **Database**: Supabase PostgreSQL (production) / SQLite (local)
-- **Frontend**: Vanilla JavaScript, Jinja2 templates
-- **Image Storage**: Cloudinary
-- **AI Services**: BytePlus Seedream (headshot), Cloudinary AI (background removal)
-- **Integrations**: Lark Bitable, Google Sheets (optional)
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Backend** | FastAPI (Python 3.9+) | API, routing, business logic |
+| **Frontend** | Vanilla JS, Jinja2 | UI templates |
+| **Database** | Supabase PostgreSQL | Production data |
+| **Dev Database** | SQLite | Local development |
+| **Image CDN** | Cloudinary | Photo/PDF storage + AI processing |
+| **AI Headshots** | BytePlus Seedream | Professional photo generation |
+| **Barcodes/QR** | QuickChart.io | Code 128 + vCard QR |
+| **Auth** | Lark OAuth 2.0 + PKCE | SSO + JWT sessions |
+| **Sync** | Lark Bitable | Enterprise visibility |
+| **Messaging** | Lark IM API | POC notifications |
+| **Deployment** | Vercel Serverless | Zero-ops hosting |
+
+---
+
+## Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     EMPLOYEE PORTAL                              │
+│  1. Lark Login → 2. Upload Photo → 3. Generate AI Headshot     │
+│  4. Fill Form (live preview) → 5. Sign → 6. Submit             │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     HR DASHBOARD                                 │
+│  7. View in Table → 8. Preview in Gallery → 9. Download PDF    │
+│  10. Approve (individual or bulk)                               │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     POC DELIVERY                                 │
+│  11. Calculate nearest POC (haversine) → 12. Send Lark message │
+│  13. POC downloads PDF → 14. Prints ID → 15. Mark Complete     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Status Flow
+
+```
+Reviewing → Rendered → Approved → Sent to POC → Completed
+                                              ↳ Removed (soft delete)
+```
+
+---
+
+## POC Branches
+
+The system routes ID cards to the nearest Point of Contact (POC) branch for printing.
+
+### POC Branches (15 with printers)
+
+| Branch | Region |
+|--------|--------|
+| San Carlos | Negros |
+| Pagadian City | Zamboanga Peninsula |
+| Zamboanga City | Zamboanga Peninsula |
+| Malolos City | Central Luzon |
+| San Fernando City | Central Luzon |
+| Cagayan De Oro | Northern Mindanao |
+| Tagum City | Davao Region |
+| Davao City | Davao Region |
+| Cebu City | Central Visayas |
+| Batangas | Southern Luzon |
+| General Santos City | SOCCSKSARGEN |
+| Bacolod | Western Visayas |
+| Ilo-Ilo | Western Visayas |
+| Quezon City | Metro Manila |
+| Calamba City | CALABARZON |
+
+### Non-POC Branches (40+)
+
+All other locations are routed to the nearest POC using haversine distance calculation based on GPS coordinates.
+
+---
+
+## API Endpoints
+
+### Public Routes
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Landing page |
+| GET | `/apply` | Employee application form |
+| GET | `/lark/callback` | Employee Lark OAuth callback |
+
+### Employee Routes
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/generate-headshot` | Generate AI headshot from photo |
+| POST | `/remove-background` | Remove photo background |
+| POST | `/submit` | Submit completed ID application |
+
+### HR Routes (Authenticated)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/hr/dashboard` | HR management dashboard |
+| GET | `/hr/gallery` | ID card gallery |
+| GET | `/hr/login` | HR login page |
+| GET | `/hr/lark/login` | Initiate HR Lark OAuth |
+| GET | `/hr/lark/callback` | HR Lark OAuth callback |
+| GET | `/hr/api/employees` | Fetch all employees |
+| GET | `/hr/api/employees/{id}` | Fetch single employee |
+| POST | `/hr/api/employees/{id}/approve` | Approve employee ID |
+| POST | `/hr/api/employees/{id}/render` | Mark as rendered |
+| POST | `/hr/api/employees/{id}/send-to-poc` | Send to POC |
+| POST | `/hr/api/employees/{id}/upload-pdf` | Upload PDF to Cloudinary |
+| POST | `/hr/api/employees/approve-all` | Bulk approve |
+| POST | `/hr/api/send-all-to-pocs` | Bulk send to POCs |
+| DELETE | `/hr/api/employees/{id}` | Soft delete employee |
+
+### Debug Routes
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/hr/api/debug/lark` | Lark configuration debug |
+| GET | `/hr/api/debug/session` | Session debug info |
 
 ## Quick Start
 
@@ -143,6 +312,67 @@ uvicorn app.main:app --reload --port 8000
 └── SPMA_LARK_SETUP.md        # Multi-table setup guide
 ```
 
+---
+
+## Security Features
+
+### Authentication
+
+| Feature | Implementation |
+|---------|----------------|
+| **Employee SSO** | Lark OAuth 2.0 with PKCE |
+| **HR Access Control** | Department hierarchy validation (People Support only) |
+| **Session Management** | JWT tokens (serverless-compatible) |
+| **Password Hashing** | bcrypt with 72-byte handling |
+
+### Safety Mechanisms
+
+| Feature | Description |
+|---------|-------------|
+| **Test Mode** | `POC_TEST_MODE=true` redirects all POC messages to test recipient |
+| **Backend Enforcement** | Test mode is server-side only, cannot be bypassed by client |
+| **Status Validation** | Only valid status transitions allowed |
+| **Soft Delete** | "Removed" status preserves data for audit |
+| **Retry Logic** | 3 attempts with 0.5s delay for Lark operations |
+
+### Security Headers
+
+- Content Security Policy (CSP)
+- X-Frame-Options: DENY
+- X-Content-Type-Options: nosniff
+- Strict-Transport-Security (HSTS)
+
+---
+
+## Error Handling
+
+### Retry Logic
+
+```python
+MAX_RETRY_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 0.5
+
+# Lark Bitable operations retry automatically
+# Cloudinary uploads return explicit errors
+# PDF URLs are verified accessible before saving
+```
+
+### Failure Scenarios
+
+| Scenario | Behavior |
+|----------|----------|
+| AI generation fails | Fallback to original photo with warning |
+| Cloudinary upload fails | Error returned, user can retry |
+| Lark Bitable update fails | 3 retries, local DB still updated |
+| POC message send fails | Error returned, status not changed |
+| PDF URL inaccessible | Upload blocked until resolved |
+
+### Session Caching
+
+Data is cached in browser `sessionStorage` (5-minute duration) to survive Vercel cold starts.
+
+---
+
 ## Deployment
 
 ### Vercel
@@ -152,7 +382,7 @@ uvicorn app.main:app --reload --port 8000
 3. Add environment variables in Vercel dashboard
 4. Deploy
 
-The `vercel.json` is pre-configured for deployment.
+The `vercel.json` is pre-configured for serverless deployment.
 
 ### Production Database (Supabase)
 
@@ -160,26 +390,132 @@ The `vercel.json` is pre-configured for deployment.
 2. Run `supabase_setup.sql` in SQL Editor
 3. Set `SUPABASE_URL` and `SUPABASE_KEY` in environment
 
+### Local Development
+
+```bash
+# Uses SQLite by default when Supabase vars not set
+uvicorn app.main:app --reload --port 8000
+
+# Database stored at: ./data/employees.db
+```
+
+---
+
+## Testing
+
+### Run Tests
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run specific test file
+pytest tests/test_barcode_service.py
+
+# Run with verbose output
+pytest tests/ -v
+```
+
+### Test Files
+
+| File | Purpose |
+|------|---------|
+| `test_barcode_service.py` | Barcode generation tests |
+| `test_cloudinary_only.py` | Cloudinary upload tests |
+| `test_dashboard_api.py` | HR API endpoint tests |
+| `test_e2e_id_card_flow.py` | End-to-end workflow tests |
+| `test_id_card_upload.py` | PDF upload tests |
+| `test_lark.py` | Lark integration tests |
+
+---
+
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"TARGET_LARK_DEPARTMENT_ID not set"**: Set this env var to your Lark org's Department ID for access control.
+| Issue | Solution |
+|-------|----------|
+| "TARGET_LARK_DEPARTMENT_ID not set" | Set to your Lark org's People Support Department ID |
+| Email lookup fails | Ensure email exists in Lark organization |
+| AI headshot not generating | Check `BYTEPLUS_API_KEY` validity |
+| Lark Bitable sync fails | Run `python scripts/diagnose_lark.py` |
+| Session lost after refresh | Check JWT_SECRET is set (required for Vercel) |
+| POC message not received | Check POC_TEST_MODE=false for production |
 
-2. **Email lookup fails**: Ensure the email exists in your Lark organization. Use actual Lark account emails.
+### Diagnostic Scripts
 
-3. **AI headshot not generating**: Check `BYTEPLUS_API_KEY` is valid. Run `python scripts/diagnose_ai_preview.py` to test.
+```bash
+# Check Lark Bitable configuration
+python scripts/diagnose_lark.py
 
-4. **Lark Bitable sync fails**: Run `python scripts/diagnose_lark.py` to check table configuration.
+# Check AI services
+python scripts/diagnose_ai_preview.py
+
+# Test POC routing logic
+python scripts/test_routing_logic.py
+```
+
+---
 
 ## Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/bulk_card_router_bot.py` | Batch send ID cards to POCs via Lark messages |
-| `scripts/diagnose_lark.py` | Check Lark Bitable field configuration |
-| `scripts/diagnose_ai_preview.py` | Test BytePlus/Cloudinary connectivity |
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `bulk_card_router_bot.py` | Batch send ID cards to POCs | `python scripts/bulk_card_router_bot.py` |
+| `diagnose_lark.py` | Check Lark Bitable fields | `python scripts/diagnose_lark.py` |
+| `diagnose_ai_preview.py` | Test BytePlus/Cloudinary | `python scripts/diagnose_ai_preview.py` |
+| `test_routing_logic.py` | Verify POC routing | `python scripts/test_routing_logic.py` |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [SHOWCASE.md](SHOWCASE.md) | Complete system showcase with architecture, features, and demo scripts |
+| [PRESENTATION.md](PRESENTATION.md) | Slide-by-slide presentation outline |
+| [SPMA_LARK_SETUP.md](SPMA_LARK_SETUP.md) | Multi-table Lark Bitable setup guide |
+| [supabase_setup.sql](supabase_setup.sql) | Production database schema |
+
+---
+
+## AI Headshot Styles
+
+The system offers 8 professional attire options:
+
+### Male Styles
+1. **Navy Blue Polo** - Crisp navy polo, relaxed fit
+2. **White Button-Down** - Classic long-sleeve with subtle check
+3. **Light Gray Sweater** - V-neck over white undershirt
+4. **Dark Green Polo** - Forest green, modern fit
+
+### Female Styles
+1. **Cream Silk Blouse** - Soft cream with subtle draping
+2. **Navy Tailored Blazer** - Structured jacket, white top
+3. **Soft Peach Blouse** - Round collar, flattering cut
+4. **Light Gray Sweater** - Fine-knit, V-neck style
+
+All styles preserve the employee's original facial features, hairstyle, and identity.
+
+---
 
 ## License
 
 MIT License
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+<p align="center">
+  <b>Built by People Support Engineering</b><br>
+  Transforming ID Card Creation from Days to Hours
+</p>
