@@ -868,12 +868,14 @@ def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
             test_mode = is_poc_test_mode()
             poc_email = get_poc_email(nearest_poc)
             
-            # Prepare employee data for message
+            # Prepare employee data for message (include PDF URL from render_url field)
             employee_data = {
                 "id_number": id_number,
                 "employee_name": row.get("employee_name", ""),
                 "position": row.get("position", ""),
                 "location_branch": location_branch,
+                "pdf_url": row.get("render_url", ""),  # Include PDF URL in the message
+                "render_url": row.get("render_url", ""),
             }
             
             # Send the message
@@ -1010,6 +1012,8 @@ def api_send_all_to_pocs(hr_session: str = Cookie(None)):
                             "employee_name": emp.get("employee_name", ""),
                             "position": emp.get("position", ""),
                             "location_branch": location_branch,
+                            "pdf_url": emp.get("render_url", ""),  # Include PDF URL in the message
+                            "render_url": emp.get("render_url", ""),
                         }
                         send_result = send_to_poc(employee_data, nearest_poc, poc_email)
                         
