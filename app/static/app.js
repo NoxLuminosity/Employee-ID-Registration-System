@@ -1045,7 +1045,7 @@ function updateDualTemplatePreview() {
   if (origEmergencyName) origEmergencyName.textContent = emergencyName || 'Emergency Contact Name';
   
   const origEmergencyContact = document.getElementById('dual_original_emergency_contact');
-  if (origEmergencyContact) origEmergencyContact.textContent = emergencyContact || '+63 XXX XXX XXXX';
+  if (origEmergencyContact) origEmergencyContact.textContent = emergencyContact || '09XXXXXXXXX';
   
   const origEmergencyAddress = document.getElementById('dual_original_emergency_address');
   if (origEmergencyAddress) origEmergencyAddress.textContent = emergencyAddress || 'Contact Address';
@@ -2795,7 +2795,7 @@ function updateIdCardBackside() {
   const emergencyContactEl = document.getElementById('id_back_emergency_contact');
   if (emergencyContactEl) {
     const contact = getValue('emergency_contact');
-    emergencyContactEl.textContent = contact || '+63 XXX XXX XXXX';
+    emergencyContactEl.textContent = contact || '09XXXXXXXXX';
   }
   
   // Update Emergency Address

@@ -14,7 +14,6 @@ from typing import Optional, Tuple
 logger = logging.getLogger(__name__)
 
 # List of valid POC branches (branches with printing POCs)
-# NOTE: Parañaque has a real POC but MUST be excluded for now - uses fallback
 POC_BRANCHES: set = {
     "San Carlos",
     "Pagadian City",
@@ -31,6 +30,7 @@ POC_BRANCHES: set = {
     "Ilo-Ilo",
     "Quezon City",
     "Calamba City",
+    "Parañaque",
 }
 
 # POC Contact Mapping (Branch → Contact Info)
@@ -39,68 +39,67 @@ POC_BRANCHES: set = {
 POC_CONTACTS: dict = {
     "San Carlos": {
         "name": "Zacarias, Reynaldo Jr Mamaril (HR PITX)",
-        "email": "rezacarias@spmadridlaw.com",
+        "email": "reyzacarias922@gmail.com",
     },
     "Pagadian City": {
         "name": "Melvin Calugay | PIF | GENSAN (PMCY)",
-        "email": "mecalugay@spmadridlaw.com",
+        "email": "melvincalugay102096@gmail.com",
     },
     "Zamboanga City": {
         "name": "Mira Mukim | PIF ZMB (QNAM)",
-        "email": "nmukim@spmadridlaw.com",
+        "email": "miramukim@gmail.com",
     },
     "Malolos City": {
         "name": "Aeron Tasic | PIF | MAL | MAPT",
-        "email": "aptasic@spmadridlaw.com",
+        "email": "aeronjay1987@gmail.com",
     },
     "San Fernando City": {
         "name": "Jojo Salomon | PIF | PAM (MJSM)",
-        "email": "jmsalomon@spmadridlaw.com",
+        "email": "jjsalomon2@gmail.com",
     },
     "Cagayan De Oro": {
         "name": "Aldrin Bautista | PIF | CDO (QADB)",
-        "email": "asbautista@spmadridlaw.com",
+        "email": "aldrinbautista62@gmail.com",
     },
     "Tagum City": {
         "name": "Kemy Revilla",
-        "email": "kvrevilla@spmadridlaw.com",
+        "email": "revillakemy@gmail.com",
     },
     "Davao City": {
         "name": "Rona Sindatoc (BNB-MSME NWOFF DAVAO)",
-        "email": "rona@spmadridlaw.com",
+        "email": "Sindatoc07@gmail.com",
     },
     "Cebu City": {
         "name": "Jenemae Manila (HR Services Ceb)",
-        "email": "jfmanila@spmadridlaw.com",
+        "email": "manilajenemae@gmail.com",
     },
     "Batangas": {
         "name": "Queenie Caraulia | PIF | BATANGAS | PQGC",
-        "email": "qgcaraulia@spmadridlaw.com",
+        "email": "kkwen0312@gmail.com",
     },
     "General Santos City": {
         "name": "As-addah Maminasacan | PIF | GEN (GASM)",
-        "email": "aamaminasacan@spmadridlaw.com",
+        "email": "maminasacana@gmail.com",
     },
     "Bacolod": {
         "name": "Nerio, Louie Rose Ponciano (PIF BACOLOD | BLON)",
-        "email": "lpnerio@spmadridlaw.com",
+        "email": "nerio.louierose1b@gmail.com",
     },
     "Ilo-Ilo": {
         "name": "Maerci del Monte | PIF | ILOILO (MMDD)",
-        "email": "mdelmonte@spmadridlaw.com",
+        "email": "mhayedelmonte02@gmail.com",
     },
     "Quezon City": {
         "name": "Queen Mary Bernaldez (HR QC)",
-        "email": "qrbernaldez@spmadridlaw.com",
+        "email": "bernaldezqueenmary24@gmail.com",
     },
     "Calamba City": {
         "name": "Cherrylyn Albis | PIF | CALAMBA (MCRA)",
-        "email": "cralbis@spmadridlaw.com",
+        "email": "cherry0415lyn@gmail.com",
     },
-    # Special case: Parañaque (not in POC_BRANCHES but has its own POC)
     "Parañaque": {
         "name": "Ira Mackenzie Arahan (HR Employee Relations PITX)",
-        "email": "icarahan@spmadridlaw.com",
+        "email": "mcknzzz2001@gmail.com",
     },
 }
 
@@ -161,12 +160,22 @@ BRANCH_COORDS: dict = {
 # Branch aliases: Province/Region names to their primary POC branch
 # These override haversine distance calculation
 BRANCH_ALIASES: dict = {
+    # Province aliases
     "Bulacan": "Malolos City",
     "Laguna": "Calamba City", 
     "Pampanga": "San Fernando City",
     "Pangasinan": "San Carlos",
     "Cavite": "Batangas",
     "Rizal": "Quezon City",
+    # Short name aliases (form dropdown uses short names)
+    "Cebu": "Cebu City",
+    "Davao": "Davao City",
+    "General Santos": "General Santos City",
+    "Iloilo": "Ilo-Ilo",
+    "Paranaque": "Parañaque",
+    "Pagadian": "Pagadian City",
+    "Tagum": "Tagum City",
+    "Zamboanga": "Zamboanga City",
 }
 
 

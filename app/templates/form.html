@@ -821,7 +821,7 @@
                 </span>
                 {% endif %}
               </label>
-              <input type="tel" id="personal_number" name="personal_number" required placeholder="+63 9XX XXX XXXX"
+              <input type="tel" id="personal_number" name="personal_number" required placeholder="09XXXXXXXXX"
                      value="{{ prefill.personal_number if prefill else '' }}"
                      class="{% if prefill and prefill.personal_number %}prefilled{% endif %}">
             </div>
@@ -839,7 +839,7 @@
             </div>
             <div class="form-group">
               <label for="emergency_contact">Contact Number <span class="required">*</span></label>
-              <input type="tel" id="emergency_contact" name="emergency_contact" required placeholder="+63 9XX XXX XXXX">
+              <input type="tel" id="emergency_contact" name="emergency_contact" required placeholder="09XXXXXXXXX">
             </div>
             <div class="form-group full-width">
               <label for="emergency_address">Address <span class="required">*</span></label>
@@ -939,7 +939,7 @@
         <!-- ID Card Preview Section -->
         <section class="form-section id-preview-section">
           <h2 class="section-title">ID Card Preview</h2>
-          <p class="review-subtitle">Live preview of your ID card. Fill in the form to see changes.</p>
+          <p class="review-subtitle">Live preview of your ID card. Fill in the form to see changes. (Note: Your Image background will be removed)</p>
           
           <!-- Single Template Container (for non-Reprocessor) -->
           <div id="singleTemplateContainer">
@@ -1090,7 +1090,7 @@
                         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                       </svg>
                     </div>
-                    <span class="id-back-emergency-value" id="id_back_emergency_contact">+63 XXX XXX XXXX</span>
+                    <span class="id-back-emergency-value" id="id_back_emergency_contact">09XXXXXXXXX</span>
                   </div>
                   <!-- Address -->
                   <div class="id-back-emergency-row address-row">
@@ -1300,7 +1300,7 @@
                               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                             </svg>
                           </div>
-                          <span class="id-back-emergency-value" id="dual_original_emergency_contact">+63 XXX XXX XXXX</span>
+                          <span class="id-back-emergency-value" id="dual_original_emergency_contact">09XXXXXXXXX</span>
                         </div>
                         <div class="id-back-emergency-row address-row">
                           <div class="id-back-emergency-icon address-icon">
