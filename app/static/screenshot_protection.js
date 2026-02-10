@@ -203,7 +203,7 @@ const ScreenshotProtection = (function() {
                 pointer-events: none;
                 z-index: 999990;
                 overflow: hidden;
-                opacity: 0.08;
+                opacity: 0.12;
             }
             
             #screenshot-protection-watermark .watermark-pattern {
@@ -219,13 +219,14 @@ const ScreenshotProtection = (function() {
             }
             
             #screenshot-protection-watermark .watermark-item {
-                padding: 60px 80px;
-                font-size: 14px;
+                padding: 80px 120px;
+                font-size: 24px;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                font-weight: 500;
+                font-weight: 600;
                 color: #000000;
                 white-space: nowrap;
                 user-select: none;
+                text-shadow: 0 0 2px rgba(0,0,0,0.1);
             }
             
             /* Keyboard shortcut warning modal */

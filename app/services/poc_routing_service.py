@@ -146,6 +146,27 @@ BRANCH_COORDS: dict = {
     "Binangonan": (14.4655, 121.1996),
     "Rodriguez": (14.7467, 121.1392),
     "San Mateo": (14.6987, 121.1176),
+    
+    # Province names (will be aliased to their POC branches)
+    "Bulacan": (14.8431, 120.8082),  # Maps to Malolos City
+    "Laguna": (14.2112, 121.1654),    # Maps to Calamba City
+    "Pampanga": (15.0286, 120.6851),  # Maps to San Fernando City
+    "Bataan": (14.6417, 120.4658),    # Will use nearest POC (San Fernando)
+    "Nueva Ecija": (15.5784, 121.1113),  # Will use nearest POC
+    "Pangasinan": (15.8949, 120.2863),   # Will use nearest POC (San Carlos)
+    "Zambales": (15.5082, 119.9698),     # Will use nearest POC (San Fernando)
+    "Tarlac": (15.4755, 120.5963),       # Will use nearest POC
+}
+
+# Branch aliases: Province/Region names to their primary POC branch
+# These override haversine distance calculation
+BRANCH_ALIASES: dict = {
+    "Bulacan": "Malolos City",
+    "Laguna": "Calamba City", 
+    "Pampanga": "San Fernando City",
+    "Pangasinan": "San Carlos",
+    "Cavite": "Batangas",
+    "Rizal": "Quezon City",
 }
 
 
@@ -205,6 +226,7 @@ def compute_nearest_poc_branch(employee_branch: str) -> str:
     Find the nearest POC branch to an employee's location.
     
     If the employee is already at a POC branch, returns that branch.
+    If the branch has a configured alias, uses that POC branch directly.
     Otherwise, finds the nearest POC branch using haversine distance.
     
     Args:
@@ -216,6 +238,12 @@ def compute_nearest_poc_branch(employee_branch: str) -> str:
     # If already at a POC branch, return it
     if employee_branch in POC_BRANCHES:
         return employee_branch
+    
+    # Check for branch alias (e.g., Bulacan → Malolos City)
+    if employee_branch in BRANCH_ALIASES:
+        alias_poc = BRANCH_ALIASES[employee_branch]
+        logger.info(f"Branch '{employee_branch}' aliased to POC '{alias_poc}'")
+        return alias_poc
     
     # Get employee's coordinates
     emp_coords = get_branch_coords(employee_branch)

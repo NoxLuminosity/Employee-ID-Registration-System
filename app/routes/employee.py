@@ -360,18 +360,92 @@ async def submit_employee(
             content={"success": False, "error": "Authentication required. Please sign in with Lark."}
         )
     
+    # ========================================
+    # QA-GRADE BACKEND VALIDATION
+    # ========================================
+    from app.validators import (
+        validate_employee_form,
+        validate_id_number,
+        check_id_number_unique,
+    )
+    from app.database import get_employee_by_id_number
+    
+    # Build validation data dictionary
+    validation_data = {
+        'first_name': first_name,
+        'middle_initial': middle_initial,
+        'last_name': last_name,
+        'suffix': suffix,
+        'suffix_custom': suffix_custom,
+        'id_number': id_number,
+        'position': position,
+        'field_officer_type': field_officer_type,
+        'location_branch': location_branch,
+        'email': email,
+        'personal_number': personal_number,
+        'emergency_name': emergency_name,
+        'emergency_contact': emergency_contact,
+        'emergency_address': emergency_address,
+    }
+    
+    # Run comprehensive validation
+    is_valid, errors, cleaned_data = validate_employee_form(validation_data)
+    
+    if not is_valid:
+        # Return all validation errors
+        logger.warning(f"Form validation failed: {errors}")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": "Validation failed",
+                "validation_errors": errors,
+                "detail": "; ".join([f"{field}: {msg}" for field, msg in errors.items()])
+            }
+        )
+    
+    # Check ID number uniqueness
+    existing_employee = get_employee_by_id_number(cleaned_data['id_number'])
+    if existing_employee:
+        logger.warning(f"Duplicate ID number: {cleaned_data['id_number']}")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": "Duplicate ID number",
+                "validation_errors": {"id_number": f"ID Number '{cleaned_data['id_number']}' is already registered"},
+                "detail": f"ID Number '{cleaned_data['id_number']}' is already registered in the system"
+            }
+        )
+    
+    # Use cleaned/validated data
+    first_name = cleaned_data['first_name']
+    middle_initial = cleaned_data['middle_initial']
+    last_name = cleaned_data['last_name']
+    final_suffix = cleaned_data['suffix']
+    id_number = cleaned_data['id_number']
+    email = cleaned_data['email']
+    personal_number = cleaned_data['personal_number']
+    emergency_name = cleaned_data.get('emergency_name', '')
+    emergency_contact = cleaned_data.get('emergency_contact', '')
+    emergency_address = cleaned_data.get('emergency_address', '')
+    
+    logger.info(f"Backend validation passed for ID: {id_number}")
+    # ========================================
+    # END BACKEND VALIDATION
+    # ========================================
+    
     # Construct full employee_name from parts for backward compatibility
     employee_name_parts = [first_name]
     if middle_initial:
-        mi = middle_initial.strip()
+        mi = middle_initial
         if not mi.endswith('.'):
             mi += '.'
         employee_name_parts.append(mi)
     if last_name:
         employee_name_parts.append(last_name)
     
-    # Add suffix (use custom suffix if "Other" was selected)
-    final_suffix = suffix_custom.strip() if suffix == 'Other' and suffix_custom else suffix.strip()
+    # Add validated suffix
     if final_suffix:
         employee_name_parts.append(final_suffix)
     

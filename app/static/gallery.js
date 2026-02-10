@@ -654,6 +654,7 @@ function buildFullName(emp) {
 // Generate Regular ID Card HTML (for Freelancer, Intern, Others)
 // Image source rule: Uses AI-generated photo (nobg_photo_url preferred)
 // For Reprocessor Portrait Template: Uses AI photo
+// Expiration rule: Only show for Freelancer and Intern positions
 function generateRegularIDCardHtml(emp) {
   // Use AI-generated photo (nobg_photo_url or new_photo_url) for portrait template
   const idPhotoUrl = emp.nobg_photo_url || emp.new_photo_url || emp.photo_url;
@@ -667,10 +668,20 @@ function generateRegularIDCardHtml(emp) {
     ? `<img src="${emp.signature_url}" alt="Signature" crossorigin="anonymous">`
     : `<span class="id-signature-placeholder">Signature</span>`;
 
-  // Calculate expiration date (2 years from now)
-  const expDate = new Date();
-  expDate.setFullYear(expDate.getFullYear() + 2);
-  const expDateStr = expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // Calculate expiration date (2 years from now) - only for Freelancer/Intern
+  const showExpiration = emp.position === 'Freelancer' || emp.position === 'Intern';
+  let expirationHtml = '';
+  if (showExpiration) {
+    const expDate = new Date();
+    expDate.setFullYear(expDate.getFullYear() + 2);
+    const expDateStr = expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    expirationHtml = `
+        <!-- Expiration Date -->
+        <div class="id-expiration">
+          <span class="id-exp-label">Expiration Date:</span>
+          <span class="id-exp-date">${expDateStr}</span>
+        </div>`;
+  }
 
   // Get nickname or use first name
   const nickname = emp.id_nickname || (emp.first_name || emp.employee_name.split(' ')[0]);
@@ -742,11 +753,7 @@ function generateRegularIDCardHtml(emp) {
           </svg>
         </div>
 
-        <!-- Expiration Date -->
-        <div class="id-expiration">
-          <span class="id-exp-label">Expiration Date:</span>
-          <span class="id-exp-date">${expDateStr}</span>
-        </div>
+        ${expirationHtml}
       </div>
     </div>
   `;

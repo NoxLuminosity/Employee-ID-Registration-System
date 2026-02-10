@@ -97,7 +97,8 @@ const state = {
   isDrawing: false,
   aiGenerationController: null,  // AbortController for AI generation
   aiGenerationComplete: false,   // Track if AI generation has successfully completed
-  aiGenerationInProgress: false  // Track if AI generation is currently in progress
+  aiGenerationInProgress: false, // Track if AI generation is currently in progress
+  isSubmitting: false            // Prevent double-submit
 };
 
 // ============================================
@@ -200,88 +201,497 @@ function initPrefilledFields() {
 }
 
 // ============================================
-// Input Field Character Restrictions
+// QA-Grade Input Validation
 // ============================================
+
+// Validation error display helper
+function showFieldError(fieldId, message) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  
+  field.classList.add('validation-error');
+  field.style.borderColor = '#ef4444';
+  
+  // Remove any existing error message
+  const existingError = field.parentElement.querySelector('.field-error-message');
+  if (existingError) existingError.remove();
+  
+  // Add error message
+  if (message) {
+    const errorEl = document.createElement('span');
+    errorEl.className = 'field-error-message';
+    errorEl.style.cssText = 'color: #ef4444; font-size: 0.75rem; display: block; margin-top: 0.25rem;';
+    errorEl.textContent = message;
+    field.parentElement.appendChild(errorEl);
+  }
+}
+
+function clearFieldError(fieldId) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  
+  field.classList.remove('validation-error');
+  field.style.borderColor = '';
+  
+  // Remove error message
+  const existingError = field.parentElement.querySelector('.field-error-message');
+  if (existingError) existingError.remove();
+}
+
+// Phone number validation: 11 digits, starts with 09, no all-same digits
+function validatePhoneNumber(value, fieldName) {
+  if (!value) return { valid: false, message: `${fieldName} is required` };
+  
+  // Extract digits only
+  const digits = value.replace(/\D/g, '');
+  
+  if (digits.length !== 11) {
+    return { valid: false, message: `${fieldName} must be exactly 11 digits (got ${digits.length})` };
+  }
+  
+  if (!digits.startsWith('09')) {
+    return { valid: false, message: `${fieldName} must start with 09` };
+  }
+  
+  // Check for all identical digits
+  if (new Set(digits).size === 1) {
+    return { valid: false, message: `${fieldName} cannot be all identical digits` };
+  }
+  
+  // Check for common invalid patterns
+  const invalidPatterns = ['09000000000', '09111111111', '09999999999', '09123456789', '09876543210'];
+  if (invalidPatterns.includes(digits)) {
+    return { valid: false, message: `${fieldName} appears to be an invalid test number` };
+  }
+  
+  return { valid: true, message: '', cleaned: digits };
+}
+
+// Name validation: letters, spaces, hyphens, apostrophes only
+function validateName(value, fieldName, minLength = 2, maxLength = 50) {
+  if (!value || !value.trim()) {
+    return { valid: false, message: `${fieldName} is required` };
+  }
+  
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+  
+  // Check for invalid characters
+  if (!/^[A-Za-zÀ-ÿ\s\-'''.]+$/.test(trimmed)) {
+    // Check if contains numbers
+    if (/\d/.test(trimmed)) {
+      return { valid: false, message: `${fieldName} cannot contain numbers` };
+    }
+    return { valid: false, message: `${fieldName} contains invalid characters` };
+  }
+  
+  if (trimmed.length < minLength) {
+    return { valid: false, message: `${fieldName} must be at least ${minLength} characters` };
+  }
+  
+  if (trimmed.length > maxLength) {
+    return { valid: false, message: `${fieldName} cannot exceed ${maxLength} characters` };
+  }
+  
+  return { valid: true, message: '', cleaned: trimmed };
+}
+
+// Email validation
+function validateEmail(value) {
+  if (!value || !value.trim()) {
+    return { valid: false, message: 'Email is required' };
+  }
+  
+  const trimmed = value.trim().toLowerCase();
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  
+  if (!emailRegex.test(trimmed)) {
+    return { valid: false, message: 'Please enter a valid email address' };
+  }
+  
+  // Check for common typos
+  const typos = {
+    '@gmial.com': '@gmail.com',
+    '@gmal.com': '@gmail.com',
+    '@gmail.con': '@gmail.com',
+    '@yahooo.com': '@yahoo.com'
+  };
+  
+  for (const [typo, correct] of Object.entries(typos)) {
+    if (trimmed.endsWith(typo)) {
+      return { valid: false, message: `Did you mean ${trimmed.replace(typo, correct)}?` };
+    }
+  }
+  
+  return { valid: true, message: '', cleaned: trimmed };
+}
+
 function initInputValidation() {
-  // Contact Number fields - digits only (and + for country code)
-  const phoneFields = ['personal_number', 'emergency_contact'];
-  phoneFields.forEach(fieldId => {
-    const field = document.getElementById(fieldId);
-    if (field) {
-      field.addEventListener('input', function(e) {
-        // Allow digits, +, spaces, and hyphens for phone formatting
-        this.value = this.value.replace(/[^0-9+\-\s]/g, '');
-      });
-      field.addEventListener('paste', function(e) {
-        e.preventDefault();
-        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-        const cleanedText = pastedText.replace(/[^0-9+\-\s]/g, '');
-        document.execCommand('insertText', false, cleanedText);
-      });
-    }
-  });
-
-  // Contact Name fields - alphanumeric + spaces only
-  const nameFields = ['first_name', 'last_name', 'emergency_name', 'suffix_custom'];
-  nameFields.forEach(fieldId => {
-    const field = document.getElementById(fieldId);
-    if (field) {
-      field.addEventListener('input', function(e) {
-        // Allow letters, numbers, spaces, and common name characters (hyphen, apostrophe, period)
-        this.value = this.value.replace(/[^a-zA-Z0-9\s\-'.]/g, '');
-      });
-      field.addEventListener('paste', function(e) {
-        e.preventDefault();
-        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-        const cleanedText = pastedText.replace(/[^a-zA-Z0-9\s\-'.]/g, '');
-        document.execCommand('insertText', false, cleanedText);
-      });
-    }
-  });
-
-  // Middle Initial - single letter only
-  const middleInitialField = document.getElementById('middle_initial');
-  if (middleInitialField) {
-    middleInitialField.addEventListener('input', function(e) {
-      // Allow only letters and period
-      this.value = this.value.replace(/[^a-zA-Z.]/g, '').substring(0, 2);
+  // ========================================
+  // Phone Number Fields - Strict 11-digit, starts with 09
+  // ========================================
+  const phoneFields = [
+    { id: 'personal_number', name: 'Personal Number', required: true },
+    { id: 'emergency_contact', name: 'Emergency Contact', required: false }
+  ];
+  
+  phoneFields.forEach(({ id, name, required }) => {
+    const field = document.getElementById(id);
+    if (!field) return;
+    
+    // Real-time: digits only input restriction
+    field.addEventListener('input', function(e) {
+      // Remove all non-digit characters while typing
+      const digits = this.value.replace(/\D/g, '');
+      this.value = digits;
+      
+      // Real-time length feedback
+      if (digits.length > 0 && digits.length !== 11) {
+        this.style.borderColor = '#f59e0b'; // Warning orange
+      } else if (digits.length === 11) {
+        const result = validatePhoneNumber(digits, name);
+        if (result.valid) {
+          clearFieldError(id);
+          this.style.borderColor = '#10b981'; // Success green
+        } else {
+          showFieldError(id, result.message);
+        }
+      }
     });
-    middleInitialField.addEventListener('paste', function(e) {
-      e.preventDefault();
-      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-      const cleanedText = pastedText.replace(/[^a-zA-Z.]/g, '').substring(0, 2);
-      document.execCommand('insertText', false, cleanedText);
-    });
-  }
-
-  // ID Number / Employee Number - alphanumeric and hyphens only
-  const idNumberField = document.getElementById('id_number');
-  if (idNumberField) {
-    idNumberField.addEventListener('input', function(e) {
-      // Allow letters, numbers, and hyphens (common in employee IDs like EMP-001)
-      this.value = this.value.replace(/[^a-zA-Z0-9\-]/g, '');
-    });
-    idNumberField.addEventListener('paste', function(e) {
-      e.preventDefault();
-      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-      const cleanedText = pastedText.replace(/[^a-zA-Z0-9\-]/g, '');
-      document.execCommand('insertText', false, cleanedText);
-    });
-  }
-
-  // Email - validate format on blur
-  const emailField = document.getElementById('email');
-  if (emailField) {
-    emailField.addEventListener('blur', function(e) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (this.value && !emailRegex.test(this.value)) {
-        this.style.borderColor = 'var(--color-danger)';
-        showMessage('Please enter a valid email address.', 'error');
+    
+    // On blur: full validation
+    field.addEventListener('blur', function(e) {
+      if (!this.value && !required) {
+        clearFieldError(id);
+        return;
+      }
+      
+      const result = validatePhoneNumber(this.value, name);
+      if (!result.valid) {
+        showFieldError(id, result.message);
       } else {
+        clearFieldError(id);
         this.style.borderColor = '';
       }
     });
+    
+    // Block paste of non-digits
+    field.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+      const digits = pastedText.replace(/\D/g, '');
+      document.execCommand('insertText', false, digits);
+    });
+  });
+
+  // ========================================
+  // Name Fields - Letters, spaces, hyphens, apostrophes only
+  // ========================================
+  const nameFields = [
+    { id: 'first_name', name: 'First Name', minLength: 2, maxLength: 50 },
+    { id: 'last_name', name: 'Last Name', minLength: 2, maxLength: 50 },
+    { id: 'emergency_name', name: 'Emergency Contact Name', minLength: 2, maxLength: 100 },
+    { id: 'suffix_custom', name: 'Custom Suffix', minLength: 1, maxLength: 10 }
+  ];
+  
+  nameFields.forEach(({ id, name, minLength, maxLength }) => {
+    const field = document.getElementById(id);
+    if (!field) return;
+    
+    field.addEventListener('input', function(e) {
+      // Allow letters, spaces, hyphens, apostrophes, periods
+      this.value = this.value.replace(/[^a-zA-ZÀ-ÿ\s\-'''.]/g, '');
+      // Collapse multiple spaces
+      this.value = this.value.replace(/\s+/g, ' ');
+    });
+    
+    field.addEventListener('blur', function(e) {
+      if (!this.value.trim()) {
+        if (id !== 'emergency_name' && id !== 'suffix_custom') {
+          showFieldError(id, `${name} is required`);
+        }
+        return;
+      }
+      
+      const result = validateName(this.value, name, minLength, maxLength);
+      if (!result.valid) {
+        showFieldError(id, result.message);
+      } else {
+        clearFieldError(id);
+      }
+    });
+    
+    field.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+      const cleaned = pastedText.replace(/[^a-zA-ZÀ-ÿ\s\-'''.]/g, '').replace(/\s+/g, ' ');
+      document.execCommand('insertText', false, cleaned);
+    });
+  });
+
+  // ========================================
+  // Middle Initial - Single letter only
+  // ========================================
+  const middleInitialField = document.getElementById('middle_initial');
+  if (middleInitialField) {
+    middleInitialField.addEventListener('input', function(e) {
+      // Allow only letters and one period
+      let value = this.value.replace(/[^a-zA-Z.]/g, '');
+      // Limit to 2 characters (letter + optional period)
+      value = value.substring(0, 2);
+      this.value = value.toUpperCase();
+    });
+    
+    middleInitialField.addEventListener('blur', function(e) {
+      let value = this.value.trim();
+      // Remove trailing period (system adds it)
+      value = value.replace(/\.$/, '');
+      if (value.length > 1) {
+        value = value[0];
+      }
+      this.value = value.toUpperCase();
+      clearFieldError('middle_initial');
+    });
+    
+    middleInitialField.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+      const letter = pastedText.replace(/[^a-zA-Z]/g, '')[0] || '';
+      document.execCommand('insertText', false, letter.toUpperCase());
+    });
   }
+
+  // ========================================
+  // ID Number - Alphanumeric and hyphens, uppercase
+  // ========================================
+  const idNumberField = document.getElementById('id_number');
+  if (idNumberField) {
+    idNumberField.addEventListener('input', function(e) {
+      // Allow letters, numbers, and hyphens only
+      this.value = this.value.replace(/[^a-zA-Z0-9\-]/g, '').toUpperCase();
+    });
+    
+    idNumberField.addEventListener('blur', function(e) {
+      const value = this.value.trim();
+      if (!value) {
+        showFieldError('id_number', 'ID Number is required');
+        return;
+      }
+      if (value.length < 3) {
+        showFieldError('id_number', 'ID Number must be at least 3 characters');
+        return;
+      }
+      clearFieldError('id_number');
+    });
+    
+    idNumberField.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+      const cleaned = pastedText.replace(/[^a-zA-Z0-9\-]/g, '').toUpperCase();
+      document.execCommand('insertText', false, cleaned);
+    });
+  }
+
+  // ========================================
+  // Email - Validate format, auto-lowercase
+  // ========================================
+  const emailField = document.getElementById('email');
+  if (emailField) {
+    emailField.addEventListener('input', function(e) {
+      // Remove spaces while typing
+      this.value = this.value.replace(/\s/g, '');
+    });
+    
+    emailField.addEventListener('blur', function(e) {
+      const result = validateEmail(this.value);
+      if (!result.valid) {
+        showFieldError('email', result.message);
+      } else {
+        clearFieldError('email');
+        // Auto-lowercase
+        this.value = result.cleaned;
+      }
+    });
+    
+    emailField.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+      const cleaned = pastedText.trim().replace(/\s/g, '').toLowerCase();
+      document.execCommand('insertText', false, cleaned);
+    });
+  }
+  
+  // ========================================
+  // Emergency Address - Min length, block placeholders
+  // ========================================
+  const emergencyAddress = document.getElementById('emergency_address');
+  if (emergencyAddress) {
+    emergencyAddress.addEventListener('blur', function(e) {
+      const value = this.value.trim();
+      if (!value) return; // Optional field
+      
+      const placeholders = ['na', 'n/a', '-', '.', 'none', 'nil', 'x', 'xx', 'xxx'];
+      if (placeholders.includes(value.toLowerCase())) {
+        showFieldError('emergency_address', 'Please enter a valid address or leave empty');
+        return;
+      }
+      
+      if (value.length < 10) {
+        showFieldError('emergency_address', 'Address must be at least 10 characters');
+        return;
+      }
+      
+      clearFieldError('emergency_address');
+    });
+  }
+}
+
+// ============================================
+// Comprehensive Form Validation Before Submit
+// ============================================
+function validateFormBeforeSubmit() {
+  const errors = [];
+  
+  // --- Phone Number Validation ---
+  const personalNumber = document.getElementById('personal_number');
+  if (personalNumber) {
+    const result = validatePhoneNumber(personalNumber.value, 'Personal Number');
+    if (!result.valid) {
+      errors.push(result.message);
+      showFieldError('personal_number', result.message);
+    }
+  }
+  
+  const emergencyContact = document.getElementById('emergency_contact');
+  if (emergencyContact && emergencyContact.value.trim()) {
+    const result = validatePhoneNumber(emergencyContact.value, 'Emergency Contact');
+    if (!result.valid) {
+      errors.push(result.message);
+      showFieldError('emergency_contact', result.message);
+    }
+  }
+  
+  // --- Name Validation ---
+  const firstName = document.getElementById('first_name');
+  if (firstName) {
+    const result = validateName(firstName.value, 'First Name', 2, 50);
+    if (!result.valid) {
+      errors.push(result.message);
+      showFieldError('first_name', result.message);
+    }
+  }
+  
+  const lastName = document.getElementById('last_name');
+  if (lastName) {
+    const result = validateName(lastName.value, 'Last Name', 2, 50);
+    if (!result.valid) {
+      errors.push(result.message);
+      showFieldError('last_name', result.message);
+    }
+  }
+  
+  // --- ID Number Validation ---
+  const idNumber = document.getElementById('id_number');
+  if (idNumber) {
+    const value = idNumber.value.trim();
+    if (!value) {
+      errors.push('ID Number is required');
+      showFieldError('id_number', 'ID Number is required');
+    } else if (!/^[A-Za-z0-9\-]+$/.test(value)) {
+      errors.push('ID Number can only contain letters, numbers, and hyphens');
+      showFieldError('id_number', 'ID Number can only contain letters, numbers, and hyphens');
+    } else if (value.length < 3) {
+      errors.push('ID Number must be at least 3 characters');
+      showFieldError('id_number', 'ID Number must be at least 3 characters');
+    }
+  }
+  
+  // --- Email Validation ---
+  const emailField = document.getElementById('email');
+  if (emailField) {
+    const result = validateEmail(emailField.value);
+    if (!result.valid) {
+      errors.push(result.message);
+      showFieldError('email', result.message);
+    }
+  }
+  
+  // --- Required Dropdown Validation ---
+  const position = document.getElementById('position');
+  if (position && (!position.value || position.value === '')) {
+    errors.push('Please select a Position');
+    position.style.borderColor = '#ef4444';
+  }
+  
+  const department = document.getElementById('department');
+  if (department && (!department.value || department.value === '')) {
+    errors.push('Please select a Department');
+    department.style.borderColor = '#ef4444';
+  }
+  
+  const branchField = document.getElementById('branch') || document.getElementById('branch_search');
+  if (branchField) {
+    const branchValue = document.getElementById('branch')?.value || '';
+    if (!branchValue) {
+      errors.push('Please select a Branch');
+      branchField.style.borderColor = '#ef4444';
+    }
+  }
+  
+  // --- Date Validation ---
+  const hireDateField = document.getElementById('hire_date');
+  if (hireDateField && hireDateField.value) {
+    const hireDate = new Date(hireDateField.value);
+    const today = new Date();
+    const oneYearAgo = new Date(today);
+    oneYearAgo.setFullYear(today.getFullYear() - 1);
+    
+    if (hireDate > today) {
+      errors.push('Hire date cannot be in the future');
+      showFieldError('hire_date', 'Hire date cannot be in the future');
+    }
+    if (hireDate < oneYearAgo) {
+      errors.push('Hire date cannot be more than 1 year in the past');
+      showFieldError('hire_date', 'Hire date cannot be more than 1 year in the past');
+    }
+  }
+  
+  const birthdateField = document.getElementById('birthdate');
+  if (birthdateField && birthdateField.value) {
+    const birthdate = new Date(birthdateField.value);
+    const today = new Date();
+    
+    // Calculate age
+    let age = today.getFullYear() - birthdate.getFullYear();
+    const monthDiff = today.getMonth() - birthdate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthdate.getDate())) {
+      age--;
+    }
+    
+    if (age < 18) {
+      errors.push('Employee must be at least 18 years old');
+      showFieldError('birthdate', 'Employee must be at least 18 years old');
+    }
+    if (age > 100) {
+      errors.push('Please verify birthdate - age exceeds 100 years');
+      showFieldError('birthdate', 'Please verify birthdate');
+    }
+  }
+  
+  // --- Address Length Validation ---
+  const emergencyAddress = document.getElementById('emergency_address');
+  if (emergencyAddress && emergencyAddress.value.trim()) {
+    const value = emergencyAddress.value.trim();
+    const placeholders = ['na', 'n/a', '-', '.', 'none', 'nil', 'x', 'xx', 'xxx'];
+    if (placeholders.includes(value.toLowerCase())) {
+      errors.push('Please enter a valid emergency address or leave empty');
+      showFieldError('emergency_address', 'Please enter a valid address or leave empty');
+    } else if (value.length < 10) {
+      errors.push('Emergency address must be at least 10 characters');
+      showFieldError('emergency_address', 'Address must be at least 10 characters');
+    }
+  }
+  
+  return errors;
 }
 
 // ============================================
@@ -1961,6 +2371,12 @@ function initFormSubmission() {
   elements.form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
+    // Prevent double-submit
+    if (state.isSubmitting) {
+      showMessage('Submission in progress. Please wait...', 'info');
+      return;
+    }
+
     // Check if AI generation is in progress or failed (photo uploaded but not generated)
     const photoInput = elements.photoInput;
     const hasPhoto = photoInput && photoInput.files && photoInput.files.length > 0;
@@ -2041,15 +2457,14 @@ function initFormSubmission() {
       return;
     }
 
-    // Validate email format
-    const emailField = document.getElementById('email');
-    if (emailField && emailField.value) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(emailField.value)) {
-        showMessage('Please enter a valid email address.', 'error');
-        emailField.style.borderColor = 'var(--color-danger)';
-        return;
-      }
+    // ========================================
+    // QA-Grade Form Validation (mirror backend rules)
+    // ========================================
+    const formValidationErrors = validateFormBeforeSubmit();
+    if (formValidationErrors.length > 0) {
+      // Show first error and highlight all fields
+      showMessage(formValidationErrors[0], 'error');
+      return;
     }
 
     // Validate signature
@@ -2063,6 +2478,7 @@ function initFormSubmission() {
     }
 
     // Disable submit button and show loading
+    state.isSubmitting = true;
     elements.btnSubmit.disabled = true;
     elements.btnSubmit.classList.add('loading');
     elements.btnSubmit.textContent = 'Submitting...';
@@ -2123,6 +2539,7 @@ function initFormSubmission() {
       showMessage(`Error: ${error.message}. Please try again.`, 'error');
 
       // Re-enable submit button
+      state.isSubmitting = false;
       elements.btnSubmit.disabled = false;
       elements.btnSubmit.classList.remove('loading');
       elements.btnSubmit.textContent = 'Submit';

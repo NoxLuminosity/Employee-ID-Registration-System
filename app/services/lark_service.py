@@ -45,6 +45,7 @@ LARK_TOKEN_URL = "https://open.larksuite.com/open-apis/auth/v3/tenant_access_tok
 LARK_BITABLE_BASE_URL = "https://open.larksuite.com/open-apis/bitable/v1/apps"
 LARK_BITABLE_RECORD_URL = f"{LARK_BITABLE_BASE_URL}/{{app_token}}/tables/{{table_id}}/records"
 LARK_DRIVE_UPLOAD_URL = "https://open.larksuite.com/open-apis/drive/v1/files/upload_all"
+LARK_IM_FILES_URL = "https://open.larksuite.com/open-apis/im/v1/files"
 
 # Cache for access token
 _cached_token: Optional[str] = None
@@ -315,6 +316,192 @@ def build_attachment_field(file_token: Optional[str]) -> Optional[List[Dict[str,
         return None
     
     return [{"file_token": file_token}]
+
+
+def upload_file_to_lark_im(file_bytes: bytes, filename: str, file_type: str = "pdf") -> Optional[str]:
+    """
+    Upload file to Lark IM for message attachments.
+    
+    Args:
+        file_bytes: File content as bytes
+        filename: Name of the file
+        file_type: Type of file - 'opus', 'mp4', 'pdf', 'doc', 'xls', 'ppt', 'stream'
+    
+    Returns:
+        file_key string for use in file messages, or None on failure
+    """
+    token = get_tenant_access_token()
+    if not token:
+        logger.error("upload_file_to_lark_im: Failed to get access token")
+        return None
+    
+    try:
+        import io
+        
+        file_size = len(file_bytes)
+        logger.info(f"Uploading {filename} ({file_size} bytes) to Lark IM...")
+        
+        # Build multipart form data
+        boundary = "----WebKitFormBoundary" + "".join(
+            [chr(ord('a') + i % 26) for i in range(16)]
+        )
+        
+        body_parts = []
+        
+        # Add file_type field
+        body_parts.append(f'--{boundary}'.encode())
+        body_parts.append(b'Content-Disposition: form-data; name="file_type"')
+        body_parts.append(b'')
+        body_parts.append(file_type.encode())
+        
+        # Add file_name field  
+        body_parts.append(f'--{boundary}'.encode())
+        body_parts.append(b'Content-Disposition: form-data; name="file_name"')
+        body_parts.append(b'')
+        body_parts.append(filename.encode())
+        
+        # Add file field
+        body_parts.append(f'--{boundary}'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode())
+        body_parts.append(b'Content-Type: application/octet-stream')
+        body_parts.append(b'')
+        body_parts.append(file_bytes)
+        
+        body_parts.append(f'--{boundary}--'.encode())
+        
+        body = b'\r\n'.join(body_parts)
+        
+        req = urllib.request.Request(
+            LARK_IM_FILES_URL,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": f"multipart/form-data; boundary={boundary}"
+            },
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=60) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        
+        if data.get("code") != 0:
+            logger.error(f"Lark IM file upload error: {data.get('msg')}")
+            return None
+        
+        file_key = data.get("data", {}).get("file_key")
+        if file_key:
+            logger.info(f"Lark IM file upload successful: file_key={file_key[:20]}...")
+            return file_key
+        else:
+            logger.error("Lark IM upload response missing file_key")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Failed to upload to Lark IM: {str(e)}")
+        return None
+
+
+def upload_url_to_lark_im(url: str, filename: str, file_type: str = "pdf") -> Optional[str]:
+    """
+    Download file from URL and upload to Lark IM for message attachments.
+    
+    Args:
+        url: Source URL (e.g., Cloudinary PDF URL)
+        filename: Filename for the attachment
+        file_type: Type of file - 'opus', 'mp4', 'pdf', 'doc', 'xls', 'ppt', 'stream'
+    
+    Returns:
+        file_key string for use in file messages, or None on failure
+    """
+    if not url:
+        return None
+    
+    # Download from source URL
+    file_bytes = download_file_from_url(url)
+    if not file_bytes:
+        return None
+    
+    # Upload to Lark IM
+    return upload_file_to_lark_im(file_bytes, filename, file_type)
+
+
+def send_lark_file_message(
+    recipient_id: str, 
+    file_key: str, 
+    token: Optional[str] = None, 
+    id_type: str = "open_id"
+) -> bool:
+    """
+    Send a file message to a Lark user.
+    
+    Args:
+        recipient_id: Lark user's open_id or email
+        file_key: File key from upload_file_to_lark_im
+        token: Optional access token (will fetch if not provided)
+        id_type: Type of recipient ID - "open_id" or "email"
+    
+    Returns:
+        True if message sent successfully, False otherwise
+    """
+    if not recipient_id or not file_key:
+        logger.error("send_lark_file_message: Missing recipient_id or file_key")
+        return False
+    
+    if token is None:
+        token = get_tenant_access_token()
+    
+    if not token:
+        logger.error("send_lark_file_message: Failed to get access token")
+        return False
+    
+    try:
+        logger.info(f"Sending Lark file message to user ({id_type}): {recipient_id[:30]}...")
+        
+        url = f"{LARK_IM_MESSAGE_URL}?receive_id_type={id_type}"
+        
+        # File message format for Lark IM
+        content = json.dumps({"file_key": file_key})
+        
+        payload = json.dumps({
+            "receive_id": recipient_id,
+            "msg_type": "file",
+            "content": content
+        }).encode('utf-8')
+        
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        
+        logger.info(f"Lark file message response: code={data.get('code')}, msg={data.get('msg')}")
+        
+        if data.get("code") != 0:
+            logger.error(f"Lark file message error: {data.get('msg')}")
+            return False
+        
+        message_id = data.get("data", {}).get("message_id", "unknown")
+        logger.info(f"✅ Lark file message sent successfully (message_id: {message_id[:15]}...)")
+        return True
+        
+    except urllib.error.HTTPError as e:
+        error_body = ""
+        try:
+            error_body = e.read().decode('utf-8')
+        except:
+            pass
+        logger.error(f"HTTP error sending Lark file message: {e.code} - {e.reason} - {error_body}")
+        return False
+    except Exception as e:
+        logger.error(f"Error sending Lark file message: {e}")
+        return False
 
 
 def build_attachment_from_url(url: str, filename: str = None) -> Optional[List[Dict[str, str]]]:
@@ -1398,13 +1585,42 @@ def send_to_poc(
     
     # Send the message (use email as id_type if no open_id was found)
     id_type = "email" if use_email else "open_id"
-    if send_lark_dm(recipient_for_send, message_text, token=token, id_type=id_type):
-        logger.info(f"  ✅ Message sent to {recipient_label}")
+    text_sent = send_lark_dm(recipient_for_send, message_text, token=token, id_type=id_type)
+    
+    # Also send PDF as attachment if available
+    pdf_sent = False
+    if pdf_url:
+        logger.info(f"  📎 Attempting to send PDF attachment...")
+        try:
+            # Upload PDF to Lark IM
+            safe_filename = f"ID_Card_{id_number.replace('/', '_').replace(' ', '_')}.pdf"
+            file_key = upload_url_to_lark_im(pdf_url, safe_filename, file_type="pdf")
+            
+            if file_key:
+                # Send file message
+                pdf_sent = send_lark_file_message(
+                    recipient_for_send, 
+                    file_key, 
+                    token=token, 
+                    id_type=id_type
+                )
+                if pdf_sent:
+                    logger.info(f"  ✅ PDF attachment sent to {recipient_label}")
+                else:
+                    logger.warning(f"  ⚠️ Failed to send PDF attachment (message may still succeed)")
+            else:
+                logger.warning(f"  ⚠️ Failed to upload PDF to Lark IM")
+        except Exception as e:
+            logger.warning(f"  ⚠️ Error sending PDF attachment: {e}")
+    
+    if text_sent:
+        logger.info(f"  ✅ Notification sent to {recipient_label}")
         return {
             "success": True,
             "message": f"Sent to {recipient_label}",
             "recipient": target_email,
-            "test_mode": POC_TEST_MODE
+            "test_mode": POC_TEST_MODE,
+            "pdf_attached": pdf_sent
         }
     else:
         error_msg = f"Failed to send Lark message to {target_email}"
