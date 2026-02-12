@@ -346,10 +346,13 @@ function showLoading(show) {
 
 function updateStatusCounts() {
   const employees = dashboardState.employees;
-  const total = employees.length;
-  const reviewing = employees.filter(e => e.status === 'Reviewing').length;
-  const approved = employees.filter(e => e.status === 'Approved').length;
-  const sentToPOC = employees.filter(e => e.status === 'Sent to POC').length;
+  // Exclude Removed from all counts (backend should already exclude them,
+  // but this is a safety net for cached data)
+  const active = employees.filter(e => e.status !== 'Removed');
+  const total = active.length;
+  const reviewing = active.filter(e => e.status === 'Reviewing').length;
+  const approved = active.filter(e => e.status === 'Approved').length;
+  const sentToPOC = active.filter(e => e.status === 'Sent to POC').length;
 
   elements.totalCount.textContent = total;
   elements.reviewingCount.textContent = reviewing;
@@ -359,7 +362,8 @@ function updateStatusCounts() {
 
 function renderEmployeeTable() {
   const employees = dashboardState.filteredEmployees;
-  const total = dashboardState.employees.length;
+  // Use active (non-Removed) count for total display
+  const total = dashboardState.employees.filter(e => e.status !== 'Removed').length;
 
   // Update count
   elements.tableCount.textContent = `${employees.length} of ${total} employees`;
@@ -520,12 +524,15 @@ async function removeEmployee(id) {
     const data = await response.json();
 
     if (data.success) {
-      // Update status to Removed instead of deleting from array
-      if (emp) {
-        emp.status = 'Removed';
-      }
+      // Remove the employee from the local arrays entirely
+      // (backend no longer returns Removed records)
+      dashboardState.employees = dashboardState.employees.filter(e => e.id !== id);
+      dashboardState.filteredEmployees = dashboardState.filteredEmployees.filter(e => e.id !== id);
       
-      // Re-filter to hide Removed employees
+      // Update cache immediately so Removed ID doesn't reappear on refresh
+      saveCachedData(dashboardState.employees);
+      
+      // Re-filter and update counters
       filterEmployees();
       updateStatusCounts();
       showToast(data.message || 'Application marked as Removed', 'success');

@@ -230,11 +230,19 @@ def insert_employee(data: Dict[str, Any]) -> Optional[int]:
             return None
 
 
-def get_all_employees() -> List[Dict[str, Any]]:
-    """Get all employees ordered by date"""
+def get_all_employees(include_removed: bool = False) -> List[Dict[str, Any]]:
+    """Get all employees ordered by date.
+    
+    Args:
+        include_removed: If False (default), excludes employees with status 'Removed'.
+                         Set to True only for audit/history purposes.
+    """
     if USE_SUPABASE:
         try:
-            result = supabase_client.table("employees").select("*").order("date_last_modified", desc=True).execute()
+            query = supabase_client.table("employees").select("*")
+            if not include_removed:
+                query = query.neq("status", "Removed")
+            result = query.order("date_last_modified", desc=True).execute()
             return result.data or []
         except Exception as e:
             logger.error(f"Supabase fetch error: {e}")
@@ -243,7 +251,10 @@ def get_all_employees() -> List[Dict[str, Any]]:
         # SQLite fallback
         conn = get_sqlite_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM employees ORDER BY date_last_modified DESC")
+        if not include_removed:
+            cursor.execute("SELECT * FROM employees WHERE status != 'Removed' ORDER BY date_last_modified DESC")
+        else:
+            cursor.execute("SELECT * FROM employees ORDER BY date_last_modified DESC")
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
@@ -361,11 +372,14 @@ def table_exists() -> bool:
         return result is not None
 
 
-def get_employee_count() -> int:
-    """Get total employee count"""
+def get_employee_count(include_removed: bool = False) -> int:
+    """Get total employee count, excluding Removed by default"""
     if USE_SUPABASE:
         try:
-            result = supabase_client.table("employees").select("id", count="exact").execute()
+            query = supabase_client.table("employees").select("id", count="exact")
+            if not include_removed:
+                query = query.neq("status", "Removed")
+            result = query.execute()
             return result.count or 0
         except Exception as e:
             logger.error(f"Supabase count error: {e}")
@@ -374,18 +388,24 @@ def get_employee_count() -> int:
         # SQLite fallback
         conn = get_sqlite_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) as count FROM employees")
+        if not include_removed:
+            cursor.execute("SELECT COUNT(*) as count FROM employees WHERE status != 'Removed'")
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM employees")
         result = cursor.fetchone()
         conn.close()
         return result[0] if result else 0
 
 
-def get_status_breakdown() -> Dict[str, int]:
-    """Get employee count by status"""
+def get_status_breakdown(include_removed: bool = False) -> Dict[str, int]:
+    """Get employee count by status, excluding Removed by default"""
     if USE_SUPABASE:
         try:
             # Supabase doesn't have GROUP BY in REST API, so we fetch all and count
-            result = supabase_client.table("employees").select("status").execute()
+            query = supabase_client.table("employees").select("status")
+            if not include_removed:
+                query = query.neq("status", "Removed")
+            result = query.execute()
             counts = {}
             for row in result.data or []:
                 status = row.get('status') or 'Reviewing'
@@ -398,7 +418,10 @@ def get_status_breakdown() -> Dict[str, int]:
         # SQLite fallback
         conn = get_sqlite_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT status, COUNT(*) as count FROM employees GROUP BY status")
+        if not include_removed:
+            cursor.execute("SELECT status, COUNT(*) as count FROM employees WHERE status != 'Removed' GROUP BY status")
+        else:
+            cursor.execute("SELECT status, COUNT(*) as count FROM employees GROUP BY status")
         rows = cursor.fetchall()
         conn.close()
         return {row[0] or 'Reviewing': row[1] for row in rows}
