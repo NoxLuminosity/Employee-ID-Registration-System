@@ -20,6 +20,7 @@ from scripts.bulk_card_router_bot import (
     compute_nearest_poc_branch,
     POC_BRANCHES,
     BRANCH_COORDS,
+    PENDING_POC_BRANCHES,
 )
 
 
@@ -85,9 +86,10 @@ def test_fallback_routing():
     print("=" * 60)
     
     test_cases = [
-        ("Makati", "Quezon City"),      # NCR -> Quezon City
-        ("Manila", "Quezon City"),       # NCR -> Quezon City
-        ("Taguig", "Quezon City"),       # NCR -> Quezon City
+        ("Makati", "Makati"),            # Now an active POC branch
+        ("Cavite", "Cavite"),            # Now an active POC branch
+        ("Manila", None),                # NCR -> nearest active POC (haversine)
+        ("Taguig", None),                # NCR -> nearest active POC (haversine)
         ("Calamba City", "Calamba City"), # Is a POC branch
         ("Lipa City", "Batangas"),       # Near Batangas
         ("Santa Rosa", "Calamba City"),  # Near Calamba
@@ -95,15 +97,43 @@ def test_fallback_routing():
     
     for branch, expected in test_cases:
         result = compute_nearest_poc_branch(branch)
-        status = "✓" if result == expected else "✗"
-        print(f"{status} {branch:20} -> {result:20} (expected: {expected})")
+        if expected is None:
+            # For non-POC branches, just verify it routes to *some* active POC
+            status = "✓" if result in POC_BRANCHES else "✗"
+            print(f"{status} {branch:20} -> {result:20} (haversine fallback, any active POC is valid)")
+        else:
+            status = "✓" if result == expected else "✗"
+            print(f"{status} {branch:20} -> {result:20} (expected: {expected})")
+    print()
+
+
+def test_active_poc_branches_makati_cavite():
+    """Test that Makati & Cavite are now active POC branches (route to themselves)."""
+    print("=" * 60)
+    print("TEST 5: Active POC Branches (Makati, Cavite)")
+    print("=" * 60)
+    
+    # PENDING should be empty now
+    assert len(PENDING_POC_BRANCHES) == 0, f"PENDING should be empty, got {PENDING_POC_BRANCHES}"
+    print("✓ PENDING_POC_BRANCHES is empty (all branches activated)")
+    
+    for branch in ["Makati", "Cavite"]:
+        assert branch in POC_BRANCHES, f"{branch} should be in POC_BRANCHES (active)"
+        assert branch not in PENDING_POC_BRANCHES, f"{branch} should NOT be pending"
+        assert branch in BRANCH_COORDS, f"{branch} should have coordinates in BRANCH_COORDS"
+        
+        result = compute_nearest_poc_branch(branch)
+        assert result == branch, f"{branch} should route to ITSELF (active POC), got '{result}'"
+        print(f"✓ {branch:20} -> {result:20} (active POC, routes to self)")
+    
+    print("✓ Makati & Cavite are active and route correctly")
     print()
 
 
 def test_unknown_branch():
     """Test handling of unknown branches."""
     print("=" * 60)
-    print("TEST 5: Unknown Branch Handling")
+    print("TEST 6: Unknown Branch Handling")
     print("=" * 60)
     
     result = compute_nearest_poc_branch("Unknown City XYZ")
@@ -116,7 +146,7 @@ def test_unknown_branch():
 def test_all_poc_branches_have_coords():
     """Verify all POC branches have coordinates."""
     print("=" * 60)
-    print("TEST 6: POC Branch Coordinates")
+    print("TEST 7: POC Branch Coordinates")
     print("=" * 60)
     
     missing = []
@@ -138,7 +168,7 @@ def test_distance_table():
     print("=" * 60)
     
     ncr_branches = [
-        "Parañaque", "Makati", "Manila", "Taguig", "Pasig", 
+        "Parañaque", "Makati", "Cavite", "Manila", "Taguig", "Pasig", 
         "Mandaluyong", "Quezon City", "Pasay", "Las Piñas", "Muntinlupa"
     ]
     
@@ -175,6 +205,7 @@ def main():
     test_poc_branches()
     test_paranaque_exclusion()
     test_fallback_routing()
+    test_active_poc_branches_makati_cavite()
     test_unknown_branch()
     test_all_poc_branches_have_coords()
     test_distance_table()

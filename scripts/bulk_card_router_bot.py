@@ -88,22 +88,28 @@ load_dotenv()
 # List of valid POC branches (branches with printing POCs)
 # NOTE: Parañaque has a real POC but MUST be excluded for now - uses fallback
 POC_BRANCHES: set[str] = {
-    "San Carlos",
-    "Pagadian City",
-    "Zamboanga City",
-    "Malolos City",
-    "San Fernando City",
-    "Cagayan De Oro",
-    "Tagum City",
-    "Davao City",
-    "Cebu City",
-    "Batangas",
-    "General Santos City",
     "Bacolod",
-    "Ilo-Ilo",
-    "Quezon City",
+    "Batangas",
+    "Cagayan De Oro",
     "Calamba City",
+    "Cavite",
+    "Cebu City",
+    "Davao City",
+    "General Santos City",
+    "Ilo-Ilo",
+    "Makati",
+    "Malolos City",
+    "Pagadian City",
+    "Quezon City",
+    "San Carlos",
+    "San Fernando City",
+    "Tagum City",
+    "Zamboanga City",
 }
+
+# Pending POC branches — empty after Makati/Cavite activation (2026-02-11).
+# See also: app/services/poc_routing_service.py (authoritative source)
+PENDING_POC_BRANCHES: set[str] = set()
 
 # Branch coordinates mapping (latitude, longitude)
 # TODO: Verify and update coordinates with actual office locations
@@ -125,6 +131,8 @@ BRANCH_COORDS: dict[str, tuple[float, float]] = {
     "Ilo-Ilo": (10.7202, 122.5621),              # Iloilo City
     "Quezon City": (14.6760, 121.0437),          # NCR
     "Calamba City": (14.2112, 121.1654),         # Laguna
+    "Makati": (14.5547, 121.0244),               # NCR
+    "Cavite": (14.4791, 120.8961),               # Cavite Province
     
     # Non-POC Branches (need fallback to nearest POC)
     "Parañaque": (14.4793, 121.0198),            # Excluded - uses fallback
@@ -203,6 +211,8 @@ POC_LABELS: dict[str, str] = {
     "Ilo-Ilo": "SPM @Maerci del Monte | PIF | ILOILO(MMDD)",
     "Quezon City": "SPM - @Queen Mary Bernaldez (HR QC)",
     "Calamba City": "SPM - @Cherrylyn Albis | PIF | CALAMBA (MCRA)",
+    "Makati": "SPM - Makati POC",
+    "Cavite": "SPM - Cavite POC",
 }
 
 
@@ -395,6 +405,13 @@ def compute_nearest_poc_branch(location_branch: str) -> str:
     if location_branch in POC_BRANCHES and location_branch != "Parañaque":
         logger.debug(f"Branch '{location_branch}' is a POC branch - using as-is")
         return location_branch
+    
+    # Rule 1b: If pending POC branch, log and fall through to haversine
+    if PENDING_POC_BRANCHES and location_branch in PENDING_POC_BRANCHES:
+        logger.warning(
+            f"Branch '{location_branch}' is a PENDING POC (details not yet provided) "
+            f"- falling back to nearest active POC"
+        )
     
     # Rule 2: Need to find nearest POC branch
     if location_branch not in BRANCH_COORDS:

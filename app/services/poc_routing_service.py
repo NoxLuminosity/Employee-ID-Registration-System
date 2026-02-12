@@ -14,24 +14,38 @@ from typing import Optional, Tuple
 logger = logging.getLogger(__name__)
 
 # List of valid POC branches (branches with printing POCs)
+# This is the single authoritative source of truth for all POC branches.
 POC_BRANCHES: set = {
-    "San Carlos",
-    "Pagadian City",
-    "Zamboanga City",
-    "Malolos City",
-    "San Fernando City",
-    "Cagayan De Oro",
-    "Tagum City",
-    "Davao City",
-    "Cebu City",
-    "Batangas",
-    "General Santos City",
     "Bacolod",
-    "Ilo-Ilo",
-    "Quezon City",
+    "Batangas",
+    "Cagayan De Oro",
     "Calamba City",
+    "Cavite",
+    "Cebu City",
+    "Davao City",
+    "General Santos City",
+    "Ilo-Ilo",
+    "Makati",
+    "Malolos City",
+    "Pagadian City",
     "Parañaque",
+    "Quezon City",
+    "San Carlos",
+    "San Fernando City",
+    "Tagum City",
+    "Zamboanga City",
 }
+
+# Pending POC Branches — placeholder for future branches.
+# To add a new pending branch:
+#   1. Add entry here with status/reason/added_date
+#   2. Add coordinates to BRANCH_COORDS
+#   3. When details arrive: add to POC_CONTACTS + POC_BRANCHES, remove from here
+# NOTE: Makati & Cavite were activated on 2026-02-11.
+PENDING_POC_BRANCHES: dict = {}
+
+# All recognized POC branches (active + pending)
+ALL_POC_BRANCHES: set = POC_BRANCHES | set(PENDING_POC_BRANCHES.keys())
 
 # POC Contact Mapping (Branch → Contact Info)
 # Each entry has: name (display), email (for Lark user lookup)
@@ -101,6 +115,14 @@ POC_CONTACTS: dict = {
         "name": "Ira Mackenzie Arahan (HR Employee Relations PITX)",
         "email": "mcknzzz2001@gmail.com",
     },
+    "Cavite": {
+        "name": "Cavite POC",
+        "email": "contadofeangelica@gmail.com",
+    },
+    "Makati": {
+        "name": "Makati POC",
+        "email": "weannbundalan@gmail.com",
+    },
 }
 
 # Branch coordinates mapping (latitude, longitude)
@@ -122,11 +144,13 @@ BRANCH_COORDS: dict = {
     "Quezon City": (14.6760, 121.0437),
     "Calamba City": (14.2112, 121.1654),
     
+    "Makati": (14.5547, 121.0244),       # NCR
+    "Cavite": (14.4791, 120.8961),       # Cavite Province
+    
     # Non-POC Branches (need fallback to nearest POC)
     "Parañaque": (14.4793, 121.0198),
     "Paranaque": (14.4793, 121.0198),  # Alias without ñ
     "Manila": (14.5995, 120.9842),
-    "Makati": (14.5547, 121.0244),
     "Pasig": (14.5764, 121.0851),
     "Taguig": (14.5176, 121.0509),
     "Mandaluyong": (14.5794, 121.0359),
@@ -165,9 +189,11 @@ BRANCH_ALIASES: dict = {
     "Laguna": "Calamba City", 
     "Pampanga": "San Fernando City",
     "Pangasinan": "San Carlos",
-    "Cavite": "Batangas",
     "Rizal": "Quezon City",
-    # Short name aliases (form dropdown uses short names)
+    # City-name aliases
+    "Cavite City": "Cavite",
+    "Makati City": "Makati",
+    # Short name aliases (backward compat for old form submissions)
     "Cebu": "Cebu City",
     "Davao": "Davao City",
     "General Santos": "General Santos City",
@@ -177,6 +203,61 @@ BRANCH_ALIASES: dict = {
     "Tagum": "Tagum City",
     "Zamboanga": "Zamboanga City",
 }
+
+
+def normalize_branch_name(branch: str) -> str:
+    """
+    Normalize a branch name: strip whitespace.
+    Alias resolution is handled separately in compute_nearest_poc_branch.
+
+    Args:
+        branch: Raw branch name
+
+    Returns:
+        Normalized branch name
+    """
+    if not branch:
+        return ""
+    return branch.strip()
+
+
+def is_pending_poc_branch(branch_name: str) -> bool:
+    """
+    Check if a branch is a pending POC branch (recognized but details not yet provided).
+
+    Args:
+        branch_name: Name of the branch
+
+    Returns:
+        True if branch is pending POC, False otherwise
+    """
+    return normalize_branch_name(branch_name) in PENDING_POC_BRANCHES
+
+
+def _log_routing_decision(
+    account_id: str,
+    original_branch: str,
+    resolved_branch: str,
+    poc_used: str,
+    reason: str,
+) -> None:
+    """
+    Log a routing decision with full audit trail.
+
+    Args:
+        account_id: Employee account/ID for tracing
+        original_branch: The branch as submitted
+        resolved_branch: The branch after normalization/alias resolution
+        poc_used: The final POC branch selected
+        reason: Why this POC was selected
+    """
+    logger.info(
+        f"[POC Routing] account={account_id} | "
+        f"original_branch='{original_branch}' | "
+        f"resolved_branch='{resolved_branch}' | "
+        f"poc_used='{poc_used}' | "
+        f"reason={reason}"
+    )
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -230,81 +311,159 @@ def is_valid_poc_branch(branch_name: str) -> bool:
     return branch_name in POC_BRANCHES
 
 
-def compute_nearest_poc_branch(employee_branch: str) -> str:
+def compute_nearest_poc_branch(employee_branch: str, context: Optional[dict] = None) -> str:
     """
-    Find the nearest POC branch to an employee's location.
-    
-    If the employee is already at a POC branch, returns that branch.
-    If the branch has a configured alias, uses that POC branch directly.
-    Otherwise, finds the nearest POC branch using haversine distance.
-    
+    Find the correct POC branch for an employee's location.
+
+    Routing algorithm (deterministic, ordered):
+        1. Normalize branch name (strip whitespace)
+        2. If branch is an active POC branch → return it directly
+        3. Resolve branch aliases (e.g., Bulacan → Malolos City, Cebu → Cebu City)
+           - If alias target is an active POC → return it
+        4. GUARDRAIL: If the resolved name has a POC contact mapping → return it
+           (catches data inconsistencies where POC_CONTACTS has entry but POC_BRANCHES doesn't)
+        5. If branch is a pending POC → log warning, fall back to nearest active
+        6. Compute nearest active POC by haversine distance
+        7. If no coordinates found → default to Quezon City
+
+    Guardrail: If the selected branch (or its alias) has a direct POC
+    contact mapping, routing MUST use that exact mapping. Haversine
+    fallback is ONLY used for branches with no POC mapping at all.
+
     Args:
         employee_branch: The employee's current location/branch
-        
+        context: Optional dict with 'account_id' for audit logging
+
     Returns:
-        Name of the nearest POC branch
+        Name of the nearest active POC branch (guaranteed to have contact info)
     """
-    # If already at a POC branch, return it
-    if employee_branch in POC_BRANCHES:
-        return employee_branch
-    
-    # Check for branch alias (e.g., Bulacan → Malolos City)
-    if employee_branch in BRANCH_ALIASES:
-        alias_poc = BRANCH_ALIASES[employee_branch]
-        logger.info(f"Branch '{employee_branch}' aliased to POC '{alias_poc}'")
-        return alias_poc
-    
-    # Get employee's coordinates
-    emp_coords = get_branch_coords(employee_branch)
-    if not emp_coords:
-        # Unknown branch - default to Quezon City
-        logger.warning(f"Unknown branch '{employee_branch}' - defaulting to Quezon City")
+    ctx = context or {}
+    account_id = ctx.get("account_id", "N/A")
+
+    # Step 1: Normalize
+    normalized = normalize_branch_name(employee_branch)
+    if not normalized:
+        logger.warning(
+            f"[POC Routing] account={account_id} | Empty branch name — defaulting to Quezon City"
+        )
         return "Quezon City"
-    
+
+    # Step 2: Direct match on active POC branches
+    if normalized in POC_BRANCHES:
+        _log_routing_decision(account_id, employee_branch, normalized, normalized, "direct_active_poc")
+        return normalized
+
+    # Step 3: Resolve aliases (e.g., Bulacan → Malolos City, Cebu → Cebu City)
+    resolved = normalized
+    if normalized in BRANCH_ALIASES:
+        resolved = BRANCH_ALIASES[normalized]
+        if resolved in POC_BRANCHES:
+            _log_routing_decision(
+                account_id, employee_branch, resolved, resolved,
+                f"alias:{normalized}->{resolved}"
+            )
+            return resolved
+        # Alias target is not in POC_BRANCHES — continue with resolved name
+        logger.info(
+            f"[POC Routing] account={account_id} | alias '{normalized}' -> '{resolved}' "
+            f"(not in POC_BRANCHES, continuing to fallback)"
+        )
+
+    # Step 4: GUARDRAIL — if resolved name has a POC contact, use it directly
+    # This catches cases where POC_CONTACTS has an entry but POC_BRANCHES
+    # was not updated. Prevents silent misrouting.
+    if resolved in POC_CONTACTS:
+        logger.error(
+            f"[POC Routing] GUARDRAIL TRIGGERED: account={account_id} | "
+            f"branch='{employee_branch}' resolved to '{resolved}' which HAS a POC contact "
+            f"but is NOT in POC_BRANCHES. Data inconsistency! Using POC contact directly."
+        )
+        _log_routing_decision(account_id, employee_branch, resolved, resolved, "guardrail_poc_contact_found")
+        return resolved
+
+    # Step 5: Check if this is a pending POC branch
+    is_pending = resolved in PENDING_POC_BRANCHES
+    if is_pending:
+        pending_info = PENDING_POC_BRANCHES[resolved]
+        logger.warning(
+            f"[POC Routing] account={account_id} | branch='{employee_branch}' | "
+            f"'{resolved}' is a PENDING POC branch: {pending_info['reason']} | "
+            f"Falling back to nearest active POC with valid contact info"
+        )
+
+    # Step 6: Find nearest active POC by haversine distance
+    # Only reaches here for branches with NO POC mapping at all
+    emp_coords = get_branch_coords(resolved) or get_branch_coords(normalized)
+    if not emp_coords:
+        reason = "pending_poc_no_coords_default" if is_pending else "unknown_branch_no_coords_default"
+        logger.warning(
+            f"[POC Routing] account={account_id} | branch='{employee_branch}' | "
+            f"No coordinates found for '{resolved}' — defaulting to Quezon City"
+        )
+        _log_routing_decision(account_id, employee_branch, resolved, "Quezon City", reason)
+        return "Quezon City"
+
     emp_lat, emp_lon = emp_coords
-    
-    # Find nearest POC branch
+
     min_distance = float('inf')
     nearest_poc = "Quezon City"  # Default fallback
-    
+
     for poc_branch in POC_BRANCHES:
         poc_coords = get_branch_coords(poc_branch)
         if not poc_coords:
             continue
-        
+
         poc_lat, poc_lon = poc_coords
         distance = haversine_distance(emp_lat, emp_lon, poc_lat, poc_lon)
-        
+
         if distance < min_distance:
             min_distance = distance
             nearest_poc = poc_branch
-    
-    logger.info(f"Resolved branch '{employee_branch}' -> nearest POC '{nearest_poc}' (distance: {min_distance:.1f} km)")
+
+    # Build reason for audit log
+    if is_pending:
+        reason = f"pending_poc_fallback_to_nearest ({min_distance:.1f} km)"
+    else:
+        reason = f"haversine_nearest ({min_distance:.1f} km)"
+
+    _log_routing_decision(account_id, employee_branch, resolved, nearest_poc, reason)
     return nearest_poc
 
 
 def get_poc_contact(branch: str) -> Optional[dict]:
     """
     Get the POC contact info for a branch.
-    
+
     Args:
         branch: Branch name
-        
+
     Returns:
-        Dict with 'name' and 'email' or None if not found
+        Dict with 'name' and 'email', or None if not found or pending
     """
-    return POC_CONTACTS.get(branch)
+    contact = POC_CONTACTS.get(branch)
+    if contact:
+        return contact
+
+    # Check if this is a pending POC branch
+    if branch in PENDING_POC_BRANCHES:
+        pending_info = PENDING_POC_BRANCHES[branch]
+        logger.warning(
+            f"[POC Contact] Branch '{branch}' is a PENDING POC — "
+            f"no contact info available: {pending_info['reason']}"
+        )
+
+    return None
 
 
 def get_poc_email(branch: str) -> Optional[str]:
     """
     Get the POC email for a branch.
-    
+
     Args:
         branch: Branch name
-        
+
     Returns:
-        POC email address or None if not configured
+        POC email address, or None if not configured or branch is pending
     """
     contact = get_poc_contact(branch)
     if contact:
@@ -315,18 +474,24 @@ def get_poc_email(branch: str) -> Optional[str]:
 def validate_poc_contacts() -> Tuple[list, list]:
     """
     Validate that all POC branches have contact info configured.
-    
+    Also reports pending POC branches.
+
     Returns:
         Tuple of (valid_branches, missing_branches)
+        Note: Pending branches are included in missing_branches with a marker.
     """
     valid = []
     missing = []
-    
+
     for branch in POC_BRANCHES:
-        contact = get_poc_contact(branch)
+        contact = POC_CONTACTS.get(branch)
         if contact and contact.get("email"):
             valid.append(branch)
         else:
             missing.append(branch)
-    
+
+    # Report pending POC branches
+    for branch, info in PENDING_POC_BRANCHES.items():
+        missing.append(f"{branch} (PENDING: {info['reason']})")
+
     return valid, missing

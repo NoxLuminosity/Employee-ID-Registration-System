@@ -613,10 +613,15 @@ def validate_position(position: str, field_officer_type: str = None) -> Tuple[bo
 # ============================================
 
 VALID_BRANCHES = [
-    'Bacolod', 'Batangas', 'Bulacan', 'Cagayan De Oro', 'Cavite', 
-    'Cebu', 'Davao', 'General Santos', 'Iloilo', 'Laguna', 
-    'Makati', 'Pampanga', 'Pangasinan', 'Paranaque', 'Pagadian',
-    'Quezon City', 'Tagum', 'Zamboanga'
+    # Canonical POC branch names (authoritative, alphabetical)
+    'Bacolod', 'Batangas', 'Cagayan De Oro', 'Calamba City', 'Cavite',
+    'Cebu City', 'Davao City', 'General Santos City', 'Ilo-Ilo',
+    'Makati', 'Malolos City', 'Pagadian City', 'Parañaque',
+    'Quezon City', 'San Carlos', 'San Fernando City', 'Tagum City',
+    'Zamboanga City',
+    # Legacy short names (backward compat for existing records)
+    'Bulacan', 'Cebu', 'Davao', 'General Santos', 'Iloilo', 'Laguna',
+    'Pampanga', 'Pangasinan', 'Paranaque', 'Pagadian', 'Tagum', 'Zamboanga',
 ]
 
 def validate_branch(branch: str) -> Tuple[bool, str, str]:
