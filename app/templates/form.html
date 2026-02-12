@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employee ID Registration</title>
   <meta name="description" content="Employee ID Registration System - Submit your details for company ID card">
-  <link rel="stylesheet" href="/static/styles.css?v=21">
+  <link rel="stylesheet" href="/static/styles.css?v=22">
   <style>
     /* User Info Bar Styles */
     .user-info-bar {
@@ -966,6 +966,7 @@
             <div class="id-preview-wrapper">
             <!-- FRONT SIDE -->
             <div class="id-card" id="idCardFront">
+              <div class="id-preview-overlay"></div>
               <!-- Photo Section with Blue Sidebar -->
               <div class="id-card-top">
                 <!-- Blue vertical sidebar -->
@@ -1036,6 +1037,7 @@
 
             <!-- BACK SIDE - New Figma Design -->
             <div class="id-card id-card-back" id="idCardBack" style="display: none;">
+              <div class="id-preview-overlay"></div>
               <!-- Overlay Pattern -->
               <div class="id-back-overlay"></div>
               
@@ -1126,6 +1128,7 @@
 
             <!-- FIELD OFFICE FRONT SIDE - Shown when Field Officer is selected -->
             <div class="id-card-field-office" id="idCardFieldOfficeFront" style="display: none;">
+              <div class="id-preview-overlay"></div>
               <div class="id-field-office-content">
                 <!-- Photo Section with border -->
                 <div class="id-fo-photo-section">
@@ -1176,6 +1179,7 @@
 
             <!-- FIELD OFFICE BACK SIDE - Static image, no edits -->
             <div class="id-card-field-office-back" id="idCardFieldOfficeBack" style="display: none;">
+              <div class="id-preview-overlay"></div>
               <!-- Back side uses 4.png as background - no editable content -->
             </div>
           </div>
@@ -1208,6 +1212,7 @@
                 <div class="id-preview-wrapper dual-preview-wrapper">
                   <!-- Original Template Front (copy of regular ID card) -->
                   <div class="id-card" id="dualOriginalFront">
+                    <div class="id-preview-overlay"></div>
                     <div class="id-card-top">
                       <div class="id-sidebar">
                         <span class="id-nickname-vertical" id="dual_original_nickname">Ian</span>
@@ -1255,6 +1260,7 @@
                   </div>
                   <!-- Original Template Back -->
                   <div class="id-card id-card-back" id="dualOriginalBack" style="display: none;">
+                    <div class="id-preview-overlay"></div>
                     <div class="id-back-overlay"></div>
                     <div class="id-back-header">
                       <div class="id-back-header-content">
@@ -1357,6 +1363,7 @@
                 <div class="id-preview-wrapper dual-preview-wrapper">
                   <!-- Reprocessor Template Front (Field Office style) -->
                   <div class="id-card-field-office" id="dualReprocessorFront">
+                    <div class="id-preview-overlay"></div>
                     <div class="id-field-office-content">
                       <div class="id-fo-photo-section">
                         <div class="id-fo-photo-container">
@@ -1395,6 +1402,7 @@
                   </div>
                   <!-- Reprocessor Template Back -->
                   <div class="id-card-field-office-back" id="dualReprocessorBack" style="display: none;">
+                    <div class="id-preview-overlay"></div>
                     <!-- Back side uses 4.png as background - no editable content -->
                   </div>
                 </div>
