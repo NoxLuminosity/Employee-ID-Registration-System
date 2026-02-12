@@ -280,13 +280,14 @@ def get_employee_by_id(employee_id: int) -> Optional[Dict[str, Any]]:
 
 
 def get_employee_by_id_number(id_number: str) -> Optional[Dict[str, Any]]:
-    """Get a single employee by ID number (for uniqueness check)"""
+    """Get a single employee by ID number (for uniqueness check).
+    Excludes Removed employees so their ID numbers can be re-registered."""
     if not id_number:
         return None
         
     if USE_SUPABASE:
         try:
-            result = supabase_client.table("employees").select("*").eq("id_number", id_number).execute()
+            result = supabase_client.table("employees").select("*").eq("id_number", id_number).neq("status", "Removed").execute()
             if result.data and len(result.data) > 0:
                 return result.data[0]
             return None
@@ -297,7 +298,7 @@ def get_employee_by_id_number(id_number: str) -> Optional[Dict[str, Any]]:
         # SQLite fallback
         conn = get_sqlite_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM employees WHERE id_number = ?", (id_number,))
+        cursor.execute("SELECT * FROM employees WHERE id_number = ? AND status != 'Removed'", (id_number,))
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row else None
