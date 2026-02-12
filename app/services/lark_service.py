@@ -616,7 +616,7 @@ def log_status_transition(id_number: str, old_status: str, new_status: str, sour
 # NOTE: These must match EXACTLY with the dropdown options in Lark Base
 # Order: Reviewing -> Rendered -> Approved -> Sent to POC -> Completed
 # IMPORTANT: "Completed" is used for final completion status after POC delivery
-VALID_STATUS_VALUES = ["Reviewing", "Rendered", "Approved", "Sent to POC", "Completed"]
+VALID_STATUS_VALUES = ["Reviewing", "Rendered", "Approved", "Sent to POC", "Completed", "Removed"]
 
 # Maximum retry attempts for handling race conditions
 MAX_RETRY_ATTEMPTS = 3
