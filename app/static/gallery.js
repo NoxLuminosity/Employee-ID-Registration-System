@@ -609,15 +609,15 @@ function renderGallery() {
 // Template selection source-of-truth:
 // - Freelancer, Intern, Others: Portrait template (512x800)
 // - Field Officer (Others): Landscape Field Office template (512x319)
-// - Field Officer (Reprocessor/Shared): DUAL templates (Portrait + Landscape) - shown in grid as portrait
+// - Field Officer (Repossessor/Shared): DUAL templates (Portrait + Landscape) - shown in grid as portrait
 function generateIDCardHtml(emp) {
-  // Check if this is a Field Officer - Reprocessor/Shared (needs dual templates)
+  // Check if this is a Field Officer - Repossessor/Shared (needs dual templates)
   const isFieldOfficer = emp.position === 'Field Officer';
-  const isReprocessorOrShared = isFieldOfficer && (emp.field_officer_type === 'Reprocessor' || emp.field_officer_type === 'Shared');
+  const isRepossessorOrShared = isFieldOfficer && (emp.field_officer_type === 'Repossessor' || emp.field_officer_type === 'Reprocessor' || emp.field_officer_type === 'Shared');
   
-  // For Reprocessor/Shared: In gallery grid, show portrait template (original) as primary card
+  // For Repossessor/Shared: In gallery grid, show portrait template (original) as primary card
   // The dual preview is shown in modal and PDF will include both
-  if (isReprocessorOrShared) {
+  if (isRepossessorOrShared) {
     return generateRegularIDCardHtml(emp);
   }
   
@@ -672,7 +672,7 @@ function buildFullNameHtml(emp) {
 
 // Generate Regular ID Card HTML (for Freelancer, Intern, Others)
 // Image source rule: Uses AI-generated photo (nobg_photo_url preferred)
-// For Reprocessor Portrait Template: Uses AI photo
+// For Repossessor Portrait Template: Uses AI photo
 // Expiration rule: Only show for Freelancer and Intern positions
 function generateRegularIDCardHtml(emp) {
   // Use AI-generated photo (nobg_photo_url or new_photo_url) for portrait template
@@ -781,7 +781,7 @@ function generateRegularIDCardHtml(emp) {
 // Generate Field Office ID Card HTML (for Field Officers)
 // Image source rule: Uses ORIGINAL uploaded photo (NOT AI-generated)
 // - Field Officer (Others): Uses original photo only
-// - Field Officer (Reprocessor) Landscape Template: Uses original photo
+// - Field Officer (Repossessor) Landscape Template: Uses original photo
 function generateFieldOfficeIDCardHtml(emp) {
   // Use original uploaded photo only (NOT AI photo)
   const idPhotoUrl = emp.photo_url;
@@ -799,7 +799,7 @@ function generateFieldOfficeIDCardHtml(emp) {
   const displayName = buildFullNameHtml(emp);
   
   // Position display - ALWAYS show "LEGAL OFFICER" regardless of field_officer_type
-  // The placeholder label should never change to "REPROCESSOR"
+  // The placeholder label should never change to "REPOSSESSOR"
   const positionDisplay = 'LEGAL OFFICER';
   
   // Field clearance (default to Level 5)
@@ -1025,7 +1025,7 @@ function generateSingleTemplatePreviewHtml(emp, isFieldOfficer) {
   `;
 }
 
-// Generate dual template preview HTML (for Reprocessor - shows both SPMC and Field Office templates)
+// Generate dual template preview HTML (for Repossessor - shows both SPMC and Field Office templates)
 function generateDualTemplatePreviewHtml(emp) {
   return `
     <div class="dual-template-grid gallery-dual-template-grid">
@@ -1064,7 +1064,7 @@ function generateDualTemplatePreviewHtml(emp) {
       <div class="dual-template-card">
         <h3 class="dual-template-title">Field Office ID Card</h3>
         <div class="id-flip-toggle dual-flip-toggle">
-          <button type="button" class="flip-btn active" data-side="front" data-template="reprocessor" onclick="showDualPreviewSide('reprocessor', 'front')">
+          <button type="button" class="flip-btn active" data-side="front" data-template="repossessor" onclick="showDualPreviewSide('repossessor', 'front')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="18" height="18" rx="2"/>
               <circle cx="9" cy="10" r="2"/>
@@ -1072,7 +1072,7 @@ function generateDualTemplatePreviewHtml(emp) {
             </svg>
             Front
           </button>
-          <button type="button" class="flip-btn" data-side="back" data-template="reprocessor" onclick="showDualPreviewSide('reprocessor', 'back')">
+          <button type="button" class="flip-btn" data-side="back" data-template="repossessor" onclick="showDualPreviewSide('repossessor', 'back')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="18" height="18" rx="2"/>
               <path d="M7 7h10v10H7z"/>
@@ -1082,10 +1082,10 @@ function generateDualTemplatePreviewHtml(emp) {
           </button>
         </div>
         <div class="id-preview-wrapper dual-preview-wrapper">
-          <div id="dualReprocessorFront">
+          <div id="dualRepossessorFront">
             ${generateFieldOfficeIDCardHtml(emp)}
           </div>
-          <div id="dualReprocessorBack" style="display: none;">
+          <div id="dualRepossessorBack" style="display: none;">
             ${generateFieldOfficeIDCardBackHtml(emp)}
           </div>
         </div>
@@ -1170,7 +1170,7 @@ function generateEmployeeInfoHtml(emp) {
 
 // Show/hide sides in dual template preview mode (for gallery modal)
 function showDualPreviewSide(template, side) {
-  const templatePrefix = template === 'original' ? 'dualOriginal' : 'dualReprocessor';
+  const templatePrefix = template === 'original' ? 'dualOriginal' : 'dualRepossessor';
   const frontCard = document.getElementById(`${templatePrefix}Front`);
   const backCard = document.getElementById(`${templatePrefix}Back`);
   

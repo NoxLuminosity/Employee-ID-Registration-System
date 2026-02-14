@@ -48,6 +48,11 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS suffix TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS location_branch TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS suffix TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS resolved_printer_branch TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS field_officer_type TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS field_clearance TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS fo_division TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS fo_department TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS fo_campaign TEXT;
 
 -- Ensure status check constraint includes all valid statuses
 -- If the constraint already exists, drop and recreate it

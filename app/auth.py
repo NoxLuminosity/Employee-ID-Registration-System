@@ -292,68 +292,6 @@ def verify_session_optional(hr_session: str = Cookie(None)) -> Optional[str]:
     return session["username"] if session else None
 
 
-def verify_org_access(hr_session: str = Cookie(None)) -> Dict[str, Any]:
-    """
-    Verify HR session AND organization access for HR Portal.
-    
-    Re-validates on EACH REQUEST that the user still belongs to People Support department.
-    This catches org changes during the session.
-    
-    Use with @router.get("/...", dependencies=[Depends(verify_org_access)]) to protect routes.
-    
-    Returns:
-        Session data if authenticated and authorized
-    
-    Raises:
-        HTTPException 401 if not authenticated
-        HTTPException 403 if not authorized (org access denied)
-    """
-    from app.services.lark_auth_service import is_descendant_of_people_support
-    
-    session = get_session(hr_session)
-    
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Please login."
-        )
-    
-    # If password-authenticated user, allow (no org data available)
-    if session.get("auth_type") == "password":
-        logger.info(f"Org access allowed for password-authenticated user: {session.get('username')}")
-        return session
-    
-    # For Lark-authenticated users, re-validate org access
-    if session.get("auth_type") == "lark":
-        open_id = session.get("lark_open_id")
-        
-        if not open_id:
-            logger.warning(f"Lark session missing open_id for user: {session.get('username')}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: Invalid Lark session data"
-            )
-        
-        # Re-validate org access (this calls the cached validation)
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"Org access denied for Lark user {session.get('username')}: {reason}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied. HR Portal access is restricted to People Support department members only."
-            )
-        
-        logger.info(f"Org access re-validated for Lark user: {session.get('username')}")
-        return session
-    
-    logger.warning(f"Org access check: Unknown auth_type for user: {session.get('username')}")
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Access denied: Invalid authentication type"
-    )
-
-
 def authenticate_user(username: str, password: str) -> bool:
     """Authenticate a user with username and password"""
     hr_users = get_hr_users()

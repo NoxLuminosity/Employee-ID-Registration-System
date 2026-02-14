@@ -343,7 +343,7 @@ async def submit_employee(
     emergency_address: Optional[str] = Form(''),  # Emergency contact address
     form_type: Optional[str] = Form('SPMC'),  # Form type: SPMC or SPMA
     # Field Officer specific fields
-    field_officer_type: Optional[str] = Form(''),  # Reprocessor or Others
+    field_officer_type: Optional[str] = Form(''),  # Repossessor, Shared, or Others
     field_clearance: Optional[str] = Form(''),  # Level 5
     fo_division: Optional[str] = Form(''),  # Division dropdown
     fo_department: Optional[str] = Form(''),  # Department dropdown

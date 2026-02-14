@@ -4,6 +4,15 @@
  */
 
 // ============================================
+// Backward Compatibility: Repossessor/Reprocessor
+// ============================================
+// Old DB records may have field_officer_type="Reprocessor"
+// New records use "Repossessor". This helper normalizes both.
+function isRepossessorType(value) {
+  return value === 'Repossessor' || value === 'Reprocessor';
+}
+
+// ============================================
 // Barcode Generation Helper
 // ============================================
 
@@ -801,17 +810,17 @@ function initPositionRadioButtons() {
   const fieldOfficerDetails = document.getElementById('field_officer_details');
   const foTypeRadios = document.querySelectorAll('input[name="field_officer_type"]');
   
-  // Handle Field Officer Type selection (Reprocessor/Shared/Others)
-  // Note: "Shared" behaves exactly the same as "Reprocessor" (dual template mode)
+  // Handle Field Officer Type selection (Repossessor/Shared/Others)
+  // Note: "Shared" behaves exactly the same as "Repossessor" (dual template mode)
   foTypeRadios.forEach(radio => {
     radio.addEventListener('change', () => {
       const selectedType = radio.value;
       
-      // Show details section for Reprocessor or Shared (both use dual template mode)
-      if (selectedType === 'Reprocessor' || selectedType === 'Shared') {
+      // Show details section for Repossessor or Shared (both use dual template mode)
+      if (isRepossessorType(selectedType) || selectedType === 'Shared') {
         if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'block';
         setFieldOfficerFieldsRequired(true);
-        // Show dual template preview for Reprocessor/Shared
+        // Show dual template preview for Repossessor/Shared
         showDualTemplateMode(true);
       } else {
         // Hide for Others or any other value
@@ -835,7 +844,7 @@ function initPositionRadioButtons() {
       // Show/hide Field Officer specific fields
       if (selectedPosition === 'Field Officer') {
         if (fieldOfficerSubtypeGroup) fieldOfficerSubtypeGroup.style.display = 'block';
-        // Don't show details yet - wait for Reprocessor selection
+        // Don't show details yet - wait for Repossessor selection
         if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'none';
         setFieldOfficerFieldsRequired(false);
         // Reset to single template mode until subtype is selected
@@ -875,7 +884,7 @@ function showDualTemplateMode(isDualMode) {
   const dualContainer = document.getElementById('dualTemplateContainer');
   
   if (isDualMode) {
-    // Show dual template container for Reprocessor
+    // Show dual template container for Repossessor
     if (singleContainer) singleContainer.style.display = 'none';
     if (dualContainer) dualContainer.style.display = 'block';
     // Update dual template previews
@@ -889,7 +898,7 @@ function showDualTemplateMode(isDualMode) {
 
 // Show/hide sides in dual template mode
 function showDualCardSide(template, side) {
-  const templatePrefix = template === 'original' ? 'dualOriginal' : 'dualReprocessor';
+  const templatePrefix = template === 'original' ? 'dualOriginal' : 'dualRepossessor';
   const frontCard = document.getElementById(`${templatePrefix}Front`);
   const backCard = document.getElementById(`${templatePrefix}Back`);
   
@@ -925,7 +934,7 @@ window.showDualCardSide = showDualCardSide;
 // Update dual template previews with form data
 // Image source rules:
 // - Original Template (Portrait): Uses AI-generated photo
-// - Reprocessor Template (Landscape): Uses original uploaded photo
+// - Repossessor Template (Landscape): Uses original uploaded photo
 function updateDualTemplatePreview() {
   const dualContainer = document.getElementById('dualTemplateContainer');
   if (!dualContainer || dualContainer.style.display === 'none') return;
@@ -976,7 +985,7 @@ function updateDualTemplatePreview() {
     aiPhotoSrc = aiPreviewImg.src;
   }
   
-  // Original uploaded photo source (for Reprocessor Template - Landscape)
+  // Original uploaded photo source (for Repossessor Template - Landscape)
   let originalPhotoSrc = '';
   if (photoPreviewImg && photoPreviewImg.src && 
       (photoPreviewImg.src.startsWith('data:') || photoPreviewImg.src.startsWith('blob:'))) {
@@ -1134,10 +1143,10 @@ function updateDualTemplatePreview() {
     }
   }
   
-  // === Update Reprocessor Template (uses ORIGINAL uploaded photo, NOT AI) ===
+  // === Update Repossessor Template (uses ORIGINAL uploaded photo, NOT AI) ===
   // Name (with line break) - Include middle initial with dot
-  const reprocessorName = document.getElementById('dual_reprocessor_name');
-  if (reprocessorName) {
+  const repossessorName = document.getElementById('dual_repossessor_name');
+  if (repossessorName) {
     let displayName = '';
     if (firstName && lastName) {
       // Format: FirstName M.<br>LastName Suffix
@@ -1151,54 +1160,54 @@ function updateDualTemplatePreview() {
     } else {
       displayName = 'Name<br>Placeholder';
     }
-    reprocessorName.innerHTML = displayName;
+    repossessorName.innerHTML = displayName;
   }
   
   // Position - ALWAYS show "LEGAL OFFICER" regardless of field_officer_type
-  // The placeholder label should never change to "REPROCESSOR"
-  const reprocessorPosition = document.getElementById('dual_reprocessor_position');
-  if (reprocessorPosition) reprocessorPosition.textContent = 'LEGAL OFFICER';
+  // The placeholder label should never change to "REPOSSESSOR"
+  const repossessorPosition = document.getElementById('dual_repossessor_position');
+  if (repossessorPosition) repossessorPosition.textContent = 'LEGAL OFFICER';
   
   // Clearance
-  const reprocessorClearance = document.getElementById('dual_reprocessor_clearance');
-  if (reprocessorClearance) reprocessorClearance.textContent = 'Level 5';
+  const repossessorClearance = document.getElementById('dual_repossessor_clearance');
+  if (repossessorClearance) repossessorClearance.textContent = 'Level 5';
   
   // ID Number
-  const reprocessorIdNumber = document.getElementById('dual_reprocessor_idnumber');
-  if (reprocessorIdNumber) reprocessorIdNumber.textContent = idNumber || 'ID Number Placeholder';
+  const repossessorIdNumber = document.getElementById('dual_repossessor_idnumber');
+  if (repossessorIdNumber) repossessorIdNumber.textContent = idNumber || 'ID Number Placeholder';
   
-  // Barcode - Reprocessor Template (SPMA card in dual mode)
+  // Barcode - Repossessor Template (SPMA card in dual mode)
   // Container is 180x40, so with width=500 we need height≈111 to maintain aspect ratio and fill the container
-  const reprocessorBarcodeImg = document.getElementById('dual_reprocessor_barcode');
-  const reprocessorBarcodeFallback = document.getElementById('dual_reprocessor_barcode_fallback');
-  updateBarcodeDisplay(idNumber, reprocessorBarcodeImg, reprocessorBarcodeFallback, { width: 500, height: 111 });
+  const repossessorBarcodeImg = document.getElementById('dual_repossessor_barcode');
+  const repossessorBarcodeFallback = document.getElementById('dual_repossessor_barcode_fallback');
+  updateBarcodeDisplay(idNumber, repossessorBarcodeImg, repossessorBarcodeFallback, { width: 500, height: 111 });
   
-  // Photo - Reprocessor Template uses ORIGINAL uploaded photo (NOT AI)
-  const reprocessorPhoto = document.getElementById('dual_reprocessor_photo');
-  const reprocessorPhotoPlaceholder = document.getElementById('dual_reprocessor_photo_placeholder');
-  if (reprocessorPhoto && reprocessorPhotoPlaceholder) {
+  // Photo - Repossessor Template uses ORIGINAL uploaded photo (NOT AI)
+  const repossessorPhoto = document.getElementById('dual_repossessor_photo');
+  const repossessorPhotoPlaceholder = document.getElementById('dual_repossessor_photo_placeholder');
+  if (repossessorPhoto && repossessorPhotoPlaceholder) {
     if (originalPhotoSrc) {
-      reprocessorPhoto.src = originalPhotoSrc;
-      reprocessorPhoto.style.display = 'block';
-      reprocessorPhotoPlaceholder.style.display = 'none';
+      repossessorPhoto.src = originalPhotoSrc;
+      repossessorPhoto.style.display = 'block';
+      repossessorPhotoPlaceholder.style.display = 'none';
     } else {
-      reprocessorPhoto.style.display = 'none';
-      reprocessorPhotoPlaceholder.style.display = 'block';
-      reprocessorPhotoPlaceholder.textContent = 'Original Photo';
+      repossessorPhoto.style.display = 'none';
+      repossessorPhotoPlaceholder.style.display = 'block';
+      repossessorPhotoPlaceholder.textContent = 'Original Photo';
     }
   }
   
   // Signature
-  const reprocessorSignature = document.getElementById('dual_reprocessor_signature');
-  const reprocessorSignaturePlaceholder = document.getElementById('dual_reprocessor_signature_placeholder');
-  if (reprocessorSignature && reprocessorSignaturePlaceholder) {
+  const repossessorSignature = document.getElementById('dual_repossessor_signature');
+  const repossessorSignaturePlaceholder = document.getElementById('dual_repossessor_signature_placeholder');
+  if (repossessorSignature && repossessorSignaturePlaceholder) {
     if (hasSignature) {
-      reprocessorSignature.src = signatureSrc;
-      reprocessorSignature.style.display = 'block';
-      reprocessorSignaturePlaceholder.style.display = 'none';
+      repossessorSignature.src = signatureSrc;
+      repossessorSignature.style.display = 'block';
+      repossessorSignaturePlaceholder.style.display = 'none';
     } else {
-      reprocessorSignature.style.display = 'none';
-      reprocessorSignaturePlaceholder.style.display = 'block';
+      repossessorSignature.style.display = 'none';
+      repossessorSignaturePlaceholder.style.display = 'block';
     }
   }
 }
@@ -2256,7 +2265,7 @@ function updateIdCardPreview() {
     }
   }
   
-  // Also update dual template preview if in Reprocessor mode
+  // Also update dual template preview if in Repossessor mode
   if (typeof updateDualTemplatePreview === 'function') {
     updateDualTemplatePreview();
   }
@@ -2418,13 +2427,13 @@ function initFormSubmission() {
       const foTypeSelected = document.querySelector('input[name="field_officer_type"]:checked');
       if (!foTypeSelected) {
         isValid = false;
-        showMessage('Please select a Field Officer Type (Reprocessor or Others).', 'error');
+        showMessage('Please select a Field Officer Type (Repossessor or Others).', 'error');
         return;
       }
       
-      // Only require Department, Campaign for Reprocessor/Shared types
+      // Only require Department, Campaign for Repossessor/Shared types
       // (Division is hidden from UI — not required from user)
-      if (foTypeSelected.value === 'Reprocessor' || foTypeSelected.value === 'Shared') {
+      if (isRepossessorType(foTypeSelected.value) || foTypeSelected.value === 'Shared') {
         // Check Department - using searchable dropdown (hidden input stores value)
         const foDepartment = document.getElementById('fo_department');
         const foDepartmentSearch = document.getElementById('fo_department_search');

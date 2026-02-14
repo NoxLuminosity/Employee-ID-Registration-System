@@ -253,7 +253,7 @@
   max-width: 500px;
 }
 
-/* Wider modal for dual template preview (Reprocessor) */
+/* Wider modal for dual template preview (Repossessor) */
 .id-preview-modal:has(.gallery-dual-template-grid) {
   max-width: 560px;
 }
@@ -937,7 +937,7 @@
 }
 
 /* ============================================
-   Dual Template Grid for Gallery (Reprocessor)
+   Dual Template Grid for Gallery (Repossessor)
    ============================================ */
 
 /* Gallery dual template uses VERTICAL STACK - no max-height to ensure all visible */
@@ -1111,7 +1111,7 @@
    Dual Template Badge and Card Styling
    ============================================ */
 
-/* Dual template badge for Reprocessor employees */
+/* Dual template badge for Repossessor employees */
 .dual-template-badge {
   display: inline-flex;
   align-items: center;
@@ -1135,8 +1135,8 @@
   flex-wrap: wrap;
 }
 
-/* Reprocessor card styling */
-.id-gallery-card.reprocessor-card {
+/* Repossessor card styling */
+.id-gallery-card.repossessor-card {
   border: 2px solid transparent;
   background: linear-gradient(var(--color-card), var(--color-card)) padding-box,
               linear-gradient(135deg, #7c3aed, #5b21b6) border-box;

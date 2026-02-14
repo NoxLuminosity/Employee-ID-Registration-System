@@ -427,7 +427,7 @@
               <label>Field Officer Type <span class="required">*</span></label>
               <div class="checkbox-group position-options">
                 <label class="checkbox-option">
-                  <input type="radio" id="fo_type_reprocessor" name="field_officer_type" value="Reprocessor">
+                  <input type="radio" id="fo_type_repossessor" name="field_officer_type" value="Repossessor">
                   <span class="checkbox-label">Repossessor</span>
                 </label>
                 <label class="checkbox-option">
@@ -941,7 +941,7 @@
           <h2 class="section-title">ID Card Preview</h2>
           <p class="review-subtitle">Live preview of your ID card. Fill in the form to see changes. (Note: Your Image background will be removed)</p>
           
-          <!-- Single Template Container (for non-Reprocessor) -->
+          <!-- Single Template Container (for non-Repossessor) -->
           <div id="singleTemplateContainer">
             <!-- Flip Toggle Button -->
             <div class="id-flip-toggle">
@@ -1185,7 +1185,7 @@
           </div>
           </div><!-- End of singleTemplateContainer -->
           
-          <!-- Dual Template Container (for Reprocessor - shows both Original and Reprocessor templates side-by-side) -->
+          <!-- Dual Template Container (for Repossessor - shows both Original and Repossessor templates side-by-side) -->
           <div id="dualTemplateContainer" style="display: none;">
             <div class="dual-template-grid">
               <!-- Original Template -->
@@ -1237,7 +1237,7 @@
                         <div class="id-info-left">
                           <h1 class="id-fullname" id="dual_original_fullname">Bonifacio M. Aguinaldo</h1>
                           <div class="id-position-dept">
-                            <span id="dual_original_position">Field Officer - Reprocessor</span>
+                            <span id="dual_original_position">Field Officer - Repossessor</span>
                           </div>
                           <div class="id-barcode-area">
                             <div class="id-barcode-container" id="dual_original_barcode_container">
@@ -1339,11 +1339,11 @@
                 </div>
               </div>
               
-              <!-- Reprocessor Template -->
+              <!-- Repossessor Template -->
               <div class="dual-template-card">
                 <h3 class="dual-template-title">SPMA ID CARD</h3>
                 <div class="id-flip-toggle dual-flip-toggle">
-                  <button type="button" class="flip-btn active" data-side="front" data-template="reprocessor" onclick="showDualCardSide('reprocessor', 'front')">
+                  <button type="button" class="flip-btn active" data-side="front" data-template="repossessor" onclick="showDualCardSide('repossessor', 'front')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <rect x="3" y="3" width="18" height="18" rx="2"/>
                       <circle cx="9" cy="10" r="2"/>
@@ -1351,7 +1351,7 @@
                     </svg>
                     Front
                   </button>
-                  <button type="button" class="flip-btn" data-side="back" data-template="reprocessor" onclick="showDualCardSide('reprocessor', 'back')">
+                  <button type="button" class="flip-btn" data-side="back" data-template="repossessor" onclick="showDualCardSide('repossessor', 'back')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <rect x="3" y="3" width="18" height="18" rx="2"/>
                       <path d="M7 7h10v10H7z"/>
@@ -1361,47 +1361,47 @@
                   </button>
                 </div>
                 <div class="id-preview-wrapper dual-preview-wrapper">
-                  <!-- Reprocessor Template Front (Field Office style) -->
-                  <div class="id-card-field-office" id="dualReprocessorFront">
+                  <!-- Repossessor Template Front (Field Office style) -->
+                  <div class="id-card-field-office" id="dualRepossessorFront">
                     <div class="id-preview-overlay"></div>
                     <div class="id-field-office-content">
                       <div class="id-fo-photo-section">
                         <div class="id-fo-photo-container">
-                          <img id="dual_reprocessor_photo" src="" alt="Employee photo" style="display: none;">
-                          <span class="id-fo-photo-placeholder" id="dual_reprocessor_photo_placeholder">Photo</span>
+                          <img id="dual_repossessor_photo" src="" alt="Employee photo" style="display: none;">
+                          <span class="id-fo-photo-placeholder" id="dual_repossessor_photo_placeholder">Photo</span>
                         </div>
                       </div>
                       <div class="id-fo-signature-section">
                         <div class="id-fo-signature-container">
-                          <img id="dual_reprocessor_signature" src="" alt="Signature" style="display: none;">
-                          <span class="id-fo-signature-placeholder" id="dual_reprocessor_signature_placeholder"></span>
+                          <img id="dual_repossessor_signature" src="" alt="Signature" style="display: none;">
+                          <span class="id-fo-signature-placeholder" id="dual_repossessor_signature_placeholder"></span>
                         </div>
                       </div>
                       <div class="id-fo-name-section">
-                        <h1 class="id-fo-name" id="dual_reprocessor_name">Name<br>Placeholder</h1>
+                        <h1 class="id-fo-name" id="dual_repossessor_name">Name<br>Placeholder</h1>
                       </div>
                       <div class="id-fo-position-section">
-                        <span class="id-fo-position" id="dual_reprocessor_position">REPROCESSOR</span>
+                        <span class="id-fo-position" id="dual_repossessor_position">REPOSSESSOR</span>
                       </div>
                       <div class="id-fo-clearance-section">
                         <span class="id-fo-clearance-label">FIELD CLEARANCE:</span>
-                        <span class="id-fo-clearance-level" id="dual_reprocessor_clearance">Level 5</span>
+                        <span class="id-fo-clearance-level" id="dual_repossessor_clearance">Level 5</span>
                       </div>
                       <!-- Barcode - Above ID Number -->
                       <div class="id-fo-barcode-section">
-                        <div class="id-fo-barcode-container" id="dual_reprocessor_barcode_container">
-                          <img id="dual_reprocessor_barcode" class="id-fo-barcode-image" alt="Barcode" style="display: none;">
-                          <span id="dual_reprocessor_barcode_fallback" class="id-barcode-fallback">Barcode</span>
+                        <div class="id-fo-barcode-container" id="dual_repossessor_barcode_container">
+                          <img id="dual_repossessor_barcode" class="id-fo-barcode-image" alt="Barcode" style="display: none;">
+                          <span id="dual_repossessor_barcode_fallback" class="id-barcode-fallback">Barcode</span>
                         </div>
                       </div>
                       <!-- ID Number - Below Barcode -->
                       <div class="id-fo-idnumber-section">
-                        <span class="id-fo-idnumber" id="dual_reprocessor_idnumber">ID Number Placeholder</span>
+                        <span class="id-fo-idnumber" id="dual_repossessor_idnumber">ID Number Placeholder</span>
                       </div>
                     </div>
                   </div>
-                  <!-- Reprocessor Template Back -->
-                  <div class="id-card-field-office-back" id="dualReprocessorBack" style="display: none;">
+                  <!-- Repossessor Template Back -->
+                  <div class="id-card-field-office-back" id="dualRepossessorBack" style="display: none;">
                     <div class="id-preview-overlay"></div>
                     <!-- Back side uses 4.png as background - no editable content -->
                   </div>

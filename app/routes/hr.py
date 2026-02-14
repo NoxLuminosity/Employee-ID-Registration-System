@@ -4,7 +4,7 @@ Handles HR authentication, dashboard, gallery, and employee management.
 Includes background removal functionality for AI-generated photos.
 Supports both password-based and Lark SSO authentication.
 """
-from fastapi import APIRouter, Request, Depends, Cookie, Query
+from fastapi import APIRouter, Request, Cookie
 from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
 from fastapi.templating import Jinja2Templates
 import os
@@ -34,18 +34,9 @@ from app.services.cloudinary_service import upload_bytes_to_cloudinary
 # Import POC routing service
 from app.services.poc_routing_service import compute_nearest_poc_branch, is_valid_poc_branch
 
-# Import Lark OAuth service
-from app.services.lark_auth_service import (
-    get_authorization_url,
-    complete_oauth_flow,
-    validate_hr_portal_access,
-    LARK_APP_ID
-)
-
 # Import authentication
 from app.auth import (
     verify_session, 
-    verify_org_access,
     authenticate_user, 
     create_session, 
     delete_session,
@@ -138,154 +129,6 @@ def hr_logout(response: Response, hr_session: str = Cookie(None)):
 
 
 # ============================================
-# Lark SSO Authentication Routes
-# ============================================
-
-@router.get("/lark/login")
-def lark_login(request: Request):
-    """
-    Initiate Lark OAuth login flow for HR Portal.
-    Redirects user to Lark authorization page.
-    
-    IMPORTANT: On Vercel, set LARK_HR_REDIRECT_URI environment variable to:
-    https://your-vercel-domain.vercel.app/hr/lark/callback
-    
-    This URL must be registered in Lark Developer Console -> Security Settings -> Redirect URLs
-    """
-    # Check for explicit HR redirect URI first (recommended for Vercel)
-    env_redirect_uri = os.environ.get('LARK_HR_REDIRECT_URI')
-    
-    if env_redirect_uri:
-        # CRITICAL FIX: Strip whitespace to remove trailing newlines from env vars
-        # Vercel dashboard copy/paste can introduce \n which encodes as %0A in URLs
-        # causing Lark OAuth error 20029 (redirect_uri mismatch)
-        redirect_uri = env_redirect_uri.strip()
-        logger.info(f"Using LARK_HR_REDIRECT_URI from environment: {redirect_uri}")
-    else:
-        # Build redirect URI dynamically from request
-        scheme = request.url.scheme
-        host = request.headers.get('host', 'localhost:8000')
-        
-        # Normalize 127.0.0.1 to localhost for Lark compatibility
-        if '127.0.0.1' in host:
-            host = host.replace('127.0.0.1', 'localhost')
-        
-        # Use HTTPS in production (Vercel)
-        if IS_VERCEL:
-            scheme = 'https'
-        
-        redirect_uri = f"{scheme}://{host}/hr/lark/callback"
-        logger.info(f"Built redirect_uri dynamically: {redirect_uri}")
-    
-    logger.info(f"Initiating HR Lark OAuth with redirect_uri: {redirect_uri}")
-    
-    # Get authorization URL
-    auth_url, state = get_authorization_url(redirect_uri)
-    
-    return RedirectResponse(url=auth_url, status_code=302)
-
-
-@router.get("/lark/callback")
-def lark_callback(
-    request: Request,
-    code: str = Query(None),
-    state: str = Query(None),
-    error: str = Query(None),
-    error_description: str = Query(None)
-):
-    """
-    Handle Lark OAuth callback.
-    Exchanges authorization code for tokens and creates session.
-    Validates organization access (only People Support department allowed).
-    """
-    # Handle authorization denial
-    if error:
-        logger.warning(f"Lark OAuth error: {error} - {error_description}")
-        return templates.TemplateResponse("hr_login.html", {
-            "request": request,
-            "error": f"Lark login denied: {error_description or error}"
-        })
-    
-    # Validate required parameters
-    if not code:
-        logger.error("Lark callback missing authorization code")
-        return templates.TemplateResponse("hr_login.html", {
-            "request": request,
-            "error": "Missing authorization code from Lark"
-        })
-    
-    if not state:
-        logger.error("Lark callback missing state parameter")
-        return templates.TemplateResponse("hr_login.html", {
-            "request": request,
-            "error": "Missing state parameter (security check failed)"
-        })
-    
-    # Complete OAuth flow
-    result = complete_oauth_flow(code, state)
-    
-    if not result.get("success"):
-        error_msg = result.get("error", "Unknown error during Lark authentication")
-        logger.error(f"Lark OAuth flow failed: {error_msg}")
-        return templates.TemplateResponse("hr_login.html", {
-            "request": request,
-            "error": f"Lark login failed: {error_msg}"
-        })
-    
-    # Extract user info
-    user = result.get("user", {})
-    tokens = result.get("tokens", {})
-    
-    user_name = user.get("name") or user.get("email") or user.get("user_id")
-    user_email = user.get("email")
-    open_id = user.get("open_id")
-    logger.info(f"Lark OAuth successful for user: {user_name}")
-    
-    # Validate organization access for HR Portal
-    # Uses Lark Contact API (department hierarchy) and Bitable API (employee records)
-    if open_id:
-        access_result = validate_hr_portal_access(open_id, user_email=user_email)
-        if not access_result.get("allowed"):
-            logger.warning(f"HR Portal access denied for user {user_name}: {access_result.get('reason')}")
-            return templates.TemplateResponse("hr_login.html", {
-                "request": request,
-                "error": access_result.get("reason", "Access denied. You are not authorized to access the HR Portal.")
-            })
-        logger.info(f"HR Portal access granted for user {user_name}: {access_result.get('reason')}")
-    
-    # Create session with Lark data
-    session_id = create_session(
-        username=user_name,
-        hours=8,
-        lark_data={
-            "user_id": user.get("user_id"),
-            "open_id": user.get("open_id"),
-            "name": user.get("name"),
-            "email": user.get("email"),
-            "avatar_url": user.get("avatar_url"),
-            "tenant_key": user.get("tenant_key"),
-        }
-    )
-    
-    # Create redirect response with session cookie
-    response = RedirectResponse(url="/hr/dashboard", status_code=302)
-    
-    is_production = IS_VERCEL or os.environ.get('VERCEL_ENV') == 'production'
-    response.set_cookie(
-        key="hr_session",
-        value=session_id,
-        httponly=True,
-        max_age=28800,  # 8 hours
-        samesite="lax",
-        secure=is_production,
-        path="/"
-    )
-    
-    logger.info(f"Lark user logged in: {user_name}")
-    return response
-
-
-# ============================================
 # Protected HTML Pages
 # ============================================
 
@@ -304,20 +147,6 @@ def hr_dashboard(request: Request, hr_session: str = Cookie(None)):
     if not session:
         return RedirectResponse(url="/hr/login", status_code=302)
     
-    # Verify org access on each request
-    from app.services.lark_auth_service import is_descendant_of_people_support
-    
-    if session.get("auth_type") == "lark":
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"Org access denied for dashboard: {session.get('username')} - {reason}")
-            return templates.TemplateResponse("hr_login.html", {
-                "request": request,
-                "error": f"Access denied. HR Portal access is restricted to People Support department members only."
-            })
-    
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "username": session["username"]
@@ -330,20 +159,6 @@ def id_gallery(request: Request, hr_session: str = Cookie(None)):
     session = get_session(hr_session)
     if not session:
         return RedirectResponse(url="/hr/login", status_code=302)
-    
-    # Verify org access on each request
-    from app.services.lark_auth_service import is_descendant_of_people_support
-    
-    if session.get("auth_type") == "lark":
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"Org access denied for gallery: {session.get('username')} - {reason}")
-            return templates.TemplateResponse("hr_login.html", {
-                "request": request,
-                "error": f"Access denied. HR Portal access is restricted to People Support department members only."
-            })
     
     return templates.TemplateResponse("gallery.html", {
         "request": request,
@@ -544,19 +359,6 @@ def api_get_employees(request: Request, hr_session: str = Cookie(None)):
         logger.warning(f"Failed to deserialize session from token (first 20 chars): {hr_session[:20] if hr_session else 'token is None'}")
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     
-    # Verify org access on each request
-    if session.get("auth_type") == "lark":
-        from app.services.lark_auth_service import is_descendant_of_people_support
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"API /api/employees: Org access denied - {reason}")
-            return JSONResponse(status_code=403, content={
-                "success": False, 
-                "error": "Access denied. You are not authorized to access the HR Portal."
-            })
-    
     logger.info(f"API /api/employees: Authenticated as {session.get('username')}")
     
     try:
@@ -625,18 +427,6 @@ def api_get_employee(employee_id: int, hr_session: str = Cookie(None)):
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     
-    # Verify org access on each request
-    if session.get("auth_type") == "lark":
-        from app.services.lark_auth_service import is_descendant_of_people_support
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"API /api/employees/{employee_id}: Org access denied - {reason}")
-            return JSONResponse(status_code=403, content={
-                "success": False, 
-                "error": "Access denied. You are not authorized to access the HR Portal."
-            })
     try:
         row = get_employee_by_id(employee_id)
 
@@ -699,18 +489,6 @@ def api_approve_employee(employee_id: int, hr_session: str = Cookie(None)):
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     
-    # Verify org access on each request
-    if session.get("auth_type") == "lark":
-        from app.services.lark_auth_service import is_descendant_of_people_support
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"API /api/employees/{employee_id}/approve: Org access denied - {reason}")
-            return JSONResponse(status_code=403, content={
-                "success": False, 
-                "error": "Access denied. You are not authorized to access the HR Portal."
-            })
     try:
         # Check if employee exists and is in Reviewing status
         row = get_employee_by_id(employee_id)
@@ -792,19 +570,6 @@ def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
     session = get_session(hr_session)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
-    
-    # Verify org access on each request
-    if session.get("auth_type") == "lark":
-        from app.services.lark_auth_service import is_descendant_of_people_support
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"API /api/employees/{employee_id}/send-to-poc: Org access denied - {reason}")
-            return JSONResponse(status_code=403, content={
-                "success": False, 
-                "error": "Access denied. You are not authorized to access the HR Portal."
-            })
     
     try:
         row = get_employee_by_id(employee_id)
@@ -934,19 +699,6 @@ def api_send_all_to_pocs(hr_session: str = Cookie(None)):
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     
-    # Verify org access on each request
-    if session.get("auth_type") == "lark":
-        from app.services.lark_auth_service import is_descendant_of_people_support
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"API /api/send-all-to-pocs: Org access denied - {reason}")
-            return JSONResponse(status_code=403, content={
-                "success": False, 
-                "error": "Access denied. You are not authorized to access the HR Portal."
-            })
-    
     try:
         # Get all employees
         all_employees = get_all_employees()
@@ -1069,18 +821,6 @@ def api_render_employee(employee_id: int, hr_session: str = Cookie(None)):
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     
-    # Verify org access on each request
-    if session.get("auth_type") == "lark":
-        from app.services.lark_auth_service import is_descendant_of_people_support
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"API /api/employees/{employee_id}/render: Org access denied - {reason}")
-            return JSONResponse(status_code=403, content={
-                "success": False, 
-                "error": "Access denied. You are not authorized to access the HR Portal."
-            })
     try:
         # Check if employee exists and is in an acceptable status
         row = get_employee_by_id(employee_id)
@@ -1162,18 +902,6 @@ def api_delete_employee(employee_id: int, hr_session: str = Cookie(None)):
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
     
-    # Verify org access on each request
-    if session.get("auth_type") == "lark":
-        from app.services.lark_auth_service import is_descendant_of_people_support
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"API /api/employees/{employee_id} DELETE: Org access denied - {reason}")
-            return JSONResponse(status_code=403, content={
-                "success": False, 
-                "error": "Access denied. You are not authorized to access the HR Portal."
-            })
     try:
         # Check if employee exists
         row = get_employee_by_id(employee_id)
@@ -1237,19 +965,6 @@ def api_remove_background(employee_id: int, hr_session: str = Cookie(None)):
     session = get_session(hr_session)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
-    
-    # Verify org access on each request
-    if session.get("auth_type") == "lark":
-        from app.services.lark_auth_service import is_descendant_of_people_support
-        open_id = session.get("lark_open_id")
-        is_authorized, reason = is_descendant_of_people_support(open_id)
-        
-        if not is_authorized:
-            logger.warning(f"API /api/employees/{employee_id}/remove-background: Org access denied - {reason}")
-            return JSONResponse(status_code=403, content={
-                "success": False, 
-                "error": "Access denied. You are not authorized to access the HR Portal."
-            })
     
     logger.info(f"=== REMOVE BACKGROUND REQUEST for employee {employee_id} ===")
     

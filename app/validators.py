@@ -575,7 +575,7 @@ def validate_suffix(suffix: str, custom_suffix: str = None) -> Tuple[bool, str, 
 # ============================================
 
 VALID_POSITIONS = ['Field Officer', 'Freelancer', 'Intern', 'Others']
-VALID_FIELD_OFFICER_TYPES = ['Reprocessor', 'Shared', 'Others']
+VALID_FIELD_OFFICER_TYPES = ['Repossessor', 'Reprocessor', 'Shared', 'Others']  # 'Reprocessor' kept for backward compatibility
 
 def validate_position(position: str, field_officer_type: str = None) -> Tuple[bool, str, str]:
     """
