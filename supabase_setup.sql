@@ -49,6 +49,20 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS location_branch TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS suffix TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS resolved_printer_branch TEXT;
 
+-- Ensure status check constraint includes all valid statuses
+-- If the constraint already exists, drop and recreate it
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'employees_status_check' AND table_name = 'employees'
+  ) THEN
+    ALTER TABLE employees DROP CONSTRAINT employees_status_check;
+  END IF;
+  ALTER TABLE employees ADD CONSTRAINT employees_status_check
+    CHECK (status IN ('Reviewing', 'Rendered', 'Approved', 'Sent to POC', 'Completed'));
+END $$;
+
 -- Create index for faster status queries
 CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status);
 

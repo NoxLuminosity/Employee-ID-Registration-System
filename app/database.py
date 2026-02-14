@@ -335,6 +335,30 @@ def update_employee(employee_id: int, data: Dict[str, Any]) -> bool:
         return affected > 0
 
 
+def update_employee_status_rpc(employee_id: int, status: str) -> bool:
+    """Update employee status using RPC to bypass PostgREST schema cache issues."""
+    if USE_SUPABASE:
+        try:
+            result = supabase_client.rpc("update_employee_status", {
+                "p_employee_id": employee_id,
+                "p_status": status,
+                "p_date_modified": datetime.now().isoformat()
+            }).execute()
+            return result.data is True
+        except Exception as e:
+            logger.error(f"Supabase RPC update_employee_status error: {e}")
+            # Fallback to regular update
+            return update_employee(employee_id, {
+                "status": status,
+                "date_last_modified": datetime.now().isoformat()
+            })
+    else:
+        return update_employee(employee_id, {
+            "status": status,
+            "date_last_modified": datetime.now().isoformat()
+        })
+
+
 def delete_employee(employee_id: int) -> bool:
     """Delete an employee record"""
     if USE_SUPABASE:

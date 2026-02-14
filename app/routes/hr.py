@@ -18,6 +18,7 @@ from app.database import (
     get_all_employees,
     get_employee_by_id,
     update_employee,
+    update_employee_status_rpc,
     delete_employee,
     table_exists,
     get_employee_count,
@@ -824,12 +825,9 @@ def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
         location_branch = row.get("location_branch", "")
         nearest_poc = compute_nearest_poc_branch(location_branch)
         
-        # Update employee status (resolved_printer_branch stored in Lark Bitable only)
+        # Update employee status via RPC (bypasses PostgREST schema cache)
         id_number = row.get("id_number")
-        success = update_employee(employee_id, {
-            "status": "Sent to POC",
-            "date_last_modified": datetime.now().isoformat()
-        })
+        success = update_employee_status_rpc(employee_id, "Sent to POC")
         
         if not success:
             return JSONResponse(
@@ -980,11 +978,8 @@ def api_send_all_to_pocs(hr_session: str = Cookie(None)):
                 # Compute nearest POC
                 nearest_poc = compute_nearest_poc_branch(location_branch)
                 
-                # Update employee (resolved_printer_branch stored in Lark Bitable only)
-                success = update_employee(employee_id, {
-                    "status": "Sent to POC",
-                    "date_last_modified": datetime.now().isoformat()
-                })
+                # Update employee status via RPC (bypasses PostgREST schema cache)
+                success = update_employee_status_rpc(employee_id, "Sent to POC")
                 
                 if success:
                     success_count += 1
