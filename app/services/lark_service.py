@@ -70,7 +70,7 @@ def _make_request(url: str, method: str = "GET", headers: Dict = None, data: Dic
     req = urllib.request.Request(url, data=request_data, headers=headers, method=method)
     
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             return json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8') if e.fp else str(e)
@@ -173,7 +173,7 @@ def get_tenant_access_token() -> Optional[str]:
 # Lark Drive File Upload (for Bitable Attachments)
 # ============================================
 
-def download_file_from_url(url: str, timeout: int = 30) -> Optional[bytes]:
+def download_file_from_url(url: str, timeout: int = 15) -> Optional[bytes]:
     """
     Download file bytes from a URL (e.g., Cloudinary URL).
     
@@ -1375,10 +1375,10 @@ def lookup_lark_user_by_email(email: str, token: Optional[str] = None) -> Option
             method="POST"
         )
         
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=8) as response:
             data = json.loads(response.read().decode('utf-8'))
         
-        logger.info(f"Lark user lookup raw response: {json.dumps(data, indent=2)[:500]}")
+        logger.info(f"Lark user lookup response code: {data.get('code')}")
         
         if data.get("code") != 0:
             logger.error(f"Lark user lookup error: {data.get('msg')}")
@@ -1457,7 +1457,7 @@ def send_lark_dm(recipient_id: str, message_text: str, token: Optional[str] = No
             method="POST"
         )
         
-        with urllib.request.urlopen(req, timeout=15) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode('utf-8'))
         
         logger.info(f"Lark IM send response: code={data.get('code')}, msg={data.get('msg')}")
@@ -1588,8 +1588,10 @@ def send_to_poc(
     text_sent = send_lark_dm(recipient_for_send, message_text, token=token, id_type=id_type)
     
     # Also send PDF as attachment if available
+    # On Vercel serverless, skip the PDF attachment to avoid timeout (PDF link is in the text message)
+    is_serverless = os.environ.get('VERCEL', '') != ''
     pdf_sent = False
-    if pdf_url:
+    if pdf_url and not is_serverless:
         logger.info(f"  📎 Attempting to send PDF attachment...")
         try:
             # Upload PDF to Lark IM
@@ -1612,6 +1614,8 @@ def send_to_poc(
                 logger.warning(f"  ⚠️ Failed to upload PDF to Lark IM")
         except Exception as e:
             logger.warning(f"  ⚠️ Error sending PDF attachment: {e}")
+    elif pdf_url and is_serverless:
+        logger.info(f"  ⏭️ Skipping PDF attachment on Vercel serverless (link included in text)")
     
     if text_sent:
         logger.info(f"  ✅ Notification sent to {recipient_label}")

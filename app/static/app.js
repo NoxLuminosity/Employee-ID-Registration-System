@@ -995,9 +995,9 @@ function updateDualTemplatePreview() {
   const origFullname = document.getElementById('dual_original_fullname');
   if (origFullname) origFullname.textContent = fullName;
   
-  // Position - ALWAYS show "Field Officer" for Repossessor/Shared (not the sub-type)
+  // Position - Show "Legal Officer" for SPMC card (same as single template behavior)
   const origPosition = document.getElementById('dual_original_position');
-  if (origPosition) origPosition.textContent = 'Field Officer';
+  if (origPosition) origPosition.textContent = 'Legal Officer';
   
   // ID Number
   const origIdNumber = document.getElementById('dual_original_idnumber');
@@ -1208,12 +1208,11 @@ window.updateDualTemplatePreview = updateDualTemplatePreview;
 
 // Set Field Officer fields as required or not
 function setFieldOfficerFieldsRequired(required) {
-  const foDivision = document.getElementById('fo_division');
+  // Division is hidden from UI — no longer required from user
   const foDepartment = document.getElementById('fo_department');
   const foCampaign = document.getElementById('fo_campaign');
   const foTypeRadios = document.querySelectorAll('input[name="field_officer_type"]');
   
-  if (foDivision) foDivision.required = required;
   if (foDepartment) foDepartment.required = required;
   if (foCampaign) foCampaign.required = required;
   
@@ -1973,32 +1972,38 @@ function updateIdCardPreview() {
   const middleInitial = getValue('middle_initial');
   const lastName = getValue('last_name');
   
-  // Build full name: "FirstName M.I. LastName" or "FirstName LastName" if no MI
+  // Build full name with line break for long names:
+  // Format: "FirstName SecondName M.I. <br> LastName Suffix"
   // Get suffix value
   const suffix = getSuffixValue();
   
-  let fullName = '';
+  let fullNameLine1 = '';
+  let fullNameLine2 = '';
   if (firstName) {
-    fullName = firstName;
+    fullNameLine1 = firstName;
     if (middleInitial) {
-      fullName += ' ' + middleInitial + (middleInitial.endsWith('.') ? '' : '.');
+      fullNameLine1 += ' ' + middleInitial + (middleInitial.endsWith('.') ? '' : '.');
     }
     if (lastName) {
-      fullName += ' ' + lastName;
+      fullNameLine2 = lastName;
     }
     if (suffix) {
-      fullName += ' ' + suffix;
+      fullNameLine2 += (fullNameLine2 ? ' ' : '') + suffix;
     }
   } else if (lastName) {
-    fullName = lastName;
+    fullNameLine1 = lastName;
     if (suffix) {
-      fullName += ' ' + suffix;
+      fullNameLine1 += ' ' + suffix;
     }
   }
   
   const fullnameEl = document.getElementById('id_preview_fullname');
   if (fullnameEl) {
-    fullnameEl.textContent = fullName || 'Employee Fullname';
+    if (fullNameLine1 && fullNameLine2) {
+      fullnameEl.innerHTML = fullNameLine1 + '<br>' + fullNameLine2;
+    } else {
+      fullnameEl.textContent = fullNameLine1 || 'Employee Fullname';
+    }
   }
 
   // Update Position (with conditional display and transformation)

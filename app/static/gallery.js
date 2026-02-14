@@ -651,6 +651,25 @@ function buildFullName(emp) {
   return emp.employee_name;
 }
 
+// Build full name with HTML line break for long names on ID cards:
+// Format: "FirstName SecondName M.I.<br>LastName Suffix"
+function buildFullNameHtml(emp) {
+  if (emp.first_name || emp.last_name) {
+    let line1 = '';
+    let line2 = '';
+    if (emp.first_name) line1 += emp.first_name;
+    if (emp.middle_initial) {
+      const mi = emp.middle_initial.trim().replace('.', '').charAt(0).toUpperCase();
+      if (mi) line1 += ' ' + mi + '.';
+    }
+    if (emp.last_name) line2 = emp.last_name;
+    if (emp.suffix) line2 += (line2 ? ' ' : '') + emp.suffix;
+    if (line1 && line2) return line1 + '<br>' + line2;
+    return (line1 || line2).trim();
+  }
+  return escapeHtml(emp.employee_name);
+}
+
 // Generate Regular ID Card HTML (for Freelancer, Intern, Others)
 // Image source rule: Uses AI-generated photo (nobg_photo_url preferred)
 // For Reprocessor Portrait Template: Uses AI photo
@@ -668,12 +687,12 @@ function generateRegularIDCardHtml(emp) {
     ? `<img src="${emp.signature_url}" alt="Signature" crossorigin="anonymous">`
     : `<span class="id-signature-placeholder">Signature</span>`;
 
-  // Calculate expiration date (2 years from now) - only for Freelancer/Intern
+  // Calculate expiration date (1 year from now) - only for Freelancer/Intern
   const showExpiration = emp.position === 'Freelancer' || emp.position === 'Intern';
   let expirationHtml = '';
   if (showExpiration) {
     const expDate = new Date();
-    expDate.setFullYear(expDate.getFullYear() + 2);
+    expDate.setFullYear(expDate.getFullYear() + 1);
     const expDateStr = expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     expirationHtml = `
         <!-- Expiration Date -->
@@ -727,10 +746,10 @@ function generateRegularIDCardHtml(emp) {
         <div class="id-info-container">
           <!-- Left side - Name, Title, Barcode -->
           <div class="id-info-left">
-            <h1 class="id-fullname">${escapeHtml(buildFullName(emp))}</h1>
+            <h1 class="id-fullname">${buildFullNameHtml(emp)}</h1>
             
             <div class="id-position-dept">
-              <span>${escapeHtml(emp.position)}</span>
+              <span>${emp.position === 'Field Officer' ? 'Legal Officer' : escapeHtml(emp.position)}</span>
             </div>
 
             <!-- Barcode area -->
@@ -776,10 +795,8 @@ function generateFieldOfficeIDCardHtml(emp) {
     : `<span class="id-fo-signature-placeholder"></span>`;
 
   // Parse name for multi-line display
-  const nameParts = emp.employee_name.split(' ');
-  const firstName = nameParts[0] || '';
-  const lastName = nameParts.slice(1).join(' ') || '';
-  const displayName = firstName && lastName ? `${firstName}<br>${lastName}` : emp.employee_name;
+  // Use buildFullNameHtml for consistent name formatting across all cards
+  const displayName = buildFullNameHtml(emp);
   
   // Position display - ALWAYS show "LEGAL OFFICER" regardless of field_officer_type
   // The placeholder label should never change to "REPROCESSOR"

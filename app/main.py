@@ -55,10 +55,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # VERCEL FIX: Added cdnjs.cloudflare.com for jsPDF and html2canvas libraries
         # BARCODE: barcodeapi.org is allowed via https: wildcard in img-src and connect-src
         # QR: quickchart.io added for QR code generation
+        # SWAGGER/REDOC: cdn.jsdelivr.net added for FastAPI auto-generated docs
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; "
+            "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.jsdelivr.net; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https: blob:; "
             "connect-src 'self' https://api.cloudinary.com https://api.larksuite.com https://barcodeapi.org https://quickchart.io; "

@@ -2525,11 +2525,11 @@ input::placeholder {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 160px;
-  height: 70px;
+  width: 200px;
+  height: 90px;
   position: absolute;
-  right: 16px;  /* Position at right side with padding */
-  bottom: 16px;  /* Position at bottom with padding */
+  right: 12px;  /* Position at right side with padding */
+  bottom: 12px;  /* Position at bottom with padding */
   overflow: hidden;
   background-color: #ffffff;  /* Solid white - no transparency */
   border: none;
@@ -2552,7 +2552,7 @@ input::placeholder {
   top: 0;
   left: 0;
   z-index: 1;
-  padding: 8px;  /* Padding for signature */
+  padding: 4px;  /* Minimal padding to maximize signature display */
   margin: 0;
   box-sizing: border-box;
   filter: none;
@@ -3752,7 +3752,7 @@ input::placeholder {
   font-weight: 800;
   color: #003366;
   line-height: 1.15;
-  text-transform: uppercase;
+  /* Name should display in natural case, not all caps */
   word-break: break-word;
   overflow-wrap: break-word;
   margin: 0;

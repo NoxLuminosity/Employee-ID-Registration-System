@@ -424,10 +424,8 @@ function renderEmployeeTable() {
         <td><span class="employee-phone">${escapeHtml(emp.personal_number || '-')}</span></td>
         <td>${escapeHtml(emp.position)}</td>
         <td>${escapeHtml(emp.location_branch || '-')}</td>
-        <td>${escapeHtml(emp.fo_division || '-')}</td>
         <td>${escapeHtml(emp.fo_department || '-')}</td>
         <td><span class="campaign-cell">${escapeHtml(formatCampaignValues(emp.fo_campaign))}</span></td>
-        <td>${escapeHtml('Level 5')}</td>
         <td><span class="status-badge ${statusClass}">${emp.status}</span></td>
         <td>${submittedDate}</td>
         <td>
@@ -790,19 +788,39 @@ function previewID(id) {
 
 async function markAsSentToPOC(id) {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout (Vercel max is 60s)
+    
     const response = await fetch(`/hr/api/employees/${id}/send-to-poc`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
+      credentials: 'include',
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
-    if (response.ok) {
+    const data = await response.json().catch(() => ({}));
+    
+    if (response.ok && data.success) {
       const emp = dashboardState.employees.find(e => e.id === id);
       if (emp) emp.status = 'Sent to POC';
       updateStatusCounts();
       filterEmployees();
+      
+      // Show detailed result
+      const msgSent = data.message_sent ? '✅ Lark message sent' : '⚠️ Lark message failed';
+      const testLabel = data.test_mode ? ' (TEST MODE)' : '';
+      showToast(`Sent to POC: ${data.nearest_poc || 'Unknown'}${testLabel}. ${msgSent}`, data.message_sent ? 'success' : 'warning');
+    } else {
+      const errorMsg = data.error || `Server error (${response.status})`;
+      showToast(`Failed to send to POC: ${errorMsg}`, 'error');
     }
   } catch (error) {
+    if (error.name === 'AbortError') {
+      showToast('POC send timed out. The server may still be processing. Try refreshing.', 'error');
+    } else {
+      showToast(`Error sending to POC: ${error.message}`, 'error');
+    }
     console.error('Error marking as sent to POC:', error);
   }
 }
@@ -895,12 +913,17 @@ async function sendAllToPOCs() {
   }
   
   try {
-    // Call the bulk POC routing endpoint
+    // Call the bulk POC routing endpoint with extended timeout for serverless
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
+    
     const response = await fetch('/hr/api/send-all-to-pocs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
+      credentials: 'include',
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     
     const data = await response.json();
     
@@ -911,13 +934,22 @@ async function sendAllToPOCs() {
       }
       updateStatusCounts();
       filterEmployees();
-      showToast(`Successfully sent ${data.sent_count || approvedEmployees.length} employee(s) to POCs`, 'success');
+      
+      const msgInfo = data.message_sent_count !== undefined 
+        ? ` (${data.message_sent_count} Lark messages sent)` 
+        : '';
+      const testLabel = data.test_mode ? ' [TEST MODE]' : '';
+      showToast(`Successfully sent ${data.sent_count || approvedEmployees.length} employee(s) to POCs${testLabel}${msgInfo}`, 'success');
     } else {
       throw new Error(data.error || 'Failed to send to POCs');
     }
   } catch (error) {
+    if (error.name === 'AbortError') {
+      showToast('Bulk send timed out. Refresh to see current status — some may have been sent.', 'error');
+    } else {
+      showToast('Failed to send employees to POCs: ' + error.message, 'error');
+    }
     console.error('Error sending to POCs:', error);
-    showToast('Failed to send employees to POCs: ' + error.message, 'error');
   }
   
   // Re-enable button

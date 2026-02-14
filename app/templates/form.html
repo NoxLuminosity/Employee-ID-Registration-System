@@ -458,14 +458,14 @@
             ============================================ -->
             <div id="field_officer_details" class="field-officer-details-section" style="display: none;">
               <div class="fo-fields-grid">
-                <!-- Field Clearance - Read-only field showing clearance level -->
-                <div class="form-group fo-field">
+                <!-- Field Clearance - Hidden (not user-interactable, always Level 5) -->
+                <div class="form-group fo-field" style="display: none;">
                   <label for="field_clearance">Field Clearance</label>
                   <input type="text" id="field_clearance" name="field_clearance" value="Level 5" readonly class="readonly-field" aria-readonly="true">
                 </div>
 
-                <!-- Division - Searchable Dropdown -->
-                <div class="form-group fo-field">
+                <!-- Division - Hidden (HR raised concerns most employees don't know their division) -->
+                <div class="form-group fo-field" style="display: none;">
                   <label for="fo_division_search">Division <span class="required">*</span></label>
                   <div class="searchable-dropdown" id="fo_division_dropdown" role="combobox" aria-expanded="false" aria-haspopup="listbox">
                     <input type="text" 
@@ -1465,11 +1465,12 @@
                   <label>Field Officer Type</label>
                   <div class="value" id="review_fo_type">-</div>
                 </div>
-                <div class="review-item">
+                <!-- Field Clearance and Division hidden from review -->
+                <div class="review-item" style="display: none;">
                   <label>Field Clearance</label>
                   <div class="value" id="review_field_clearance">Level 5</div>
                 </div>
-                <div class="review-item">
+                <div class="review-item" style="display: none;">
                   <label>Division</label>
                   <div class="value" id="review_fo_division">-</div>
                 </div>
