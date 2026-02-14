@@ -824,11 +824,10 @@ def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
         location_branch = row.get("location_branch", "")
         nearest_poc = compute_nearest_poc_branch(location_branch)
         
-        # Update employee status and resolved POC branch
+        # Update employee status (resolved_printer_branch stored in Lark Bitable only)
         id_number = row.get("id_number")
         success = update_employee(employee_id, {
             "status": "Sent to POC",
-            "resolved_printer_branch": nearest_poc,
             "date_last_modified": datetime.now().isoformat()
         })
         
@@ -981,10 +980,9 @@ def api_send_all_to_pocs(hr_session: str = Cookie(None)):
                 # Compute nearest POC
                 nearest_poc = compute_nearest_poc_branch(location_branch)
                 
-                # Update employee
+                # Update employee (resolved_printer_branch stored in Lark Bitable only)
                 success = update_employee(employee_id, {
                     "status": "Sent to POC",
-                    "resolved_printer_branch": nearest_poc,
                     "date_last_modified": datetime.now().isoformat()
                 })
                 

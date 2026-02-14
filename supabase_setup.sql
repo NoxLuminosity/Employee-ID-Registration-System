@@ -47,6 +47,7 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS last_name TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS suffix TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS location_branch TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS suffix TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS resolved_printer_branch TEXT;
 
 -- Create index for faster status queries
 CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status);
