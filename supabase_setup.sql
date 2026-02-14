@@ -65,7 +65,7 @@ BEGIN
     ALTER TABLE employees DROP CONSTRAINT employees_status_check;
   END IF;
   ALTER TABLE employees ADD CONSTRAINT employees_status_check
-    CHECK (status IN ('Reviewing', 'Rendered', 'Approved', 'Sent to POC', 'Completed'));
+    CHECK (status IN ('Reviewing', 'Rendered', 'Approved', 'Sent to POC', 'Completed', 'Removed'));
 END $$;
 
 -- Create index for faster status queries
