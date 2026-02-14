@@ -2422,19 +2422,9 @@ function initFormSubmission() {
         return;
       }
       
-      // Only require Division, Department, Campaign for Reprocessor type
-      if (foTypeSelected.value === 'Reprocessor') {
-        // Check Division - using searchable dropdown (hidden input stores value)
-        const foDivision = document.getElementById('fo_division');
-        const foDivisionSearch = document.getElementById('fo_division_search');
-        if (!foDivision || !foDivision.value || foDivision.value === '') {
-          isValid = false;
-          // Highlight the search input, not the hidden input
-          if (foDivisionSearch) foDivisionSearch.style.borderColor = 'var(--color-danger)';
-        } else {
-          if (foDivisionSearch) foDivisionSearch.style.borderColor = '';
-        }
-        
+      // Only require Department, Campaign for Reprocessor/Shared types
+      // (Division is hidden from UI — not required from user)
+      if (foTypeSelected.value === 'Reprocessor' || foTypeSelected.value === 'Shared') {
         // Check Department - using searchable dropdown (hidden input stores value)
         const foDepartment = document.getElementById('fo_department');
         const foDepartmentSearch = document.getElementById('fo_department_search');
