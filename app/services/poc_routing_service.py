@@ -85,7 +85,7 @@ POC_CONTACTS: dict = {
     },
     "Cebu City": {
         "name": "Jenemae Manila (HR Services Ceb)",
-        "email": "manilajenemae@gmail.com",
+        "email": "jfmanila@spmadridlaw.com",
     },
     "Batangas": {
         "name": "Queenie Caraulia | PIF | BATANGAS | PQGC",
