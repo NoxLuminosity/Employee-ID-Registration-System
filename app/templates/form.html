@@ -325,9 +325,9 @@
                 </span>
                 {% endif %}
               </label>
-              <input type="text" id="first_name" name="first_name" required maxlength="20" placeholder="First name" 
+              <input type="text" id="first_name" name="first_name" required maxlength="50" placeholder="First name" 
                      value="{{ prefill.first_name if prefill else '' }}"
-                     class="{% if prefill and prefill.first_name %}prefilled{% endif %}">
+                     class="{% if prefill and prefill.first_name %}prefilled{% endif %}" style="text-transform: uppercase;">
             </div>
             <div class="form-group">
               <label for="middle_initial">
@@ -353,9 +353,9 @@
                 </span>
                 {% endif %}
               </label>
-              <input type="text" id="last_name" name="last_name" required maxlength="20" placeholder="Last name"
+              <input type="text" id="last_name" name="last_name" required maxlength="50" placeholder="Last name"
                      value="{{ prefill.last_name if prefill else '' }}"
-                     class="{% if prefill and prefill.last_name %}prefilled{% endif %}">
+                     class="{% if prefill and prefill.last_name %}prefilled{% endif %}" style="text-transform: uppercase;">
             </div>
             <div class="form-group">
               <label for="suffix">Suffix (Optional)</label>
@@ -376,7 +376,7 @@
             </div>
             <div class="form-group">
               <label for="id_nickname">ID Nickname</label>
-              <input type="text" id="id_nickname" name="id_nickname" maxlength="20" placeholder="Auto-filled from First Name" readonly class="readonly-field">
+              <input type="text" id="id_nickname" name="id_nickname" maxlength="50" placeholder="Auto-filled from First Name" readonly class="readonly-field">
             </div>
             <div class="form-group">
               <label for="id_number">

@@ -17,7 +17,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 # Database abstraction layer (supports Supabase and SQLite)
-from app.database import insert_employee, USE_SUPABASE
+from app.database import insert_employee, USE_SUPABASE, get_headshot_usage_count, increment_headshot_usage, check_headshot_limit
 
 # Lark Bitable integration (for appending data)
 from app.services.lark_service import (
@@ -76,6 +76,21 @@ class GenerateHeadshotRequest(BaseModel):
     prompt_type: str = "male_1"  # One of: male_1-4, female_1-4 (smart casual attire)
 
 
+@router.get("/headshot-usage")
+async def api_headshot_usage(employee_session: str = Cookie(None)):
+    """Return the current Lark user's AI headshot generation usage and remaining count."""
+    if not verify_employee_auth(employee_session):
+        return JSONResponse(status_code=401, content={"success": False, "error": "Authentication required."})
+
+    session = get_session(employee_session)
+    lark_user_id = session.get("lark_user_id", "") if session else ""
+    if not lark_user_id:
+        return JSONResponse(status_code=200, content={"success": True, "used": 0, "limit": 5, "remaining": 5})
+
+    info = check_headshot_limit(lark_user_id)
+    return JSONResponse(status_code=200, content={"success": True, **info})
+
+
 @router.post("/generate-headshot")
 async def api_generate_headshot(request: GenerateHeadshotRequest, employee_session: str = Cookie(None)):
     """
@@ -103,6 +118,25 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
             status_code=401,
             content={"success": False, "error": "Authentication required. Please log in again."}
         )
+    
+    # --- Rate Limiting: 5 AI headshots per Lark user ---
+    session = get_session(employee_session)
+    lark_user_id = session.get("lark_user_id", "") if session else ""
+    if lark_user_id:
+        limit_info = check_headshot_limit(lark_user_id)
+        if not limit_info["allowed"]:
+            logger.warning(f"Headshot rate limit reached for Lark user {lark_user_id} ({limit_info['used']}/{limit_info['limit']})")
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "success": False,
+                    "error": "You have reached the limit of 5 AI headshot generations. Further attempts are not allowed.",
+                    "rate_limited": True,
+                    "used": limit_info["used"],
+                    "limit": limit_info["limit"],
+                    "remaining": 0,
+                }
+            )
     
     try:
         logger.info(f"Received headshot generation request with prompt_type: {request.prompt_type}")
@@ -149,6 +183,14 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
         
         logger.info(f"AI headshot generated: {generated_url[:80]}...")
         
+        # --- Increment headshot usage count after successful AI generation ---
+        if lark_user_id:
+            increment_headshot_usage(lark_user_id)
+            new_limit_info = check_headshot_limit(lark_user_id)
+            logger.info(f"Headshot usage incremented for {lark_user_id}: {new_limit_info['used']}/{new_limit_info['limit']}")
+        else:
+            new_limit_info = {"used": 0, "limit": 5, "remaining": 5}
+        
         # Step 3: Upload AI image to Cloudinary with background removal
         logger.info("Step 3: Uploading to Cloudinary with background removal...")
         final_id = f"headshot_transparent_{uuid.uuid4().hex[:8]}"
@@ -167,7 +209,10 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
                     "success": True,
                     "generated_image": final_url,
                     "transparent": is_transparent,
-                    "message": "AI headshot generated" + (" with transparent background" if is_transparent else " (background removal unavailable)")
+                    "message": "AI headshot generated" + (" with transparent background" if is_transparent else " (background removal unavailable)"),
+                    "used": new_limit_info["used"],
+                    "limit": new_limit_info["limit"],
+                    "remaining": new_limit_info["remaining"],
                 }
             )
         else:
@@ -186,7 +231,10 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
                         "success": True,
                         "generated_image": fallback_url,
                         "transparent": False,
-                        "message": "AI headshot generated (background removal unavailable)"
+                        "message": "AI headshot generated (background removal unavailable)",
+                        "used": new_limit_info["used"],
+                        "limit": new_limit_info["limit"],
+                        "remaining": new_limit_info["remaining"],
                     }
                 )
             else:
@@ -197,7 +245,10 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
                         "success": True,
                         "generated_image": generated_url,
                         "transparent": False,
-                        "message": "AI headshot generated (using original URL)"
+                        "message": "AI headshot generated (using original URL)",
+                        "used": new_limit_info["used"],
+                        "limit": new_limit_info["limit"],
+                        "remaining": new_limit_info["remaining"],
                     }
                 )
             

@@ -677,6 +677,114 @@ def get_security_statistics() -> Dict[str, Any]:
             return {}
 
 
+# =============================================================================
+# AI Headshot Rate Limiting
+# =============================================================================
+HEADSHOT_LIMIT_PER_USER = 5
+
+
+def _init_headshot_usage_sqlite():
+    """Create headshot_usage table in SQLite if it doesn't exist."""
+    import sqlite3
+    conn = get_sqlite_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS headshot_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lark_user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """)
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_headshot_usage_lark_user
+    ON headshot_usage(lark_user_id)
+    """)
+    conn.commit()
+    conn.close()
+
+
+def get_headshot_usage_count(lark_user_id: str) -> int:
+    """Get the number of AI headshot generations for a Lark user."""
+    if not lark_user_id:
+        return 0
+
+    if USE_SUPABASE:
+        try:
+            result = (
+                supabase_client.table("headshot_usage")
+                .select("id", count="exact")
+                .eq("lark_user_id", lark_user_id)
+                .execute()
+            )
+            return result.count if result.count is not None else 0
+        except Exception as e:
+            logger.error(f"Supabase headshot usage count error: {e}")
+            return 0
+    else:
+        import sqlite3
+        try:
+            _init_headshot_usage_sqlite()
+            conn = get_sqlite_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM headshot_usage WHERE lark_user_id = ?",
+                (lark_user_id,),
+            )
+            count = cursor.fetchone()[0]
+            conn.close()
+            return count
+        except Exception as e:
+            logger.error(f"SQLite headshot usage count error: {e}")
+            return 0
+
+
+def increment_headshot_usage(lark_user_id: str) -> bool:
+    """Record a new AI headshot generation for a Lark user. Returns True on success."""
+    if not lark_user_id:
+        return False
+
+    if USE_SUPABASE:
+        try:
+            supabase_client.table("headshot_usage").insert(
+                {"lark_user_id": lark_user_id}
+            ).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Supabase headshot usage insert error: {e}")
+            return False
+    else:
+        import sqlite3
+        try:
+            _init_headshot_usage_sqlite()
+            conn = get_sqlite_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO headshot_usage (lark_user_id, created_at) VALUES (?, datetime('now'))",
+                (lark_user_id,),
+            )
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            logger.error(f"SQLite headshot usage insert error: {e}")
+            return False
+
+
+def check_headshot_limit(lark_user_id: str) -> dict:
+    """
+    Check if a Lark user can generate another AI headshot.
+    Returns dict with 'allowed' (bool), 'used' (int), 'limit' (int), 'remaining' (int).
+    """
+    used = get_headshot_usage_count(lark_user_id)
+    remaining = max(0, HEADSHOT_LIMIT_PER_USER - used)
+    return {
+        "allowed": remaining > 0,
+        "used": used,
+        "limit": HEADSHOT_LIMIT_PER_USER,
+        "remaining": remaining,
+    }
+
+
 # Export for backward compatibility
 DB_NAME = SQLITE_DB if not USE_SUPABASE else "supabase"
 

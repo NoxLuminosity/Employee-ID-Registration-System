@@ -2414,13 +2414,17 @@ input::placeholder {
 }
 
 .id-fullname {
-  font-size: 2.4rem;  /* Reduced to ensure long names fit */
+  font-size: 2.4rem;  /* Base size - will be scaled down dynamically for long names */
   font-weight: 900;
   color: #000000;
   line-height: 1;
   margin: 0 0 3px 0;
   word-break: break-word;
+  overflow-wrap: break-word;
   max-width: 300px;
+  /* Ensure text doesn't push other elements out of view */
+  max-height: 100px;
+  overflow: hidden;
 }
 
 .id-position-dept {
@@ -2525,8 +2529,8 @@ input::placeholder {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 200px;
-  height: 90px;
+  width: 240px;
+  height: 110px;
   position: absolute;
   right: 12px;  /* Position at right side with padding */
   bottom: 12px;  /* Position at bottom with padding */
@@ -2555,7 +2559,8 @@ input::placeholder {
   padding: 4px;  /* Minimal padding to maximize signature display */
   margin: 0;
   box-sizing: border-box;
-  filter: none;
+  /* Enhanced contrast and boldness for better visibility */
+  filter: contrast(1.8) brightness(0.85);
 }
 
 .id-signature-placeholder {
@@ -3711,8 +3716,8 @@ input::placeholder {
 }
 
 .id-fo-signature-container {
-  width: 120px;
-  height: 50px;
+  width: 140px;
+  height: 60px;
   background: transparent;
   border-bottom: none;
   display: flex;
@@ -3730,6 +3735,8 @@ input::placeholder {
   height: 100%;
   object-fit: contain;
   padding: 4px;
+  /* Enhanced contrast and boldness for better visibility */
+  filter: contrast(1.8) brightness(0.85);
 }
 
 .id-fo-signature-placeholder {

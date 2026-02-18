@@ -99,6 +99,24 @@ function updateBarcodeDisplay(idNumber, imgEl, fallbackEl, options = {}) {
 }
 
 // ============================================
+// Name Formatting Helper - Title Case for ID Preview
+// ============================================
+/**
+ * Convert a name to title case (first letter of each word capitalized).
+ * Handles hyphenated and apostrophe names properly.
+ * Input: "JOHN DOE SMITH" => "John Doe Smith"
+ * Input: "MARY-JANE O'BRIEN" => "Mary-Jane O'Brien"
+ * @param {string} name - The name string to format
+ * @returns {string} Title-cased name
+ */
+function toTitleCase(name) {
+  if (!name) return '';
+  return name.toLowerCase().replace(/(?:^|\s|[-''])(\w)/g, function(match) {
+    return match.toUpperCase();
+  });
+}
+
+// ============================================
 // State Management
 // ============================================
 const state = {
@@ -107,7 +125,12 @@ const state = {
   aiGenerationController: null,  // AbortController for AI generation
   aiGenerationComplete: false,   // Track if AI generation has successfully completed
   aiGenerationInProgress: false, // Track if AI generation is currently in progress
-  isSubmitting: false            // Prevent double-submit
+  isSubmitting: false,           // Prevent double-submit
+  // AI headshot rate limiting
+  headshotUsed: 0,
+  headshotLimit: 5,
+  headshotRemaining: 5,
+  headshotLimitReached: false
 };
 
 // ============================================
@@ -156,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateIdCardBackside(); // Update ID card backside on load
   updateFieldOfficePreview(); // Update Field Office ID preview on load
   updateSubmitButtonState(); // Initialize submit button state
+  fetchHeadshotUsage(); // Fetch AI headshot usage for rate limiting
   
   // Auto-update review and ID card preview when form changes
   document.querySelectorAll('input, select, textarea').forEach(el => {
@@ -411,6 +435,10 @@ function initInputValidation() {
       this.value = this.value.replace(/[^a-zA-ZÀ-ÿ\s\-'''.]/g, '');
       // Collapse multiple spaces
       this.value = this.value.replace(/\s+/g, ' ');
+      // Force uppercase for name input consistency (ID preview will show title case)
+      if (id === 'first_name' || id === 'last_name') {
+        this.value = this.value.toUpperCase();
+      }
     });
     
     field.addEventListener('blur', function(e) {
@@ -818,8 +846,9 @@ function initPositionRadioButtons() {
       
       // Show details section for Repossessor or Shared (both use dual template mode)
       if (isRepossessorType(selectedType) || selectedType === 'Shared') {
-        if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'block';
-        setFieldOfficerFieldsRequired(true);
+        // Department and Campaign fields removed for Repossessor/Shared per requirements
+        if (fieldOfficerDetails) fieldOfficerDetails.style.display = 'none';
+        setFieldOfficerFieldsRequired(false);
         // Show dual template preview for Repossessor/Shared
         showDualTemplateMode(true);
       } else {
@@ -965,11 +994,16 @@ function updateDualTemplatePreview() {
   const emergencyContact = getValue('emergency_contact');
   const emergencyAddress = getValue('emergency_address');
   
-  // Build full name
+  // Apply title case for display
+  const displayFirstName = toTitleCase(firstName);
+  const displayLastName = toTitleCase(lastName);
+  const displayNickname = toTitleCase(nickname);
+  
+  // Build full name with title case
   let fullName = '';
-  if (firstName) fullName += firstName;
-  if (middleInitial) fullName += ' ' + middleInitial + '.';
-  if (lastName) fullName += ' ' + lastName;
+  if (displayFirstName) fullName += displayFirstName;
+  if (middleInitial) fullName += ' ' + middleInitial.charAt(0).toUpperCase() + '.';
+  if (displayLastName) fullName += ' ' + displayLastName;
   if (suffix) fullName += ' ' + suffix;
   fullName = fullName.trim() || 'Bonifacio M. Aguinaldo';
   
@@ -998,11 +1032,24 @@ function updateDualTemplatePreview() {
   // === Update Original Template (uses AI photo) ===
   // Nickname
   const origNickname = document.getElementById('dual_original_nickname');
-  if (origNickname) origNickname.textContent = nickname || 'Ian';
+  if (origNickname) origNickname.textContent = displayNickname || 'Ian';
   
   // Full name
   const origFullname = document.getElementById('dual_original_fullname');
-  if (origFullname) origFullname.textContent = fullName;
+  if (origFullname) {
+    origFullname.textContent = fullName;
+    
+    // Dynamic font scaling for long names
+    if (fullName.length > 30) {
+      origFullname.style.fontSize = '1.4rem';
+    } else if (fullName.length > 24) {
+      origFullname.style.fontSize = '1.7rem';
+    } else if (fullName.length > 18) {
+      origFullname.style.fontSize = '2.0rem';
+    } else {
+      origFullname.style.fontSize = '2.4rem';
+    }
+  }
   
   // Position - Show "Legal Officer" for SPMC card (same as single template behavior)
   const origPosition = document.getElementById('dual_original_position');
@@ -1048,7 +1095,7 @@ function updateDualTemplatePreview() {
   
   // Emergency contact for back side
   const origContactLabel = document.getElementById('dual_original_contact_label');
-  if (origContactLabel) origContactLabel.textContent = `${firstName || 'Employee'}'s Contact`;
+  if (origContactLabel) origContactLabel.textContent = `${displayFirstName || 'Employee'}'s Contact`;
   
   const origEmergencyName = document.getElementById('dual_original_emergency_name');
   if (origEmergencyName) origEmergencyName.textContent = emergencyName || 'Emergency Contact Name';
@@ -1148,14 +1195,14 @@ function updateDualTemplatePreview() {
   const repossessorName = document.getElementById('dual_repossessor_name');
   if (repossessorName) {
     let displayName = '';
-    if (firstName && lastName) {
+    if (displayFirstName && displayLastName) {
       // Format: FirstName M.<br>LastName Suffix
-      displayName = firstName;
+      displayName = displayFirstName;
       if (middleInitial) {
         // Use first character of middle initial field, uppercase, with dot
         displayName += ' ' + middleInitial.charAt(0).toUpperCase() + '.';
       }
-      displayName += '<br>' + lastName;
+      displayName += '<br>' + displayLastName;
       if (suffix) displayName += ' ' + suffix;
     } else {
       displayName = 'Name<br>Placeholder';
@@ -1540,12 +1587,104 @@ function initPhotoUpload() {
 }
 
 // ============================================
+// AI Headshot Rate Limiting
+// ============================================
+
+/**
+ * Fetch the current user's headshot usage from the server.
+ * Updates state and UI accordingly.
+ */
+async function fetchHeadshotUsage() {
+  try {
+    const res = await fetch('/headshot-usage', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        state.headshotUsed = data.used;
+        state.headshotLimit = data.limit;
+        state.headshotRemaining = data.remaining;
+        state.headshotLimitReached = data.remaining <= 0;
+        updateHeadshotLimitUI();
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch headshot usage:', e);
+  }
+}
+
+/**
+ * Update headshot usage tracking from a generate-headshot API response.
+ */
+function updateHeadshotUsageFromResponse(result) {
+  if (result && typeof result.used === 'number') {
+    state.headshotUsed = result.used;
+    state.headshotLimit = result.limit;
+    state.headshotRemaining = result.remaining;
+    state.headshotLimitReached = result.remaining <= 0;
+    updateHeadshotLimitUI();
+  }
+}
+
+/**
+ * Update the UI to reflect remaining headshot generations.
+ * Shows/hides warning banner and disables regenerate controls when limit is reached.
+ */
+function updateHeadshotLimitUI() {
+  // Regenerate button
+  const regenerateBtn = document.getElementById('regenerateBtn');
+  const outfitSelect = document.getElementById('outfitSelect');
+
+  // Create or update the counter label
+  let counterEl = document.getElementById('headshotCounter');
+  if (!counterEl) {
+    counterEl = document.createElement('div');
+    counterEl.id = 'headshotCounter';
+    counterEl.style.cssText = 'font-size:0.8rem;color:#6b7280;text-align:center;margin-top:4px;';
+    const aiActions = document.getElementById('aiActions');
+    if (aiActions) aiActions.appendChild(counterEl);
+  }
+
+  // Create or update the warning banner
+  let warningEl = document.getElementById('headshotLimitWarning');
+  if (!warningEl) {
+    warningEl = document.createElement('div');
+    warningEl.id = 'headshotLimitWarning';
+    warningEl.style.cssText = 'display:none;background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;padding:8px 12px;border-radius:8px;font-size:0.85rem;text-align:center;margin-top:8px;';
+    warningEl.textContent = 'You have reached the limit of 5 AI headshot generations. Further attempts are not allowed.';
+    const aiPreviewCard = document.querySelector('.ai-preview-card');
+    if (aiPreviewCard) aiPreviewCard.appendChild(warningEl);
+  }
+
+  if (state.headshotLimitReached) {
+    // Disable controls
+    if (regenerateBtn) { regenerateBtn.disabled = true; regenerateBtn.style.opacity = '0.5'; regenerateBtn.style.cursor = 'not-allowed'; }
+    if (outfitSelect) { outfitSelect.disabled = true; outfitSelect.style.opacity = '0.5'; }
+    warningEl.style.display = 'block';
+    counterEl.textContent = `AI Headshot Generations: ${state.headshotUsed}/${state.headshotLimit} (limit reached)`;
+    counterEl.style.color = '#dc2626';
+  } else {
+    // Enable controls
+    if (regenerateBtn) { regenerateBtn.disabled = false; regenerateBtn.style.opacity = ''; regenerateBtn.style.cursor = ''; }
+    if (outfitSelect) { outfitSelect.disabled = false; outfitSelect.style.opacity = ''; }
+    warningEl.style.display = 'none';
+    counterEl.textContent = `AI Headshot Generations: ${state.headshotUsed}/${state.headshotLimit} (${state.headshotRemaining} remaining)`;
+    counterEl.style.color = state.headshotRemaining <= 2 ? '#d97706' : '#6b7280';
+  }
+}
+
+// ============================================
 // AI Headshot Generation (with server-side background removal)
 // ============================================
 async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
   console.log('=== generateAIHeadshot called ===');
   console.log('promptType received:', promptType);
   const loadingText = document.getElementById('aiLoadingText');
+  
+  // Check rate limit before attempting generation
+  if (state.headshotLimitReached) {
+    showMessage('You have reached the limit of 5 AI headshot generations. Further attempts are not allowed.', 'error');
+    return;
+  }
   
   // Reset AI generation state
   state.aiGenerationComplete = false;
@@ -1588,6 +1727,9 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
     }
     
     if (response.ok && result.success && result.generated_image) {
+      // Update headshot usage tracking from response
+      updateHeadshotUsageFromResponse(result);
+      
       // Server returns pre-processed image (already transparent if bg removal succeeded)
       const processedImageUrl = result.generated_image;
       const isTransparent = result.transparent === true;
@@ -1632,6 +1774,24 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
       state.aiGenerationInProgress = false;
       updateSubmitButtonState();
       
+    } else if (result.rate_limited) {
+      // Rate limit reached - update state and UI
+      state.headshotLimitReached = true;
+      state.headshotRemaining = 0;
+      if (typeof result.used === 'number') state.headshotUsed = result.used;
+      updateHeadshotLimitUI();
+      
+      // Show error in the AI preview area
+      elements.aiLoading.style.display = 'none';
+      elements.aiPreviewImg.style.display = 'none';
+      elements.aiError.style.display = 'block';
+      elements.aiError.textContent = 'AI headshot limit reached';
+      
+      state.aiGenerationComplete = false;
+      state.aiGenerationInProgress = false;
+      updateSubmitButtonState();
+      
+      showMessage('You have reached the limit of 5 AI headshot generations. Further attempts are not allowed.', 'error');
     } else {
       throw new Error(result.error || 'Failed to generate headshot');
     }
@@ -1849,8 +2009,8 @@ function initSignaturePad() {
     canvas.height = 200;
 
     // Set drawing styles
-    ctx.strokeStyle = '#212529';
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 3.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -1973,13 +2133,17 @@ function updateIdCardPreview() {
   const nicknameEl = document.getElementById('id_preview_nickname');
   if (nicknameEl) {
     const firstWord = nickname ? nickname.trim().split(' ')[0] : 'Nickname';
-    nicknameEl.textContent = firstWord;
+    nicknameEl.textContent = toTitleCase(firstWord);
   }
 
   // Update Full Name (constructed from first_name, middle_initial, last_name)
   const firstName = getValue('first_name');
   const middleInitial = getValue('middle_initial');
   const lastName = getValue('last_name');
+  
+  // Apply title case formatting for ID preview display
+  const displayFirstName = toTitleCase(firstName);
+  const displayLastName = toTitleCase(lastName);
   
   // Build full name with line break for long names:
   // Format: "FirstName SecondName M.I. <br> LastName Suffix"
@@ -1988,19 +2152,19 @@ function updateIdCardPreview() {
   
   let fullNameLine1 = '';
   let fullNameLine2 = '';
-  if (firstName) {
-    fullNameLine1 = firstName;
+  if (displayFirstName) {
+    fullNameLine1 = displayFirstName;
     if (middleInitial) {
-      fullNameLine1 += ' ' + middleInitial + (middleInitial.endsWith('.') ? '' : '.');
+      fullNameLine1 += ' ' + middleInitial.charAt(0).toUpperCase() + (middleInitial.endsWith('.') ? '' : '.');
     }
-    if (lastName) {
-      fullNameLine2 = lastName;
+    if (displayLastName) {
+      fullNameLine2 = displayLastName;
     }
     if (suffix) {
       fullNameLine2 += (fullNameLine2 ? ' ' : '') + suffix;
     }
-  } else if (lastName) {
-    fullNameLine1 = lastName;
+  } else if (displayLastName) {
+    fullNameLine1 = displayLastName;
     if (suffix) {
       fullNameLine1 += ' ' + suffix;
     }
@@ -2012,6 +2176,18 @@ function updateIdCardPreview() {
       fullnameEl.innerHTML = fullNameLine1 + '<br>' + fullNameLine2;
     } else {
       fullnameEl.textContent = fullNameLine1 || 'Employee Fullname';
+    }
+    
+    // Dynamic font scaling for long names to prevent barcode/ID disappearing
+    const totalNameLength = (fullNameLine1 + ' ' + fullNameLine2).trim().length;
+    if (totalNameLength > 30) {
+      fullnameEl.style.fontSize = '1.4rem';
+    } else if (totalNameLength > 24) {
+      fullnameEl.style.fontSize = '1.7rem';
+    } else if (totalNameLength > 18) {
+      fullnameEl.style.fontSize = '2.0rem';
+    } else {
+      fullnameEl.style.fontSize = '2.4rem';
     }
   }
 
@@ -2188,7 +2364,7 @@ function updateIdCardPreview() {
   // Back-side contact label ("{First name}'s Contact")
   const backContactLabel = document.getElementById('id_back_contact_label');
   if (backContactLabel) {
-    backContactLabel.textContent = firstName ? `${firstName}'s Contact` : "'s Contact";
+    backContactLabel.textContent = displayFirstName ? `${displayFirstName}'s Contact` : "'s Contact";
   }
   
   // Generate vCard QR code for single template SPMC backside using QuickChart API
@@ -2312,11 +2488,20 @@ function updateReviewSection() {
     
     // Get Field Officer type
     const foTypeRadio = document.querySelector('input[name="field_officer_type"]:checked');
-    setText('review_fo_type', foTypeRadio ? foTypeRadio.value : '-');
+    const foTypeValue = foTypeRadio ? foTypeRadio.value : '';
+    setText('review_fo_type', foTypeValue || '-');
     
     // Get other Field Officer fields
     setText('review_field_clearance', 'Level 5');
     setText('review_fo_division', getValue('fo_division') || '-');
+    
+    // Hide Department/Campaign for Repossessor/Shared (fields removed)
+    const isRepoOrShared = isRepossessorType(foTypeValue) || foTypeValue === 'Shared';
+    const reviewDeptEl = document.getElementById('review_fo_department')?.closest('.review-item');
+    const reviewCampEl = document.getElementById('review_fo_campaign')?.closest('.review-item');
+    if (reviewDeptEl) reviewDeptEl.style.display = isRepoOrShared ? 'none' : '';
+    if (reviewCampEl) reviewCampEl.style.display = isRepoOrShared ? 'none' : '';
+    
     setText('review_fo_department', getValue('fo_department') || '-');
     setText('review_fo_campaign', getValue('fo_campaign') || '-');
   } else {
@@ -2431,9 +2616,9 @@ function initFormSubmission() {
         return;
       }
       
-      // Only require Department, Campaign for Repossessor/Shared types
-      // (Division is hidden from UI — not required from user)
-      if (isRepossessorType(foTypeSelected.value) || foTypeSelected.value === 'Shared') {
+      // Only require Department, Campaign for FO Others type (not Repossessor/Shared)
+      // Department and Campaign fields removed for Repossessor/Shared per requirements
+      if (!isRepossessorType(foTypeSelected.value) && foTypeSelected.value !== 'Shared') {
         // Check Department - using searchable dropdown (hidden input stores value)
         const foDepartment = document.getElementById('fo_department');
         const foDepartmentSearch = document.getElementById('fo_department_search');
@@ -2871,22 +3056,26 @@ function updateFieldOfficePreview() {
   const lastName = getValue('last_name');
   const suffix = getSuffixValue();
   
+  // Apply title case for display
+  const displayFirstName = toTitleCase(firstName);
+  const displayLastName = toTitleCase(lastName);
+  
   let displayName = '';
-  if (firstName && lastName) {
+  if (displayFirstName && displayLastName) {
     // Format: FirstName M.<br>LastName Suffix
-    displayName = firstName;
+    displayName = displayFirstName;
     if (middleInitial) {
       // Use first character of middle initial field, uppercase, with dot
       displayName += ' ' + middleInitial.charAt(0).toUpperCase() + '.';
     }
-    displayName += '\n' + lastName;
+    displayName += '\n' + displayLastName;
     if (suffix) {
       displayName += ' ' + suffix;
     }
-  } else if (firstName) {
-    displayName = firstName;
-  } else if (lastName) {
-    displayName = lastName;
+  } else if (displayFirstName) {
+    displayName = displayFirstName;
+  } else if (displayLastName) {
+    displayName = displayLastName;
   } else {
     displayName = 'Name\nPlaceholder';
   }
@@ -2894,6 +3083,18 @@ function updateFieldOfficePreview() {
   const nameEl = document.getElementById('id_fo_preview_name');
   if (nameEl) {
     nameEl.innerHTML = displayName.replace('\n', '<br>');
+    
+    // Dynamic font scaling for long names on Field Office template
+    const nameLength = displayName.replace('\n', ' ').length;
+    if (nameLength > 25) {
+      nameEl.style.fontSize = '1.0rem';
+    } else if (nameLength > 20) {
+      nameEl.style.fontSize = '1.2rem';
+    } else if (nameLength > 15) {
+      nameEl.style.fontSize = '1.4rem';
+    } else {
+      nameEl.style.fontSize = '';  // Use default CSS
+    }
   }
   
   // Update Position (always "LEGAL OFFICER" for Field Officer)

@@ -107,6 +107,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ============================================
+-- AI Headshot Rate Limiting
+-- ============================================
+-- Tracks per-Lark-user headshot generation count (limit: 5 per user).
+
+CREATE TABLE IF NOT EXISTS headshot_usage (
+    id BIGSERIAL PRIMARY KEY,
+    lark_user_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_headshot_usage_lark_user ON headshot_usage(lark_user_id);
+
 -- Ask PostgREST (Supabase API layer) to reload its schema cache.
 -- This helps the API see newly-added columns immediately.
 -- If you don't have permissions for NOTIFY, you can remove this and wait a minute.
