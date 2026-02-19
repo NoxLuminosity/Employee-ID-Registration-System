@@ -1498,18 +1498,20 @@ def get_poc_test_recipient() -> str:
     return POC_TEST_RECIPIENT_EMAIL
 
 
-def derive_image_url_from_pdf(pdf_url: str) -> Optional[str]:
+def derive_image_url_from_pdf(pdf_url: str, page: int = 1) -> Optional[str]:
     """
     Derive Cloudinary image preview URL from a raw PDF URL.
     
     Converts: .../raw/upload/v123/folder/file.pdf
-    To:       .../image/upload/folder/file.jpg
+    To:       .../image/upload/folder/file.jpg          (page 1, front)
+    To:       .../image/upload/pg_2/folder/file.jpg     (page 2, back)
     
     The image must have been previously uploaded via upload_pdf_image_preview().
     Removes version number so Cloudinary serves the latest version.
     
     Args:
         pdf_url: Cloudinary raw PDF URL
+        page: Page number (1 = front, 2 = back). Default is 1.
     
     Returns:
         Image preview URL, or None if URL doesn't match expected pattern
@@ -1524,6 +1526,10 @@ def derive_image_url_from_pdf(pdf_url: str) -> Optional[str]:
     if image_url == pdf_url:
         logger.warning(f"Could not derive image URL from: {pdf_url[:80]}...")
         return None
+    
+    # For page 2+, add pg_N transformation after /image/upload/
+    if page > 1:
+        image_url = image_url.replace('/image/upload/', f'/image/upload/pg_{page}/')
     
     # Change extension from .pdf to .jpg
     image_url = re.sub(r'\.pdf$', '.jpg', image_url, flags=re.IGNORECASE)
@@ -1604,16 +1610,17 @@ def build_poc_interactive_card(
     employee_data: dict,
     poc_branch: str,
     poc_name: str = "",
-    image_key: str = None
+    front_image_key: str = None,
+    back_image_key: str = None
 ) -> dict:
     """
     Build a Lark Interactive Card JSON for POC ID card notification.
     
-    Matches HR's preferred format:
-    - Red header: "Temporary ID Ready for Printing"
+    HR preferred format:
+    - Red header: "Permanent ID Ready for Printing"
     - Greeting mentioning the POC
     - Info about the ID being ready
-    - Embedded ID card image preview (if image_key provided)
+    - Embedded front and back ID card images (if image keys provided)
     - Employee details
     - Link to Lark Base
     - PDF download link
@@ -1623,7 +1630,8 @@ def build_poc_interactive_card(
         employee_data: Dict with employee info
         poc_branch: Resolved POC branch name
         poc_name: POC contact's display name
-        image_key: Lark image_key for card image (optional)
+        front_image_key: Lark image_key for front ID card (optional)
+        back_image_key: Lark image_key for back ID card (optional)
     
     Returns:
         Card message dict ready for sending
@@ -1646,7 +1654,7 @@ def build_poc_interactive_card(
     # Greeting and body text
     body_text = (
         f"{greeting}\n\n"
-        f"This is to inform you that the Temporary ID number for **{employee_name}** "
+        f"This is to inform you that the Permanent ID for **{employee_name}** "
         f"is now ready for printing. Kindly proceed with the printing process at your earliest convenience."
     )
     elements.append({
@@ -1660,16 +1668,30 @@ def build_poc_interactive_card(
     # Divider before image
     elements.append({"tag": "hr"})
     
-    # ID card image preview (if available)
-    if image_key:
+    # Front ID card image (if available)
+    if front_image_key:
         elements.append({
             "tag": "img",
-            "img_key": image_key,
+            "img_key": front_image_key,
             "alt": {
                 "tag": "plain_text",
-                "content": f"ID Card - {employee_name}"
+                "content": f"ID Card Front - {employee_name}"
             }
         })
+    
+    # Back ID card image (if available)
+    if back_image_key:
+        elements.append({
+            "tag": "img",
+            "img_key": back_image_key,
+            "alt": {
+                "tag": "plain_text",
+                "content": f"ID Card Back - {employee_name}"
+            }
+        })
+    
+    # Divider after images (if any images were shown)
+    if front_image_key or back_image_key:
         elements.append({"tag": "hr"})
     
     # Employee details
@@ -1735,7 +1757,7 @@ def build_poc_interactive_card(
         "header": {
             "title": {
                 "tag": "plain_text",
-                "content": "Temporary ID Ready for Printing"
+                "content": "Permanent ID Ready for Printing"
             },
             "template": "red"
         },
@@ -1897,36 +1919,59 @@ def send_to_poc(
     
     id_type = "email" if use_email else "open_id"
     
-    # Try to get image preview for the card
-    image_key = None
+    # Try to get front and back image previews for the card
+    front_image_key = None
+    back_image_key = None
     if pdf_url:
+        # Front image (page 1)
         try:
-            image_url = derive_image_url_from_pdf(pdf_url)
-            if image_url:
-                logger.info(f"  \U0001f5bc\ufe0f Downloading ID card image preview...")
-                image_bytes = download_file_from_url(image_url, timeout=10)
-                if image_bytes:
-                    logger.info(f"  \U0001f4e4 Uploading image to Lark card API ({len(image_bytes)} bytes)...")
-                    image_key = upload_image_to_lark_card(image_bytes)
-                    if image_key:
-                        logger.info(f"  \u2705 Card image ready: {image_key[:20]}...")
+            front_url = derive_image_url_from_pdf(pdf_url, page=1)
+            if front_url:
+                logger.info(f"  \U0001f5bc\ufe0f Downloading front ID card image...")
+                front_bytes = download_file_from_url(front_url, timeout=10)
+                if front_bytes:
+                    logger.info(f"  \U0001f4e4 Uploading front image to Lark ({len(front_bytes)} bytes)...")
+                    front_image_key = upload_image_to_lark_card(front_bytes)
+                    if front_image_key:
+                        logger.info(f"  \u2705 Front image ready: {front_image_key[:20]}...")
                     else:
-                        logger.warning(f"  \u26a0\ufe0f Failed to upload image to Lark card API")
+                        logger.warning(f"  \u26a0\ufe0f Failed to upload front image to Lark")
                 else:
-                    logger.warning(f"  \u26a0\ufe0f Failed to download image preview from Cloudinary")
+                    logger.warning(f"  \u26a0\ufe0f Failed to download front image from Cloudinary")
         except Exception as img_e:
-            logger.warning(f"  \u26a0\ufe0f Image preview failed (will send card without image): {str(img_e)}")
+            logger.warning(f"  \u26a0\ufe0f Front image failed: {str(img_e)}")
+        
+        # Back image (page 2)
+        try:
+            back_url = derive_image_url_from_pdf(pdf_url, page=2)
+            if back_url:
+                logger.info(f"  \U0001f5bc\ufe0f Downloading back ID card image...")
+                back_bytes = download_file_from_url(back_url, timeout=10)
+                if back_bytes:
+                    logger.info(f"  \U0001f4e4 Uploading back image to Lark ({len(back_bytes)} bytes)...")
+                    back_image_key = upload_image_to_lark_card(back_bytes)
+                    if back_image_key:
+                        logger.info(f"  \u2705 Back image ready: {back_image_key[:20]}...")
+                    else:
+                        logger.warning(f"  \u26a0\ufe0f Failed to upload back image to Lark")
+                else:
+                    logger.warning(f"  \u26a0\ufe0f Failed to download back image from Cloudinary")
+        except Exception as img_e:
+            logger.warning(f"  \u26a0\ufe0f Back image failed: {str(img_e)}")
     
     # Build interactive card
     card = build_poc_interactive_card(
         employee_data=employee_data,
         poc_branch=poc_branch,
         poc_name=poc_name,
-        image_key=image_key
+        front_image_key=front_image_key,
+        back_image_key=back_image_key
     )
     
     # Send the card message
     card_sent = send_lark_card_message(recipient_for_send, card, token=token, id_type=id_type)
+    
+    images_included = bool(front_image_key or back_image_key)
     
     if card_sent:
         logger.info(f"  \u2705 Card notification sent to {recipient_label}")
@@ -1935,7 +1980,9 @@ def send_to_poc(
             "message": f"Sent to {recipient_label}",
             "recipient": target_email,
             "test_mode": POC_TEST_MODE,
-            "image_included": image_key is not None
+            "image_included": images_included,
+            "front_image": front_image_key is not None,
+            "back_image": back_image_key is not None
         }
     else:
         error_msg = f"Failed to send Lark card message to {target_email}"
