@@ -444,14 +444,15 @@ def upload_pdf_image_preview(
     folder: Optional[str] = None
 ) -> Optional[str]:
     """
-    Upload PDF to Cloudinary as image type for preview generation.
+    Upload PDF to Cloudinary as image type for multi-page preview.
     
-    Cloudinary auto-renders page 1 of the PDF as a JPG image.
-    Uses same public_id as the raw PDF upload (different resource_type namespace).
+    Stores the PDF in Cloudinary's image namespace WITHOUT format conversion,
+    preserving all pages. Individual pages can be accessed on-the-fly via
+    URL transformations (pg_N, f_jpg).
     
-    This enables deriving an image preview URL from the PDF URL by:
-    - Replacing /raw/upload/ with /image/upload/
-    - Changing .pdf extension to .jpg
+    Example delivery URLs after upload:
+    - Page 1 as JPG: .../image/upload/f_jpg/folder/file.pdf
+    - Page 2 as JPG: .../image/upload/pg_2,f_jpg/folder/file.pdf
     
     Args:
         pdf_bytes: Raw PDF bytes (same as used for PDF upload)
@@ -459,7 +460,7 @@ def upload_pdf_image_preview(
         folder: Optional folder name (defaults to 'id_cards')
     
     Returns:
-        Secure HTTPS URL of the image preview, or None on failure
+        Secure HTTPS URL of the image resource, or None on failure
     """
     try:
         if not configure_cloudinary():
@@ -471,7 +472,7 @@ def upload_pdf_image_preview(
         
         full_public_id = f"{folder}/{public_id}"
         
-        logger.info(f"Uploading PDF image preview: {public_id}")
+        logger.info(f"Uploading PDF as image resource: {public_id}")
         
         base64_data = base64.b64encode(pdf_bytes).decode('utf-8')
         data_uri = f"data:application/pdf;base64,{base64_data}"
@@ -481,7 +482,6 @@ def upload_pdf_image_preview(
             public_id=full_public_id,
             overwrite=True,
             resource_type="image",
-            format="jpg",
             type="upload",
             access_mode="public"
         )
@@ -489,15 +489,15 @@ def upload_pdf_image_preview(
         secure_url = result.get('secure_url')
         
         if secure_url:
-            logger.info(f"PDF image preview uploaded: {public_id} -> {secure_url}")
+            logger.info(f"PDF image resource uploaded: {public_id} -> {secure_url}")
             return secure_url
         else:
-            logger.error(f"PDF image preview upload failed: No secure_url for {public_id}")
+            logger.error(f"PDF image resource upload failed: No secure_url for {public_id}")
             return None
             
     except cloudinary.exceptions.Error as e:
-        logger.error(f"Cloudinary API error uploading image preview {public_id}: {str(e)}")
+        logger.error(f"Cloudinary API error uploading image resource {public_id}: {str(e)}")
         return None
     except Exception as e:
-        logger.error(f"PDF image preview upload failed for {public_id}: {str(e)}")
+        logger.error(f"PDF image resource upload failed for {public_id}: {str(e)}")
         return None

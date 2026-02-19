@@ -1500,39 +1500,40 @@ def get_poc_test_recipient() -> str:
 
 def derive_image_url_from_pdf(pdf_url: str, page: int = 1) -> Optional[str]:
     """
-    Derive Cloudinary image preview URL from a raw PDF URL.
+    Derive Cloudinary image URL from a raw PDF URL using on-the-fly transformations.
     
     Converts: .../raw/upload/v123/folder/file.pdf
-    To:       .../image/upload/folder/file.jpg          (page 1, front)
-    To:       .../image/upload/pg_2/folder/file.jpg     (page 2, back)
+    To:       .../image/upload/f_jpg/v123/folder/file.pdf          (page 1)
+    To:       .../image/upload/pg_2,f_jpg/v123/folder/file.pdf     (page 2)
     
-    The image must have been previously uploaded via upload_pdf_image_preview().
-    Removes version number so Cloudinary serves the latest version.
+    The PDF must exist in Cloudinary's image namespace (uploaded via
+    upload_pdf_image_preview). Cloudinary renders the specified page
+    as JPG on-the-fly using the f_jpg and pg_N transformations.
     
     Args:
         pdf_url: Cloudinary raw PDF URL
-        page: Page number (1 = front, 2 = back). Default is 1.
+        page: Page number (1-based). Default is 1.
     
     Returns:
-        Image preview URL, or None if URL doesn't match expected pattern
+        Image delivery URL, or None if URL doesn't match expected pattern
     """
     if not pdf_url:
         return None
     
-    # Replace /raw/upload/v<digits>/ with /image/upload/
-    image_url = re.sub(r'/raw/upload/v\d+/', '/image/upload/', pdf_url)
+    # Build Cloudinary transformation string
+    if page <= 1:
+        transform = "f_jpg"
+    else:
+        transform = f"pg_{page},f_jpg"
+    
+    # Replace /raw/upload/ with /image/upload/<transform>/
+    # Keep version number and .pdf extension — transformation handles format
+    image_url = re.sub(r'/raw/upload/', f'/image/upload/{transform}/', pdf_url)
     
     # If no replacement was made (URL didn't match pattern), return None
     if image_url == pdf_url:
         logger.warning(f"Could not derive image URL from: {pdf_url[:80]}...")
         return None
-    
-    # For page 2+, add pg_N transformation after /image/upload/
-    if page > 1:
-        image_url = image_url.replace('/image/upload/', f'/image/upload/pg_{page}/')
-    
-    # Change extension from .pdf to .jpg
-    image_url = re.sub(r'\.pdf$', '.jpg', image_url, flags=re.IGNORECASE)
     
     return image_url
 
