@@ -1563,10 +1563,10 @@ def upload_image_to_lark_card(image_bytes: bytes) -> Optional[str]:
         
         body_parts = []
         
-        # Add image_type field
+        # Add image_type field (must be "message" for IM image upload API)
         body_parts.append(f'--{boundary}\r\n'.encode('utf-8'))
         body_parts.append(b'Content-Disposition: form-data; name="image_type"\r\n\r\n')
-        body_parts.append(b'message_card\r\n')
+        body_parts.append(b'message\r\n')
         
         # Add image file
         body_parts.append(f'--{boundary}\r\n'.encode('utf-8'))
@@ -1602,6 +1602,14 @@ def upload_image_to_lark_card(image_bytes: bytes) -> Optional[str]:
             logger.error("Lark image upload response missing image_key")
             return None
             
+    except urllib.error.HTTPError as e:
+        error_body = ""
+        try:
+            error_body = e.read().decode('utf-8')[:500]
+        except:
+            pass
+        logger.error(f"HTTP {e.code} uploading image to Lark: {error_body}")
+        return None
     except Exception as e:
         logger.error(f"Failed to upload image to Lark card API: {str(e)}")
         return None
