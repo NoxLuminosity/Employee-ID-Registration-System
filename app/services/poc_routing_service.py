@@ -53,35 +53,35 @@ ALL_POC_BRANCHES: set = POC_BRANCHES | set(PENDING_POC_BRANCHES.keys())
 POC_CONTACTS: dict = {
     "San Carlos": {
         "name": "Zacarias, Reynaldo Jr Mamaril (HR PITX)",
-        "email": "reyzacarias922@gmail.com",
+        "email": "rezacarias@spmadridlaw.com",
     },
     "Pagadian City": {
         "name": "Melvin Calugay | PIF | GENSAN (PMCY)",
-        "email": "melvincalugay102096@gmail.com",
+        "email": "mecalugay@spmadridlaw.com",
     },
     "Zamboanga City": {
         "name": "Mira Mukim | PIF ZMB (QNAM)",
-        "email": "miramukim@gmail.com",
+        "email": "nmukim@spmadridlaw.com",
     },
     "Malolos City": {
         "name": "Aeron Tasic | PIF | MAL | MAPT",
-        "email": "aeronjay1987@gmail.com",
+        "email": "aptasic@spmadridlaw.com",
     },
     "San Fernando City": {
         "name": "Jojo Salomon | PIF | PAM (MJSM)",
-        "email": "jjsalomon2@gmail.com",
+        "email": "jmsalomon@spmadridlaw.com",
     },
     "Cagayan De Oro": {
         "name": "Aldrin Bautista | PIF | CDO (QADB)",
-        "email": "aldrinbautista62@gmail.com",
+        "email": "asbautista@spmadridlaw.com",
     },
     "Tagum City": {
         "name": "Kemy Revilla",
-        "email": "revillakemy@gmail.com",
+        "email": "kvrevilla@spmadridlaw.com",
     },
     "Davao City": {
         "name": "Rona Sindatoc (BNB-MSME NWOFF DAVAO)",
-        "email": "Sindatoc07@gmail.com",
+        "email": "rona@spmadridlaw.com",
     },
     "Cebu City": {
         "name": "Jenemae Manila (HR Services Ceb)",
@@ -89,39 +89,39 @@ POC_CONTACTS: dict = {
     },
     "Batangas": {
         "name": "Queenie Caraulia | PIF | BATANGAS | PQGC",
-        "email": "kkwen0312@gmail.com",
+        "email": "qgcaraulia@spmadridlaw.com",
     },
     "General Santos City": {
         "name": "As-addah Maminasacan | PIF | GEN (GASM)",
-        "email": "maminasacana@gmail.com",
+        "email": "aamaminasacan@spmadridlaw.com",
     },
     "Bacolod": {
         "name": "Nerio, Louie Rose Ponciano (PIF BACOLOD | BLON)",
-        "email": "nerio.louierose1b@gmail.com",
+        "email": "lpnerio@spmadridlaw.com",
     },
     "Ilo-Ilo": {
         "name": "Maerci del Monte | PIF | ILOILO (MMDD)",
-        "email": "mhayedelmonte02@gmail.com",
+        "email": "mdelmonte@spmadridlaw.com",
     },
     "Quezon City": {
         "name": "Queen Mary Bernaldez (HR QC)",
-        "email": "bernaldezqueenmary24@gmail.com",
+        "email": "qrbernaldez@spmadridlaw.com",
     },
     "Calamba City": {
         "name": "Cherrylyn Albis | PIF | CALAMBA (MCRA)",
-        "email": "cherry0415lyn@gmail.com",
+        "email": "cralbis@spmadridlaw.com",
     },
     "Parañaque": {
         "name": "Ira Mackenzie Arahan (HR Employee Relations PITX)",
-        "email": "mcknzzz2001@gmail.com",
+        "email": "icarahan@spmadridlaw.com",
     },
     "Cavite": {
-        "name": "Cavite POC",
-        "email": "contadofeangelica@gmail.com",
+        "name": "Fe Angelica Contado (Angel)",
+        "email": "fecontado@spmadridlaw.com",
     },
     "Makati": {
-        "name": "Makati POC",
-        "email": "weannbundalan@gmail.com",
+        "name": "Weann Bundalan (HR CompenBen MKT)",
+        "email": "webundalan@spmadridlaw.com",
     },
 }
 
