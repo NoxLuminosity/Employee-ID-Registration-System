@@ -2349,8 +2349,8 @@ input::placeholder {
 .id-photo-container img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  object-position: center center;
+  object-fit: cover;
+  object-position: center top;  /* Prioritize head/hair - crop from bottom (torso) */
   /* AI image positioned absolutely within container */
   position: absolute;
   top: 0;
@@ -2358,10 +2358,10 @@ input::placeholder {
   z-index: 1;  /* Above background pattern within container */
 }
 
-/* When image has transparent background - contain to show full image */
+/* When image has transparent background - cover with top priority */
 .id-photo-container img.transparent-bg {
-  object-fit: contain;
-  object-position: center center;
+  object-fit: cover;
+  object-position: center top;  /* Show full head, crop bottom if needed */
   background: transparent;
 }
 
