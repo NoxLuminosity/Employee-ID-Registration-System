@@ -788,9 +788,9 @@ function generateRegularIDCardHtml(emp) {
           <div class="id-info-left">
             <h1 class="id-fullname ${getFullNameSizeClass(emp)}">${buildFullNameHtml(emp)}</h1>
             
-            <div class="id-position-dept">
+            ${emp.position !== 'Others' ? `<div class="id-position-dept">
               <span>${emp.position === 'Field Officer' ? 'Legal Officer' : escapeHtml(emp.position)}</span>
-            </div>
+            </div>` : ''}
 
             <!-- Barcode area -->
             <div class="id-barcode-area">

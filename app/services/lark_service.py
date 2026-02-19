@@ -1521,10 +1521,12 @@ def derive_image_url_from_pdf(pdf_url: str, page: int = 1) -> Optional[str]:
         return None
     
     # Build Cloudinary transformation string
+    # Use high quality (q_100), high DPI (dn_300), and large width (w_2048)
+    # to ensure ID card images are sharp and not blurry in OkPo messages
     if page <= 1:
-        transform = "f_jpg"
+        transform = "f_jpg,q_100,dn_300,w_2048"
     else:
-        transform = f"pg_{page},f_jpg"
+        transform = f"pg_{page},f_jpg,q_100,dn_300,w_2048"
     
     # Replace /raw/upload/ with /image/upload/<transform>/
     # Keep version number and .pdf extension — transformation handles format
