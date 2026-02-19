@@ -38,7 +38,7 @@ LARK_BITABLE_ID_SPMA = os.environ.get('LARK_BITABLE_ID_SPMA', os.environ.get('LA
 
 # POC Test Mode Configuration
 # When TEST_MODE is True, all POC messages are sent to TEST_RECIPIENT instead of real POCs
-POC_TEST_MODE = os.environ.get('POC_TEST_MODE', 'false').lower() in ('true', '1', 'yes')
+POC_TEST_MODE = os.environ.get('POC_TEST_MODE', 'true').lower() in ('true', '1', 'yes')
 POC_TEST_RECIPIENT_EMAIL = os.environ.get('POC_TEST_RECIPIENT_EMAIL', 'manuelmiguel0726@gmail.com')
 
 # Lark API endpoints
