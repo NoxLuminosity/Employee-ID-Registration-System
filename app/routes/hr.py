@@ -23,8 +23,7 @@ from app.database import (
     table_exists,
     get_employee_count,
     get_status_breakdown,
-    USE_SUPABASE,
-    get_sqlite_connection
+    USE_SUPABASE
 )
 
 # Import services for background removal
@@ -625,10 +624,12 @@ def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
         send_error = None
         try:
             from app.services.lark_service import send_to_poc, update_employee_email_sent, is_poc_test_mode
-            from app.services.poc_routing_service import get_poc_email
+            from app.services.poc_routing_service import get_poc_email, get_poc_contact
             
             test_mode = is_poc_test_mode()
             poc_email = get_poc_email(nearest_poc)
+            poc_contact = get_poc_contact(nearest_poc)
+            poc_name = poc_contact.get("name", "") if poc_contact else ""
             
             # Prepare employee data for message (include PDF URL from render_url field)
             employee_data = {
@@ -636,8 +637,9 @@ def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
                 "employee_name": row.get("employee_name", ""),
                 "position": row.get("position", ""),
                 "location_branch": location_branch,
-                "pdf_url": row.get("render_url", ""),  # Include PDF URL in the message
+                "pdf_url": row.get("render_url", ""),
                 "render_url": row.get("render_url", ""),
+                "poc_name": poc_name,
             }
             
             # Send the message
@@ -718,7 +720,7 @@ def api_send_all_to_pocs(hr_session: str = Cookie(None)):
         
         # Import messaging functions once
         from app.services.lark_service import find_and_update_employee_status, send_to_poc, update_employee_email_sent, is_poc_test_mode
-        from app.services.poc_routing_service import get_poc_email
+        from app.services.poc_routing_service import get_poc_email, get_poc_contact
         test_mode = is_poc_test_mode()
         
         for emp in approved_employees:
@@ -752,13 +754,16 @@ def api_send_all_to_pocs(hr_session: str = Cookie(None)):
                     # Send actual Lark message to POC
                     try:
                         poc_email = get_poc_email(nearest_poc)
+                        poc_contact = get_poc_contact(nearest_poc)
+                        poc_name = poc_contact.get("name", "") if poc_contact else ""
                         employee_data = {
                             "id_number": id_number,
                             "employee_name": emp.get("employee_name", ""),
                             "position": emp.get("position", ""),
                             "location_branch": location_branch,
-                            "pdf_url": emp.get("render_url", ""),  # Include PDF URL in the message
+                            "pdf_url": emp.get("render_url", ""),
                             "render_url": emp.get("render_url", ""),
+                            "poc_name": poc_name,
                         }
                         send_result = send_to_poc(employee_data, nearest_poc, poc_email)
                         
@@ -1212,7 +1217,19 @@ async def api_upload_pdf(employee_id: int, request: Request, hr_session: str = C
         
         logger.info(f"✅ PDF uploaded to Cloudinary: {pdf_url}")
         
-        # Step 1.5: Verify the URL is publicly accessible before saving to LarkBase
+        # Step 1.5a: Upload image preview to Cloudinary (for Lark card image embedding)
+        # This creates an image version of the PDF that can be used in Lark Interactive Cards
+        try:
+            from app.services.cloudinary_service import upload_pdf_image_preview
+            image_preview_url = upload_pdf_image_preview(pdf_bytes, public_id, folder="id_cards")
+            if image_preview_url:
+                logger.info(f"✅ Image preview uploaded: {image_preview_url[:80]}...")
+            else:
+                logger.warning(f"⚠️ Image preview upload failed (non-critical)")
+        except Exception as img_e:
+            logger.warning(f"⚠️ Image preview upload error (non-critical): {str(img_e)}")
+        
+        # Step 1.5b: Verify the URL is publicly accessible before saving to LarkBase
         # This prevents saving 401/403 URLs to the database
         import urllib.request
         import urllib.error

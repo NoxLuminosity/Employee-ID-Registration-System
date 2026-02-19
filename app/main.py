@@ -17,6 +17,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.routes import employee, hr, auth
 from app.database import init_db
 from app.auth import get_session
+from app.utils import parse_lark_name
 import os
 import logging
 from pathlib import Path
@@ -212,23 +213,6 @@ async def apply_page(request: Request, employee_session: str = Cookie(None)):
             "avatar": session.get("lark_avatar"),
         }
     })
-
-
-def parse_lark_name(full_name: str) -> dict:
-    """Parse a full name into first, middle initial, and last name."""
-    if not full_name:
-        return {"first_name": "", "middle_initial": "", "last_name": ""}
-    
-    parts = full_name.strip().split()
-    
-    if len(parts) == 1:
-        return {"first_name": parts[0], "middle_initial": "", "last_name": ""}
-    elif len(parts) == 2:
-        return {"first_name": parts[0], "middle_initial": "", "last_name": parts[1]}
-    else:
-        middle = parts[1]
-        middle_initial = middle.replace(".", "")[0].upper() if middle else ""
-        return {"first_name": parts[0], "middle_initial": middle_initial, "last_name": parts[-1]}
 
 
 # ============================================

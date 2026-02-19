@@ -436,3 +436,68 @@ def upload_pdf_to_cloudinary(
     except Exception as e:
         logger.error(f"PDF upload failed for {public_id}: {str(e)}")
         return None
+
+
+def upload_pdf_image_preview(
+    pdf_bytes: bytes,
+    public_id: str,
+    folder: Optional[str] = None
+) -> Optional[str]:
+    """
+    Upload PDF to Cloudinary as image type for preview generation.
+    
+    Cloudinary auto-renders page 1 of the PDF as a JPG image.
+    Uses same public_id as the raw PDF upload (different resource_type namespace).
+    
+    This enables deriving an image preview URL from the PDF URL by:
+    - Replacing /raw/upload/ with /image/upload/
+    - Changing .pdf extension to .jpg
+    
+    Args:
+        pdf_bytes: Raw PDF bytes (same as used for PDF upload)
+        public_id: Same public_id used for the raw PDF upload
+        folder: Optional folder name (defaults to 'id_cards')
+    
+    Returns:
+        Secure HTTPS URL of the image preview, or None on failure
+    """
+    try:
+        if not configure_cloudinary():
+            logger.warning("Cloudinary not configured. Skipping image preview upload.")
+            return None
+        
+        if folder is None:
+            folder = os.environ.get('CLOUDINARY_PDF_FOLDER', 'id_cards')
+        
+        full_public_id = f"{folder}/{public_id}"
+        
+        logger.info(f"Uploading PDF image preview: {public_id}")
+        
+        base64_data = base64.b64encode(pdf_bytes).decode('utf-8')
+        data_uri = f"data:application/pdf;base64,{base64_data}"
+        
+        result = cloudinary.uploader.upload(
+            data_uri,
+            public_id=full_public_id,
+            overwrite=True,
+            resource_type="image",
+            format="jpg",
+            type="upload",
+            access_mode="public"
+        )
+        
+        secure_url = result.get('secure_url')
+        
+        if secure_url:
+            logger.info(f"PDF image preview uploaded: {public_id} -> {secure_url}")
+            return secure_url
+        else:
+            logger.error(f"PDF image preview upload failed: No secure_url for {public_id}")
+            return None
+            
+    except cloudinary.exceptions.Error as e:
+        logger.error(f"Cloudinary API error uploading image preview {public_id}: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"PDF image preview upload failed for {public_id}: {str(e)}")
+        return None

@@ -453,17 +453,6 @@ def get_status_breakdown(include_removed: bool = False) -> Dict[str, int]:
 
 
 # =============================================================================
-# Legacy compatibility
-# =============================================================================
-def get_db_connection():
-    """Legacy function for backward compatibility"""
-    if USE_SUPABASE:
-        logger.warning("get_db_connection() called but using Supabase - returning None")
-        return None
-    return get_sqlite_connection()
-
-
-# =============================================================================
 # Security Event Logging (Screenshot/Recording Detection)
 # =============================================================================
 def insert_security_event(
@@ -783,8 +772,3 @@ def check_headshot_limit(lark_user_id: str) -> dict:
         "limit": HEADSHOT_LIMIT_PER_USER,
         "remaining": remaining,
     }
-
-
-# Export for backward compatibility
-DB_NAME = SQLITE_DB if not USE_SUPABASE else "supabase"
-

@@ -14,6 +14,7 @@ Direct Cloudinary URL Strategy:
 import os
 import json
 import logging
+import re
 import time
 import uuid
 from typing import Optional, Dict, Any, List, Tuple
@@ -37,7 +38,7 @@ LARK_BITABLE_ID_SPMA = os.environ.get('LARK_BITABLE_ID_SPMA', os.environ.get('LA
 
 # POC Test Mode Configuration
 # When TEST_MODE is True, all POC messages are sent to TEST_RECIPIENT instead of real POCs
-POC_TEST_MODE = os.environ.get('POC_TEST_MODE', 'false').lower() in ('true', '1', 'yes')
+POC_TEST_MODE = os.environ.get('POC_TEST_MODE', 'true').lower() in ('true', '1', 'yes')
 POC_TEST_RECIPIENT_EMAIL = os.environ.get('POC_TEST_RECIPIENT_EMAIL', 'manuelmiguel0726@gmail.com')
 
 # Lark API endpoints
@@ -46,6 +47,10 @@ LARK_BITABLE_BASE_URL = "https://open.larksuite.com/open-apis/bitable/v1/apps"
 LARK_BITABLE_RECORD_URL = f"{LARK_BITABLE_BASE_URL}/{{app_token}}/tables/{{table_id}}/records"
 LARK_DRIVE_UPLOAD_URL = "https://open.larksuite.com/open-apis/drive/v1/files/upload_all"
 LARK_IM_FILES_URL = "https://open.larksuite.com/open-apis/im/v1/files"
+LARK_IM_IMAGE_URL = "https://open.larksuite.com/open-apis/im/v1/images"
+
+# Lark Suite domain for constructing Base URLs
+LARK_SUITE_DOMAIN = os.environ.get('LARK_SUITE_DOMAIN', 'spmadridlaw')
 
 # Cache for access token
 _cached_token: Optional[str] = None
@@ -1493,6 +1498,331 @@ def get_poc_test_recipient() -> str:
     return POC_TEST_RECIPIENT_EMAIL
 
 
+def derive_image_url_from_pdf(pdf_url: str) -> Optional[str]:
+    """
+    Derive Cloudinary image preview URL from a raw PDF URL.
+    
+    Converts: .../raw/upload/v123/folder/file.pdf
+    To:       .../image/upload/folder/file.jpg
+    
+    The image must have been previously uploaded via upload_pdf_image_preview().
+    Removes version number so Cloudinary serves the latest version.
+    
+    Args:
+        pdf_url: Cloudinary raw PDF URL
+    
+    Returns:
+        Image preview URL, or None if URL doesn't match expected pattern
+    """
+    if not pdf_url:
+        return None
+    
+    # Replace /raw/upload/v<digits>/ with /image/upload/
+    image_url = re.sub(r'/raw/upload/v\d+/', '/image/upload/', pdf_url)
+    
+    # If no replacement was made (URL didn't match pattern), return None
+    if image_url == pdf_url:
+        logger.warning(f"Could not derive image URL from: {pdf_url[:80]}...")
+        return None
+    
+    # Change extension from .pdf to .jpg
+    image_url = re.sub(r'\.pdf$', '.jpg', image_url, flags=re.IGNORECASE)
+    
+    return image_url
+
+
+def upload_image_to_lark_card(image_bytes: bytes) -> Optional[str]:
+    """
+    Upload image to Lark for use in interactive card messages.
+    
+    Uses POST /im/v1/images with image_type=message_card.
+    
+    Args:
+        image_bytes: Image file bytes (JPG, PNG, etc.)
+    
+    Returns:
+        image_key string for use in card img elements, or None on failure
+    """
+    token = get_tenant_access_token()
+    if not token:
+        logger.error("upload_image_to_lark_card: Failed to get access token")
+        return None
+    
+    try:
+        file_size = len(image_bytes)
+        logger.info(f"Uploading image to Lark card API ({file_size} bytes)...")
+        
+        boundary = f"----WebKitFormBoundary{uuid.uuid4().hex[:16]}"
+        
+        body_parts = []
+        
+        # Add image_type field
+        body_parts.append(f'--{boundary}\r\n'.encode('utf-8'))
+        body_parts.append(b'Content-Disposition: form-data; name="image_type"\r\n\r\n')
+        body_parts.append(b'message_card\r\n')
+        
+        # Add image file
+        body_parts.append(f'--{boundary}\r\n'.encode('utf-8'))
+        body_parts.append(b'Content-Disposition: form-data; name="image"; filename="preview.jpg"\r\n')
+        body_parts.append(b'Content-Type: image/jpeg\r\n\r\n')
+        body_parts.append(image_bytes)
+        body_parts.append(f'\r\n--{boundary}--\r\n'.encode('utf-8'))
+        
+        body = b''.join(body_parts)
+        
+        req = urllib.request.Request(
+            LARK_IM_IMAGE_URL,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": f"multipart/form-data; boundary={boundary}"
+            },
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=30) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        
+        if data.get("code") != 0:
+            logger.error(f"Lark image upload error: {data.get('msg')}")
+            return None
+        
+        image_key = data.get("data", {}).get("image_key")
+        if image_key:
+            logger.info(f"\u2705 Lark card image uploaded: {image_key[:20]}...")
+            return image_key
+        else:
+            logger.error("Lark image upload response missing image_key")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Failed to upload image to Lark card API: {str(e)}")
+        return None
+
+
+def build_poc_interactive_card(
+    employee_data: dict,
+    poc_branch: str,
+    poc_name: str = "",
+    image_key: str = None
+) -> dict:
+    """
+    Build a Lark Interactive Card JSON for POC ID card notification.
+    
+    Matches HR's preferred format:
+    - Red header: "Temporary ID Ready for Printing"
+    - Greeting mentioning the POC
+    - Info about the ID being ready
+    - Embedded ID card image preview (if image_key provided)
+    - Employee details
+    - Link to Lark Base
+    - PDF download link
+    - Footer: "From HR Services"
+    
+    Args:
+        employee_data: Dict with employee info
+        poc_branch: Resolved POC branch name
+        poc_name: POC contact's display name
+        image_key: Lark image_key for card image (optional)
+    
+    Returns:
+        Card message dict ready for sending
+    """
+    employee_name = employee_data.get("employee_name", "Unknown")
+    id_number = employee_data.get("id_number", "")
+    position = employee_data.get("position", "")
+    location_branch = employee_data.get("location_branch", "")
+    pdf_url = employee_data.get("pdf_url", "")
+    
+    # Build Lark Base URL
+    lark_base_url = f"https://{LARK_SUITE_DOMAIN}.larksuite.com/base/{LARK_BITABLE_ID}?from=from_copylink"
+    
+    # Greeting line
+    greeting = f"Hi {poc_name}," if poc_name else f"Hi {poc_branch} POC,"
+    
+    # Build card elements
+    elements = []
+    
+    # Greeting and body text
+    body_text = (
+        f"{greeting}\n\n"
+        f"This is to inform you that the Temporary ID number for **{employee_name}** "
+        f"is now ready for printing. Kindly proceed with the printing process at your earliest convenience."
+    )
+    elements.append({
+        "tag": "div",
+        "text": {
+            "tag": "lark_md",
+            "content": body_text
+        }
+    })
+    
+    # Divider before image
+    elements.append({"tag": "hr"})
+    
+    # ID card image preview (if available)
+    if image_key:
+        elements.append({
+            "tag": "img",
+            "img_key": image_key,
+            "alt": {
+                "tag": "plain_text",
+                "content": f"ID Card - {employee_name}"
+            }
+        })
+        elements.append({"tag": "hr"})
+    
+    # Employee details
+    details_text = f"**Name :** {employee_name}"
+    if id_number:
+        details_text += f"\n**ID Number :** {id_number}"
+    if position:
+        details_text += f"\n**Position :** {position}"
+    if location_branch:
+        details_text += f"\n**Branch :** {location_branch}"
+    
+    elements.append({
+        "tag": "div",
+        "text": {
+            "tag": "lark_md",
+            "content": details_text
+        }
+    })
+    
+    # Divider
+    elements.append({"tag": "hr"})
+    
+    # Lark Base link and PDF download
+    links_text = f"You can access the ID by clicking the link below:\n[Open in Lark Base]({lark_base_url})"
+    if pdf_url:
+        links_text += f"\n\n[\U0001f4c4 Download PDF]({pdf_url})"
+    
+    elements.append({
+        "tag": "div",
+        "text": {
+            "tag": "lark_md",
+            "content": links_text
+        }
+    })
+    
+    # Divider before footer
+    elements.append({"tag": "hr"})
+    
+    # Footer
+    elements.append({
+        "tag": "div",
+        "text": {
+            "tag": "lark_md",
+            "content": "Thank you!\n\nFrom **HR Services**"
+        }
+    })
+    
+    # Test mode warning
+    if POC_TEST_MODE:
+        elements.append({
+            "tag": "note",
+            "elements": [{
+                "tag": "plain_text",
+                "content": "\u26a0\ufe0f TEST MODE - This is a test message"
+            }]
+        })
+    
+    # Build complete card
+    card = {
+        "config": {
+            "wide_screen_mode": True
+        },
+        "header": {
+            "title": {
+                "tag": "plain_text",
+                "content": "Temporary ID Ready for Printing"
+            },
+            "template": "red"
+        },
+        "elements": elements
+    }
+    
+    return card
+
+
+def send_lark_card_message(
+    recipient_id: str,
+    card_content: dict,
+    token: Optional[str] = None,
+    id_type: str = "open_id"
+) -> bool:
+    """
+    Send an interactive card message to a Lark user.
+    
+    Args:
+        recipient_id: Lark user's open_id or email
+        card_content: Card JSON dict (header + elements)
+        token: Optional access token (will fetch if not provided)
+        id_type: Type of recipient ID - "open_id" or "email"
+    
+    Returns:
+        True if message sent successfully, False otherwise
+    """
+    if not recipient_id or not card_content:
+        logger.error("send_lark_card_message: Missing recipient_id or card_content")
+        return False
+    
+    if token is None:
+        token = get_tenant_access_token()
+    
+    if not token:
+        logger.error("send_lark_card_message: Failed to get access token")
+        return False
+    
+    try:
+        logger.info(f"Sending Lark card message to user ({id_type}): {recipient_id[:30]}...")
+        
+        url = f"{LARK_IM_MESSAGE_URL}?receive_id_type={id_type}"
+        
+        content = json.dumps(card_content)
+        
+        payload = json.dumps({
+            "receive_id": recipient_id,
+            "msg_type": "interactive",
+            "content": content
+        }).encode('utf-8')
+        
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        
+        logger.info(f"Lark card message response: code={data.get('code')}, msg={data.get('msg')}")
+        
+        if data.get("code") != 0:
+            logger.error(f"Lark card message error: {data.get('msg')}")
+            return False
+        
+        message_id = data.get("data", {}).get("message_id", "unknown")
+        logger.info(f"\u2705 Lark card message sent successfully (message_id: {message_id[:15]}...)")
+        return True
+        
+    except urllib.error.HTTPError as e:
+        error_body = ""
+        try:
+            error_body = e.read().decode('utf-8')
+        except:
+            pass
+        logger.error(f"HTTP error sending Lark card message: {e.code} - {e.reason} - {error_body}")
+        return False
+    except Exception as e:
+        logger.error(f"Error sending Lark card message: {e}")
+        return False
+
+
 def send_to_poc(
     employee_data: dict,
     poc_branch: str,
@@ -1501,11 +1831,19 @@ def send_to_poc(
     """
     Send an ID card notification to a POC (Point of Contact).
     
+    Sends a Lark Interactive Card message (HR preferred format) with:
+    - Red header: "Temporary ID Ready for Printing"
+    - Greeting mentioning the POC by name
+    - Embedded ID card image preview (from Cloudinary)
+    - Employee details (name, ID number, position, branch)
+    - Lark Base link + PDF download link
+    - Footer: "From HR Services"
+    
     When test mode is enabled (POC_TEST_MODE=true), all messages are sent
     to the test recipient instead of the real POC.
     
     Args:
-        employee_data: Employee data including id_number, employee_name, etc.
+        employee_data: Employee data including id_number, employee_name, poc_name, etc.
         poc_branch: The resolved POC branch name
         poc_email: POC's email address (required if not in test mode)
     
@@ -1514,9 +1852,7 @@ def send_to_poc(
     """
     id_number = employee_data.get("id_number", "Unknown")
     employee_name = employee_data.get("employee_name", "Unknown")
-    position = employee_data.get("position", "")
-    location_branch = employee_data.get("location_branch", "")
-    render_url = employee_data.get("render_url", "")
+    poc_name = employee_data.get("poc_name", "")
     pdf_url = employee_data.get("pdf_url", "")
     
     logger.info(f"send_to_poc: Processing {employee_name} ({id_number}) -> {poc_branch}")
@@ -1526,11 +1862,11 @@ def send_to_poc(
     if POC_TEST_MODE:
         target_email = POC_TEST_RECIPIENT_EMAIL
         recipient_label = f"{POC_TEST_RECIPIENT_EMAIL} (TEST MODE)"
-        logger.info(f"  📧 TEST MODE: Sending to {target_email} instead of real POC")
+        logger.info(f"  \U0001f4e7 TEST MODE: Sending to {target_email} instead of real POC")
     else:
         if not poc_email:
             error_msg = f"No POC email configured for branch: {poc_branch}"
-            logger.error(f"  ❌ {error_msg}")
+            logger.error(f"  \u274c {error_msg}")
             return {
                 "success": False,
                 "error": error_msg,
@@ -1538,7 +1874,7 @@ def send_to_poc(
             }
         target_email = poc_email
         recipient_label = f"{poc_email} ({poc_branch})"
-        logger.info(f"  📧 Sending to real POC: {target_email}")
+        logger.info(f"  \U0001f4e7 Sending to real POC: {target_email}")
     
     # Get access token
     token = get_tenant_access_token()
@@ -1549,86 +1885,61 @@ def send_to_poc(
             "test_mode": POC_TEST_MODE
         }
     
-    # Try to look up recipient's Lark user ID, but fall back to sending by email
+    # Try to look up recipient's Lark user ID, fall back to sending by email
     recipient_id = lookup_lark_user_by_email(target_email, token=token)
     use_email = recipient_id is None
     
     if use_email:
-        logger.info(f"  📧 No open_id found, will send by email directly")
+        logger.info(f"  \U0001f4e7 No open_id found, will send by email directly")
         recipient_for_send = target_email
     else:
         recipient_for_send = recipient_id
     
-    # Build message content
-    message_lines = [
-        f"📋 NEW ID CARD FOR PRINTING",
-        f"",
-        f"🏢 POC Branch: {poc_branch}",
-        f"👤 Employee: {employee_name}",
-        f"🔢 ID Number: {id_number}",
-        f"💼 Position: {position}",
-        f"📍 Location: {location_branch}",
-    ]
-    
-    if pdf_url:
-        message_lines.append(f"")
-        message_lines.append(f"📄 PDF: {pdf_url}")
-    
-    if render_url:
-        message_lines.append(f"🖼️ Preview: {render_url}")
-    
-    if POC_TEST_MODE:
-        message_lines.append(f"")
-        message_lines.append(f"⚠️ TEST MODE - This is a test message")
-    
-    message_text = "\n".join(message_lines)
-    
-    # Send the message (use email as id_type if no open_id was found)
     id_type = "email" if use_email else "open_id"
-    text_sent = send_lark_dm(recipient_for_send, message_text, token=token, id_type=id_type)
     
-    # Also send PDF as attachment if available
-    # On Vercel serverless, skip the PDF attachment to avoid timeout (PDF link is in the text message)
-    is_serverless = os.environ.get('VERCEL', '') != ''
-    pdf_sent = False
-    if pdf_url and not is_serverless:
-        logger.info(f"  📎 Attempting to send PDF attachment...")
+    # Try to get image preview for the card
+    image_key = None
+    if pdf_url:
         try:
-            # Upload PDF to Lark IM
-            safe_filename = f"ID_Card_{id_number.replace('/', '_').replace(' ', '_')}.pdf"
-            file_key = upload_url_to_lark_im(pdf_url, safe_filename, file_type="pdf")
-            
-            if file_key:
-                # Send file message
-                pdf_sent = send_lark_file_message(
-                    recipient_for_send, 
-                    file_key, 
-                    token=token, 
-                    id_type=id_type
-                )
-                if pdf_sent:
-                    logger.info(f"  ✅ PDF attachment sent to {recipient_label}")
+            image_url = derive_image_url_from_pdf(pdf_url)
+            if image_url:
+                logger.info(f"  \U0001f5bc\ufe0f Downloading ID card image preview...")
+                image_bytes = download_file_from_url(image_url, timeout=10)
+                if image_bytes:
+                    logger.info(f"  \U0001f4e4 Uploading image to Lark card API ({len(image_bytes)} bytes)...")
+                    image_key = upload_image_to_lark_card(image_bytes)
+                    if image_key:
+                        logger.info(f"  \u2705 Card image ready: {image_key[:20]}...")
+                    else:
+                        logger.warning(f"  \u26a0\ufe0f Failed to upload image to Lark card API")
                 else:
-                    logger.warning(f"  ⚠️ Failed to send PDF attachment (message may still succeed)")
-            else:
-                logger.warning(f"  ⚠️ Failed to upload PDF to Lark IM")
-        except Exception as e:
-            logger.warning(f"  ⚠️ Error sending PDF attachment: {e}")
-    elif pdf_url and is_serverless:
-        logger.info(f"  ⏭️ Skipping PDF attachment on Vercel serverless (link included in text)")
+                    logger.warning(f"  \u26a0\ufe0f Failed to download image preview from Cloudinary")
+        except Exception as img_e:
+            logger.warning(f"  \u26a0\ufe0f Image preview failed (will send card without image): {str(img_e)}")
     
-    if text_sent:
-        logger.info(f"  ✅ Notification sent to {recipient_label}")
+    # Build interactive card
+    card = build_poc_interactive_card(
+        employee_data=employee_data,
+        poc_branch=poc_branch,
+        poc_name=poc_name,
+        image_key=image_key
+    )
+    
+    # Send the card message
+    card_sent = send_lark_card_message(recipient_for_send, card, token=token, id_type=id_type)
+    
+    if card_sent:
+        logger.info(f"  \u2705 Card notification sent to {recipient_label}")
         return {
             "success": True,
             "message": f"Sent to {recipient_label}",
             "recipient": target_email,
             "test_mode": POC_TEST_MODE,
-            "pdf_attached": pdf_sent
+            "image_included": image_key is not None
         }
     else:
-        error_msg = f"Failed to send Lark message to {target_email}"
-        logger.error(f"  ❌ {error_msg}")
+        error_msg = f"Failed to send Lark card message to {target_email}"
+        logger.error(f"  \u274c {error_msg}")
         return {
             "success": False,
             "error": error_msg,

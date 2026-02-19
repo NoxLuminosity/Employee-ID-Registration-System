@@ -20,6 +20,9 @@ from app.services.lark_auth_service import (
 # Import session management
 from app.auth import create_session, get_session
 
+# Shared utilities
+from app.utils import parse_lark_name
+
 router = APIRouter(prefix="/auth")
 
 # Get the directory where this file is located
@@ -230,44 +233,4 @@ def get_current_user(employee_session: str = Cookie(None)):
     })
 
 
-def parse_lark_name(full_name: str) -> dict:
-    """
-    Parse a full name into first name, middle initial, and last name.
-    Handles various name formats:
-    - "John Doe" -> first: John, last: Doe
-    - "John M. Doe" -> first: John, middle: M, last: Doe
-    - "John Michael Doe" -> first: John, middle: M, last: Doe
-    - "John" -> first: John
-    """
-    if not full_name:
-        return {"first_name": "", "middle_initial": "", "last_name": ""}
-    
-    parts = full_name.strip().split()
-    
-    if len(parts) == 1:
-        # Only first name
-        return {
-            "first_name": parts[0],
-            "middle_initial": "",
-            "last_name": ""
-        }
-    elif len(parts) == 2:
-        # First and last name
-        return {
-            "first_name": parts[0],
-            "middle_initial": "",
-            "last_name": parts[1]
-        }
-    else:
-        # First, middle(s), and last name
-        # Take first part as first name, last part as last name
-        # Middle initial from second part
-        middle = parts[1]
-        # Extract initial (first letter, removing any dots)
-        middle_initial = middle.replace(".", "")[0].upper() if middle else ""
-        
-        return {
-            "first_name": parts[0],
-            "middle_initial": middle_initial,
-            "last_name": parts[-1]
-        }
+

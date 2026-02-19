@@ -77,6 +77,16 @@ except ImportError:
 
 from dotenv import load_dotenv
 
+# Import POC routing service for contact resolution
+try:
+    from app.services.poc_routing_service import get_poc_contact, get_poc_email
+except ImportError:
+    # Fallback if app module not available
+    def get_poc_contact(branch):
+        return None
+    def get_poc_email(branch):
+        return None
+
 # Load environment variables
 load_dotenv()
 
@@ -248,6 +258,10 @@ class Config:
     BITABLE_BASE_URL: str = 'https://open.larksuite.com/open-apis/bitable/v1/apps'
     USER_BY_EMAIL_URL: str = 'https://open.larksuite.com/open-apis/contact/v3/users/batch_get_id'
     IM_MESSAGE_URL: str = 'https://open.larksuite.com/open-apis/im/v1/messages'
+    IM_IMAGE_URL: str = 'https://open.larksuite.com/open-apis/im/v1/images'
+    
+    # Lark Suite domain for Base URLs
+    LARK_SUITE_DOMAIN: str = field(default_factory=lambda: os.getenv('LARK_SUITE_DOMAIN', 'spmadridlaw'))
     
     def validate(self) -> bool:
         """Validate required configuration is present."""
@@ -743,6 +757,158 @@ def send_base_assistant_dm(recipient_id: str, message_text: str) -> bool:
         return False
 
 
+def build_interactive_card(resolved_branch: str, records: list[IDCardRecord], poc_name: str = "") -> dict:
+    """
+    Build a Lark Interactive Card for a group of records.
+    
+    HR preferred format with:
+    - Red header: "Temporary IDs Ready for Printing"
+    - Greeting with POC name
+    - Employee list with PDF links
+    - Lark Base link
+    - Footer: "From HR Services"
+    
+    Args:
+        resolved_branch: The resolved printer branch
+        records: List of records in this group
+        poc_name: POC contact's display name
+    
+    Returns:
+        Card message dict ready for sending
+    """
+    lark_base_url = f"https://{config.LARK_SUITE_DOMAIN}.larksuite.com/base/{config.BITABLE_APP_TOKEN}?from=from_copylink"
+    
+    greeting = f"Hi {poc_name}," if poc_name else f"Hi {resolved_branch} POC,"
+    
+    count = len(records)
+    plural = "s" if count > 1 else ""
+    
+    elements = []
+    
+    # Greeting and body text
+    body_text = (
+        f"{greeting}\n\n"
+        f"This is to inform you that **{count}** Temporary ID{plural} for the following employee{plural} "
+        f"{'are' if count > 1 else 'is'} now ready for printing. "
+        f"Kindly proceed with the printing process at your earliest convenience."
+    )
+    elements.append({
+        "tag": "div",
+        "text": {"tag": "lark_md", "content": body_text}
+    })
+    
+    elements.append({"tag": "hr"})
+    
+    # Employee list
+    for i, record in enumerate(records, 1):
+        entry = f"**{i}) {record.employee_name}**"
+        if record.id_number:
+            entry += f"\nID Number: {record.id_number}"
+        if record.position:
+            entry += f"\nPosition: {record.position}"
+        if record.location_branch:
+            entry += f"\nBranch: {record.location_branch}"
+        if record.id_card:
+            entry += f"\n[\U0001f4c4 Download PDF]({record.id_card})"
+        
+        elements.append({
+            "tag": "div",
+            "text": {"tag": "lark_md", "content": entry}
+        })
+        
+        # Add separator between employees (but not after the last one)
+        if i < count:
+            elements.append({"tag": "hr"})
+    
+    elements.append({"tag": "hr"})
+    
+    # Lark Base link
+    elements.append({
+        "tag": "div",
+        "text": {
+            "tag": "lark_md",
+            "content": f"You can access all IDs by clicking the link below:\n[Open in Lark Base]({lark_base_url})"
+        }
+    })
+    
+    elements.append({"tag": "hr"})
+    
+    # Footer
+    elements.append({
+        "tag": "div",
+        "text": {"tag": "lark_md", "content": "Thank you!\n\nFrom **HR Services**"}
+    })
+    
+    # Test mode note
+    if config.TEST_MODE:
+        elements.append({
+            "tag": "note",
+            "elements": [{"tag": "plain_text", "content": "\u26a0\ufe0f TEST MODE - This is a test message"}]
+        })
+    
+    card = {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "title": {
+                "tag": "plain_text",
+                "content": f"Temporary ID{plural} Ready for Printing \u2013 {resolved_branch}"
+            },
+            "template": "red"
+        },
+        "elements": elements
+    }
+    
+    return card
+
+
+def send_card_message(recipient_id: str, card_content: dict) -> bool:
+    """
+    Send an interactive card message via Lark IM Bot API.
+    
+    Args:
+        recipient_id: Lark user_id (open_id format)
+        card_content: Interactive card JSON dict
+    
+    Returns:
+        True if message sent successfully, False otherwise
+    """
+    token = get_tenant_access_token()
+    if not token:
+        return False
+    
+    content = json.dumps(card_content)
+    
+    try:
+        response = requests.post(
+            config.IM_MESSAGE_URL,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            params={"receive_id_type": "open_id"},
+            json={
+                "receive_id": recipient_id,
+                "msg_type": "interactive",
+                "content": content
+            },
+            timeout=config.REQUEST_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get("code") != 0:
+            logger.error(f"Card message send error: {data.get('msg')}")
+            return False
+        
+        message_id = data.get("data", {}).get("message_id", "unknown")
+        logger.info(f"Card message sent successfully (message_id: {message_id[:10]}...)")
+        return True
+        
+    except requests.RequestException as e:
+        logger.error(f"Failed to send card message: {e}")
+        return False
+
+
 # ============================================
 # Main Processing Logic
 # ============================================
@@ -861,13 +1027,22 @@ Examples:
     for resolved_branch, branch_records in groups.items():
         print(f"--- Batch: {resolved_branch} ({len(branch_records)} records) ---")
         
-        # Build message content
-        message_text = build_message_content(resolved_branch, branch_records)
+        # Get POC name for the greeting
+        poc_contact = get_poc_contact(resolved_branch)
+        poc_name = poc_contact.get("name", "") if poc_contact else ""
+        
+        # Build interactive card
+        card_content = build_interactive_card(resolved_branch, branch_records, poc_name)
         
         # Display message preview
-        print("Message Preview:")
+        print("Card Preview:")
         print("-" * 40)
-        print(message_text)
+        header_title = card_content.get('header', {}).get('title', {}).get('content', '')
+        print(f"  Header: {header_title}")
+        print(f"  POC: {poc_name or resolved_branch}")
+        print(f"  Employees: {len(branch_records)}")
+        for i, rec in enumerate(branch_records, 1):
+            print(f"    {i}) {rec.employee_name} | {rec.id_number} | {rec.position}")
         print("-" * 40)
         
         # Determine recipient
@@ -875,9 +1050,21 @@ Examples:
             recipient_id = test_user_id
             recipient_label = f"{config.TEST_RECIPIENT_EMAIL} (test mode)"
         else:
-            # TODO: Look up real POC email for this branch
-            recipient_id = test_user_id  # Fallback to test for now
-            recipient_label = f"{config.TEST_RECIPIENT_EMAIL} (POC lookup TODO)"
+            # Resolve real POC email and user_id
+            poc_email = get_poc_email(resolved_branch)
+            if poc_email:
+                real_poc_id = resolve_user_for_base_assistant(poc_email)
+                if real_poc_id:
+                    recipient_id = real_poc_id
+                    recipient_label = f"{poc_email} ({resolved_branch})"
+                else:
+                    print(f"WARNING: Could not resolve POC email {poc_email} - skipping batch")
+                    total_failed += len(branch_records)
+                    continue
+            else:
+                print(f"WARNING: No POC email for branch {resolved_branch} - skipping batch")
+                total_failed += len(branch_records)
+                continue
         
         print(f"Recipient: {recipient_label}")
         
@@ -886,9 +1073,9 @@ Examples:
             print()
             continue
         
-        # Send message
-        print("Sending message...")
-        if send_base_assistant_dm(recipient_id, message_text):
+        # Send card message
+        print("Sending interactive card message...")
+        if send_card_message(recipient_id, card_content):
             print("Action: ✓ MESSAGE SENT")
             
             # Prepare updates

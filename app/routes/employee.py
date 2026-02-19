@@ -39,7 +39,6 @@ from app.services.seedream_service import generate_headshot_from_url
 from app.services.barcode_service import (
     get_barcode_url,
     get_barcode_image,
-    get_barcode_url_safe,
     validate_barcode_data,
     BarcodeType
 )
@@ -417,7 +416,6 @@ async def submit_employee(
     from app.validators import (
         validate_employee_form,
         validate_id_number,
-        check_id_number_unique,
     )
     from app.database import get_employee_by_id_number
     
