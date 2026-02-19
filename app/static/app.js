@@ -116,6 +116,36 @@ function toTitleCase(name) {
   });
 }
 
+/**
+ * Generate OKPo URL slug from employee name parts.
+ * Format: full first word of first name + first letter of each subsequent word in first name
+ *         + first letter of last name + middle initial letter (all lowercase, no spaces).
+ * Example: firstName="Jan Joshua Kendrick", lastName="Dela Paz", middleInitial="A"
+ *          → "janjkda"
+ * @param {string} firstName - Full first name (may contain multiple words)
+ * @param {string} lastName - Last name
+ * @param {string} middleInitial - Middle initial (with or without period)
+ * @returns {string} Lowercase slug for OKPo URL
+ */
+function generateOkpoSlug(firstName, lastName, middleInitial) {
+  let slug = '';
+  if (firstName) {
+    const parts = firstName.trim().toLowerCase().split(/\s+/);
+    slug += parts[0] || '';
+    for (let i = 1; i < parts.length; i++) {
+      if (parts[i]) slug += parts[i].charAt(0);
+    }
+  }
+  if (lastName) {
+    slug += lastName.trim().charAt(0).toLowerCase();
+  }
+  if (middleInitial) {
+    const mi = middleInitial.replace('.', '').trim();
+    if (mi) slug += mi.charAt(0).toLowerCase();
+  }
+  return slug;
+}
+
 // ============================================
 // State Management
 // ============================================
@@ -1106,14 +1136,12 @@ function updateDualTemplatePreview() {
   const origEmergencyAddress = document.getElementById('dual_original_emergency_address');
   if (origEmergencyAddress) origEmergencyAddress.textContent = emergencyAddress || 'Contact Address';
   
-  // Update SPMC back website URL with correct format: www.okpo.com/spm/firstnamelastinitialmiddleinitial
+  // Update SPMC back website URL with correct format: www.okpo.com/spm/<okpo-slug>
   const origBackWebsiteUrl = document.getElementById('dual_original_back_website_url');
   if (origBackWebsiteUrl) {
-    const firstNameLower = firstName ? firstName.toLowerCase().replace(/\s+/g, '') : '';
-    const lastNameInitialLower = lastName ? lastName.charAt(0).toLowerCase() : '';
-    const middleInitialLower = middleInitial ? middleInitial.charAt(0).toLowerCase() : '';
-    const backDynamicUrl = `www.okpo.com/spm/${firstNameLower}${lastNameInitialLower}${middleInitialLower}`;
-    origBackWebsiteUrl.textContent = firstNameLower ? backDynamicUrl : 'www.okpo.com/spm/';
+    const okpoSlugDual = generateOkpoSlug(firstName, lastName, middleInitial);
+    const backDynamicUrl = `www.okpo.com/spm/${okpoSlugDual}`;
+    origBackWebsiteUrl.textContent = okpoSlugDual ? backDynamicUrl : 'www.okpo.com/spm/';
   }
   
   // Generate vCard QR code for SPMC backside using QuickChart API
@@ -1168,12 +1196,10 @@ function updateDualTemplatePreview() {
   const urlQrPlaceholder = document.getElementById('dual_original_url_qr_placeholder');
   if (urlQrImg && urlQrPlaceholder) {
     // Build URL using same format as the displayed URL text
-    const firstNameLower = firstName ? firstName.toLowerCase().replace(/\s+/g, '') : '';
-    const lastNameInitialLower = lastName ? lastName.charAt(0).toLowerCase() : '';
-    const middleInitialLower = middleInitial ? middleInitial.charAt(0).toLowerCase() : '';
-    const employeeUrl = `https://www.okpo.com/spm/${firstNameLower}${lastNameInitialLower}${middleInitialLower}`;
+    const okpoSlugDualQr = generateOkpoSlug(firstName, lastName, middleInitial);
+    const employeeUrl = `https://www.okpo.com/spm/${okpoSlugDualQr}`;
     
-    if (firstNameLower) {
+    if (okpoSlugDualQr) {
       // OKPO logo URL (must be URL-encoded)
       const logoUrl = 'https://239dc453931a663c0cfa3bb867f1aaae.cdn.bubble.io/cdn-cgi/image/w=,h=,f=auto,dpr=1,fit=contain/f1727917655428x617042099316169600/okpologo.jpg';
       const encodedLogoUrl = encodeURIComponent(logoUrl);
@@ -1604,6 +1630,8 @@ async function fetchHeadshotUsage() {
         state.headshotLimit = data.limit;
         state.headshotRemaining = data.remaining;
         state.headshotLimitReached = data.remaining <= 0;
+        // Initialize local generation counter from server data
+        state._localGenerationCount = data.used;
         updateHeadshotLimitUI();
       }
     }
@@ -1614,13 +1642,27 @@ async function fetchHeadshotUsage() {
 
 /**
  * Update headshot usage tracking from a generate-headshot API response.
+ * Also increments a local fallback counter in case the server-side tracking
+ * returns stale data (e.g. when lark_user_id is missing).
  */
 function updateHeadshotUsageFromResponse(result) {
   if (result && typeof result.used === 'number') {
-    state.headshotUsed = result.used;
-    state.headshotLimit = result.limit;
-    state.headshotRemaining = result.remaining;
-    state.headshotLimitReached = result.remaining <= 0;
+    // If server reports 0 used but we know we just generated, use local count
+    state._localGenerationCount = (state._localGenerationCount || 0) + 1;
+    const serverUsed = result.used;
+    const effectiveUsed = Math.max(serverUsed, state._localGenerationCount);
+    
+    state.headshotUsed = effectiveUsed;
+    state.headshotLimit = result.limit || 5;
+    state.headshotRemaining = Math.max(0, state.headshotLimit - effectiveUsed);
+    state.headshotLimitReached = state.headshotRemaining <= 0;
+    updateHeadshotLimitUI();
+  } else {
+    // Fallback: increment local counter even without server data
+    state._localGenerationCount = (state._localGenerationCount || 0) + 1;
+    state.headshotUsed = state._localGenerationCount;
+    state.headshotRemaining = Math.max(0, state.headshotLimit - state.headshotUsed);
+    state.headshotLimitReached = state.headshotRemaining <= 0;
     updateHeadshotLimitUI();
   }
 }
@@ -1628,20 +1670,29 @@ function updateHeadshotUsageFromResponse(result) {
 /**
  * Update the UI to reflect remaining headshot generations.
  * Shows/hides warning banner and disables regenerate controls when limit is reached.
+ * Counter is placed in the ai-preview-card (always visible once photo section loads),
+ * not inside aiActions (which is hidden until generation completes).
  */
 function updateHeadshotLimitUI() {
   // Regenerate button
   const regenerateBtn = document.getElementById('regenerateBtn');
   const outfitSelect = document.getElementById('outfitSelect');
 
-  // Create or update the counter label
+  // Create or update the counter label - place in ai-preview-card so it's always visible
   let counterEl = document.getElementById('headshotCounter');
   if (!counterEl) {
     counterEl = document.createElement('div');
     counterEl.id = 'headshotCounter';
-    counterEl.style.cssText = 'font-size:0.8rem;color:#6b7280;text-align:center;margin-top:4px;';
-    const aiActions = document.getElementById('aiActions');
-    if (aiActions) aiActions.appendChild(counterEl);
+    counterEl.style.cssText = 'font-size:0.8rem;color:#6b7280;text-align:center;margin-top:8px;padding:4px 0;';
+    // Append to ai-preview-card instead of aiActions so counter is visible even before first generation
+    const aiPreviewCard = document.querySelector('.ai-preview-card');
+    if (aiPreviewCard) {
+      aiPreviewCard.appendChild(counterEl);
+    } else {
+      // Fallback: try aiActions
+      const aiActions = document.getElementById('aiActions');
+      if (aiActions) aiActions.appendChild(counterEl);
+    }
   }
 
   // Create or update the warning banner
@@ -2341,13 +2392,13 @@ function updateIdCardPreview() {
   }
 
   // Update dynamic website URLs
-  // Back-side URL format: www.okpo.com/spm/(FirstName + LastNameInitial + MiddleInitial)
-  // All lowercase, no spaces, no separators
-  // Example: Miguel Manuel Lacaden → www.okpo.com/spm/miguelml
-  const firstNameLower = firstName ? firstName.toLowerCase() : '';
-  const lastNameInitialLower = lastName ? lastName.charAt(0).toLowerCase() : '';
-  const middleInitialLower = middleInitial ? middleInitial.replace('.', '').charAt(0).toLowerCase() : '';
-  const backDynamicUrl = `www.okpo.com/spm/${firstNameLower}${lastNameInitialLower}${middleInitialLower}`;
+  // Back-side URL format: www.okpo.com/spm/<okpo-slug>
+  // Slug: full first word of first name + first letter of each subsequent first-name word
+  //       + first letter of last name + middle initial (all lowercase, no spaces)
+  // Example: Jan Joshua Kendrick, Dela Paz, A → www.okpo.com/spm/janjkda
+  const okpoSlug = generateOkpoSlug(firstName, lastName, middleInitial);
+  const firstNameLower = okpoSlug; // used by URL QR section below
+  const backDynamicUrl = `www.okpo.com/spm/${okpoSlug}`;
   
   // Front-side website URL (always static)
   const frontWebsiteEl = document.getElementById('id_front_website_url');
@@ -2355,10 +2406,10 @@ function updateIdCardPreview() {
     frontWebsiteEl.textContent = 'www.spmadrid.com';
   }
   
-  // Back-side website URL (dynamic with first name)
+  // Back-side website URL (dynamic with name slug)
   const backWebsiteEl = document.getElementById('id_back_website_url');
   if (backWebsiteEl) {
-    backWebsiteEl.textContent = firstNameLower ? backDynamicUrl : 'www.okpo.com/spm/';
+    backWebsiteEl.textContent = okpoSlug ? backDynamicUrl : 'www.okpo.com/spm/';
   }
   
   // Back-side contact label ("{First name}'s Contact")

@@ -2417,14 +2417,13 @@ input::placeholder {
   font-size: 2.4rem;  /* Base size - will be scaled down dynamically for long names */
   font-weight: 900;
   color: #000000;
-  line-height: 1;
+  line-height: 1.05;
   margin: 0 0 3px 0;
   word-break: break-word;
   overflow-wrap: break-word;
   max-width: 300px;
-  /* Ensure text doesn't push other elements out of view */
-  max-height: 100px;
-  overflow: hidden;
+  /* Allow full name to display without truncation */
+  overflow: visible;
 }
 
 .id-position-dept {
@@ -2529,16 +2528,16 @@ input::placeholder {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 240px;
-  height: 110px;
+  width: 150px;
+  height: 65px;
   position: absolute;
   right: 12px;  /* Position at right side with padding */
   bottom: 12px;  /* Position at bottom with padding */
   overflow: hidden;
   background-color: #ffffff;  /* Solid white - no transparency */
   border: none;
-  border-radius: 10px;  /* Rounded corners */
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);  /* Subtle shadow for depth */
+  border-radius: 8px;  /* Rounded corners */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);  /* Subtle shadow for depth */
   z-index: 15;  /* Above photo but below nickname */
 }
 
@@ -2556,7 +2555,7 @@ input::placeholder {
   top: 0;
   left: 0;
   z-index: 1;
-  padding: 4px;  /* Minimal padding to maximize signature display */
+  padding: 3px;  /* Minimal padding to maximize signature display */
   margin: 0;
   box-sizing: border-box;
   /* Enhanced contrast and boldness for better visibility */

@@ -630,6 +630,35 @@ function generateIDCardHtml(emp) {
   return generateRegularIDCardHtml(emp);
 }
 
+/**
+ * Generate OKPo URL slug from employee object name parts.
+ * Format: full first word of first name + first letter of each subsequent word in first name
+ *         + first letter of last name + middle initial letter (all lowercase, no spaces).
+ * Example: first_name="Jan Joshua Kendrick", last_name="Dela Paz", middle_initial="A"
+ *          → "janjkda"
+ * @param {Object} emp - Employee object with first_name, last_name, middle_initial
+ * @returns {string} Lowercase slug for OKPo URL
+ */
+function generateOkpoSlugGallery(emp) {
+  let slug = '';
+  const firstName = emp.first_name || emp.employee_name?.split(' ')[0] || '';
+  if (firstName) {
+    const parts = firstName.trim().toLowerCase().split(/\s+/);
+    slug += parts[0] || '';
+    for (let i = 1; i < parts.length; i++) {
+      if (parts[i]) slug += parts[i].charAt(0);
+    }
+  }
+  if (emp.last_name) {
+    slug += emp.last_name.trim().charAt(0).toLowerCase();
+  }
+  if (emp.middle_initial) {
+    const mi = emp.middle_initial.replace('.', '').trim();
+    if (mi) slug += mi.charAt(0).toLowerCase();
+  }
+  return slug;
+}
+
 // Build full name from separate fields: FirstName + MiddleInitial + LastName + Suffix
 // If middle_initial exists, format as single uppercase letter with period
 // Falls back to employee_name if separate fields are not available
@@ -705,13 +734,11 @@ function generateRegularIDCardHtml(emp) {
   // Get nickname or use first name
   const nickname = emp.id_nickname || (emp.first_name || emp.employee_name.split(' ')[0]);
   
-  // Generate dynamic back-side URL: www.okpo.com/spm/(FirstName + LastNameInitial + MiddleInitial)
-  // Format: all lowercase, no spaces, no separators
-  // Example: Miguel Manuel Lacaden → www.okpo.com/spm/miguelml
-  const firstName = (emp.first_name || emp.employee_name.split(' ')[0] || '').toLowerCase();
-  const lastNameInitial = emp.last_name ? emp.last_name.charAt(0).toLowerCase() : '';
-  const middleInitial = emp.middle_initial ? emp.middle_initial.replace('.', '').charAt(0).toLowerCase() : '';
-  const backDynamicUrl = `www.okpo.com/spm/${firstName}${lastNameInitial}${middleInitial}`;
+  // Generate dynamic back-side URL using OKPo slug format:
+  // Full first word of first name + first letter of each subsequent word
+  // + first letter of last name + middle initial (all lowercase, no spaces)
+  // Example: Jan Joshua Kendrick, Dela Paz, A → www.okpo.com/spm/janjkda
+  const backDynamicUrl = `www.okpo.com/spm/${generateOkpoSlugGallery(emp)}`;
   const frontStaticUrl = 'www.spmadrid.com';
 
   return `
@@ -870,12 +897,11 @@ function generateIDCardBackHtml(emp) {
   const nickname = emp.id_nickname || (emp.first_name || emp.employee_name.split(' ')[0]);
   const username = nickname.toLowerCase().replace(/\s+/g, '');
   
-  // Generate dynamic URL: www.okpo.com/spm/(FirstName + LastNameInitial + MiddleInitial)
-  // Format: all lowercase, no spaces, no separators
-  const firstName = (emp.first_name || emp.employee_name.split(' ')[0] || '').toLowerCase();
-  const lastNameInitial = emp.last_name ? emp.last_name.charAt(0).toLowerCase() : '';
-  const middleInitial = emp.middle_initial ? emp.middle_initial.replace('.', '').charAt(0).toLowerCase() : '';
-  const dynamicUrl = `www.okpo.com/spm/${firstName}${lastNameInitial}${middleInitial}`;
+  // Generate dynamic URL using OKPo slug format:
+  // Full first word of first name + first letter of each subsequent word
+  // + first letter of last name + middle initial (all lowercase, no spaces)
+  // Example: Jan Joshua Kendrick, Dela Paz, A → www.okpo.com/spm/janjkda
+  const dynamicUrl = `www.okpo.com/spm/${generateOkpoSlugGallery(emp)}`;
   const fullWebUrl = `https://${dynamicUrl}`;
   const contactLabel = `${emp.first_name || emp.employee_name.split(' ')[0] || ''}'s Contact`;
   

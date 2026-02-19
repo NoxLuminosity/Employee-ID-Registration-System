@@ -424,8 +424,6 @@ function renderEmployeeTable() {
         <td><span class="employee-phone">${escapeHtml(emp.personal_number || '-')}</span></td>
         <td>${escapeHtml(emp.position)}</td>
         <td>${escapeHtml(emp.location_branch || '-')}</td>
-        <td>${escapeHtml(emp.fo_department || '-')}</td>
-        <td><span class="campaign-cell">${escapeHtml(formatCampaignValues(emp.fo_campaign))}</span></td>
         <td><span class="status-badge ${statusClass}">${emp.status}</span></td>
         <td>${submittedDate}</td>
         <td>
