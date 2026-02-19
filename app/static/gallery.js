@@ -699,6 +699,19 @@ function buildFullNameHtml(emp) {
   return escapeHtml(emp.employee_name);
 }
 
+/**
+ * Determine CSS size class for id-fullname based on total name length.
+ * Longer names get smaller font sizes to prevent pushing barcode/ID off the card.
+ */
+function getFullNameSizeClass(emp) {
+  const fullName = buildFullName(emp);
+  const len = fullName.length;
+  if (len > 35) return 'id-fullname-xs';   // Very long names: ~1.2rem
+  if (len > 25) return 'id-fullname-sm';   // Long names: ~1.6rem
+  if (len > 18) return 'id-fullname-md';   // Medium names: ~2.0rem
+  return '';  // Default 2.4rem for short names
+}
+
 // Generate Regular ID Card HTML (for Freelancer, Intern, Others)
 // Image source rule: Uses AI-generated photo (nobg_photo_url preferred)
 // For Repossessor Portrait Template: Uses AI photo
@@ -773,7 +786,7 @@ function generateRegularIDCardHtml(emp) {
         <div class="id-info-container">
           <!-- Left side - Name, Title, Barcode -->
           <div class="id-info-left">
-            <h1 class="id-fullname">${buildFullNameHtml(emp)}</h1>
+            <h1 class="id-fullname ${getFullNameSizeClass(emp)}">${buildFullNameHtml(emp)}</h1>
             
             <div class="id-position-dept">
               <span>${emp.position === 'Field Officer' ? 'Legal Officer' : escapeHtml(emp.position)}</span>

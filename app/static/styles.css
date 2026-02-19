@@ -2426,6 +2426,17 @@ input::placeholder {
   overflow: visible;
 }
 
+/* Dynamic font sizing for long names - prevents barcode/ID from being pushed off card */
+.id-fullname.id-fullname-md {
+  font-size: 2.0rem;
+}
+.id-fullname.id-fullname-sm {
+  font-size: 1.6rem;
+}
+.id-fullname.id-fullname-xs {
+  font-size: 1.3rem;
+}
+
 .id-position-dept {
   display: flex;
   align-items: center;
