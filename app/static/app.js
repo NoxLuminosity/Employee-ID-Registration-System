@@ -230,9 +230,11 @@ function initNameAutoPopulation() {
     firstNameInput.addEventListener('input', () => {
       // Auto-populate id_nickname with only the first word of first name
       // e.g., "Sean Raphael" -> "Sean" for the ID card nickname
+      // Always capitalize: first letter uppercase, rest lowercase
       const fullFirstName = firstNameInput.value.trim();
       const firstWord = fullFirstName.split(' ')[0] || '';
-      idNicknameInput.value = firstWord;
+      const capitalized = firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase() : '';
+      idNicknameInput.value = capitalized;
       // Trigger change event to update previews
       idNicknameInput.dispatchEvent(new Event('change'));
     });
@@ -247,10 +249,12 @@ function initPrefilledFields() {
   const idNicknameInput = document.getElementById('id_nickname');
   
   // If first_name is prefilled, auto-populate id_nickname with only first word
+  // Always capitalize: first letter uppercase, rest lowercase
   if (firstNameInput && idNicknameInput && firstNameInput.value) {
     const fullFirstName = firstNameInput.value.trim();
     const firstWord = fullFirstName.split(' ')[0] || '';
-    idNicknameInput.value = firstWord;
+    const capitalized = firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase() : '';
+    idNicknameInput.value = capitalized;
     // Trigger change event to update previews
     idNicknameInput.dispatchEvent(new Event('change'));
   }

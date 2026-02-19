@@ -2349,7 +2349,7 @@ input::placeholder {
 .id-photo-container img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center center;
   /* AI image positioned absolutely within container */
   position: absolute;
@@ -2358,10 +2358,10 @@ input::placeholder {
   z-index: 1;  /* Above background pattern within container */
 }
 
-/* When image has transparent background - still use cover to fill container */
+/* When image has transparent background - contain to show full image */
 .id-photo-container img.transparent-bg {
-  object-fit: cover;
-  object-position: center top;
+  object-fit: contain;
+  object-position: center center;
   background: transparent;
 }
 
@@ -2571,6 +2571,11 @@ input::placeholder {
   box-sizing: border-box;
   /* Enhanced contrast and boldness for better visibility */
   filter: contrast(1.8) brightness(0.85);
+  /* Dynamic scaling support - min dimensions ensure small signatures are visible */
+  min-width: 60%;
+  min-height: 50%;
+  /* Smooth scaling transitions */
+  transition: transform 0.15s ease;
 }
 
 .id-signature-placeholder {

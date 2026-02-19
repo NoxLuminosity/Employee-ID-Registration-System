@@ -1521,12 +1521,13 @@ def derive_image_url_from_pdf(pdf_url: str, page: int = 1) -> Optional[str]:
         return None
     
     # Build Cloudinary transformation string
-    # Use high quality (q_100), high DPI (dn_300), and large width (w_2048)
-    # to ensure ID card images are sharp and not blurry in OkPo messages
+    # Use PNG format (lossless) instead of JPG to prevent compression artifacts
+    # High quality (q_100), high DPI (dn_300), large width (w_2400) for sharp images
+    # fl_sanitize ensures clean output for Lark card rendering
     if page <= 1:
-        transform = "f_jpg,q_100,dn_300,w_2048"
+        transform = "f_png,q_100,dn_300,w_2400"
     else:
-        transform = f"pg_{page},f_jpg,q_100,dn_300,w_2048"
+        transform = f"pg_{page},f_png,q_100,dn_300,w_2400"
     
     # Replace /raw/upload/ with /image/upload/<transform>/
     # Keep version number and .pdf extension — transformation handles format
@@ -1570,10 +1571,10 @@ def upload_image_to_lark_card(image_bytes: bytes) -> Optional[str]:
         body_parts.append(b'Content-Disposition: form-data; name="image_type"\r\n\r\n')
         body_parts.append(b'message\r\n')
         
-        # Add image file
+        # Add image file - use PNG for higher quality
         body_parts.append(f'--{boundary}\r\n'.encode('utf-8'))
-        body_parts.append(b'Content-Disposition: form-data; name="image"; filename="preview.jpg"\r\n')
-        body_parts.append(b'Content-Type: image/jpeg\r\n\r\n')
+        body_parts.append(b'Content-Disposition: form-data; name="image"; filename="preview.png"\r\n')
+        body_parts.append(b'Content-Type: image/png\r\n\r\n')
         body_parts.append(image_bytes)
         body_parts.append(f'\r\n--{boundary}--\r\n'.encode('utf-8'))
         
@@ -1589,7 +1590,7 @@ def upload_image_to_lark_card(image_bytes: bytes) -> Optional[str]:
             method="POST"
         )
         
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=45) as response:
             data = json.loads(response.read().decode('utf-8'))
         
         if data.get("code") != 0:
@@ -1632,9 +1633,10 @@ def build_poc_interactive_card(
     - Info about the ID being ready
     - Embedded ID card images with labels (front/back, SPMA/SPMC)
     - Employee details
-    - Link to Lark Base
-    - PDF download link
     - Footer: "From HR Services"
+    
+    Note: PDF link and Lark Base link have been removed per HR feedback.
+    Only essential ID information and actions are included.
     
     Args:
         employee_data: Dict with employee info
@@ -1650,9 +1652,6 @@ def build_poc_interactive_card(
     position = employee_data.get("position", "")
     location_branch = employee_data.get("location_branch", "")
     pdf_url = employee_data.get("pdf_url", "")
-    
-    # Build Lark Base URL
-    lark_base_url = f"https://{LARK_SUITE_DOMAIN}.larksuite.com/base/{LARK_BITABLE_ID}?from=from_copylink"
     
     # Greeting line
     greeting = f"Hi {poc_name}," if poc_name else f"Hi {poc_branch} POC,"
@@ -1721,21 +1720,9 @@ def build_poc_interactive_card(
     # Divider
     elements.append({"tag": "hr"})
     
-    # Lark Base link and PDF download
-    links_text = f"You can access the ID by clicking the link below:\n[Open in Lark Base]({lark_base_url})"
-    if pdf_url:
-        links_text += f"\n\n[\U0001f4c4 Download PDF]({pdf_url})"
-    
-    elements.append({
-        "tag": "div",
-        "text": {
-            "tag": "lark_md",
-            "content": links_text
-        }
-    })
-    
-    # Divider before footer
-    elements.append({"tag": "hr"})
+    # Links section removed per HR feedback:
+    # - PDF link and "Open in Lark Base" link are no longer included
+    # - Only essential ID information and images are shown
     
     # Footer
     elements.append({
@@ -1865,8 +1852,9 @@ def send_to_poc(
     - Greeting mentioning the POC by name
     - Embedded ID card image preview (from Cloudinary)
     - Employee details (name, ID number, position, branch)
-    - Lark Base link + PDF download link
     - Footer: "From HR Services"
+    
+    Note: PDF link and Lark Base link have been removed per HR feedback.
     
     When test mode is enabled (POC_TEST_MODE=true), all messages are sent
     to the test recipient instead of the real POC.
@@ -1975,7 +1963,7 @@ def send_to_poc(
                     continue
                 
                 logger.info(f"  \U0001f5bc\ufe0f Downloading {page_label}...")
-                image_bytes = download_file_from_url(image_url, timeout=10)
+                image_bytes = download_file_from_url(image_url, timeout=20)
                 
                 # Fallback: if download fails, try re-uploading PDF as image
                 if not image_bytes and not cloudinary_image_ensured:

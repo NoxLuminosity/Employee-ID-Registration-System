@@ -619,7 +619,7 @@ async def submit_employee(
             'middle_initial': middle_initial,
             'last_name': last_name,
             'suffix': final_suffix,
-            'id_nickname': id_nickname,
+            'id_nickname': id_nickname.strip().capitalize() if id_nickname else '',
             'id_number': id_number,
             'position': position,
             'location_branch': location_branch,  # Branch/Location from form
@@ -687,7 +687,7 @@ async def submit_employee(
             
             lark_success = append_employee_submission(
                 employee_name=employee_name,
-                id_nickname=id_nickname,
+                id_nickname=id_nickname.strip().capitalize() if id_nickname else '',
                 id_number=id_number,
                 position=position,
                 location_branch=location_branch,

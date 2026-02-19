@@ -700,6 +700,64 @@ function buildFullNameHtml(emp) {
 }
 
 /**
+ * Apply Cloudinary e_trim transformation to a signature URL.
+ * This auto-crops whitespace/transparency around the signature strokes,
+ * so small signatures are effectively "zoomed in" and large ones are properly bounded.
+ * The result is a tightly-cropped signature image that fills the container better.
+ * 
+ * @param {string} signatureUrl - Cloudinary URL of the signature image
+ * @returns {string} Transformed URL with trim applied
+ */
+function applySignatureTrim(signatureUrl) {
+  if (!signatureUrl) return '';
+  // Apply e_trim to remove surrounding whitespace/transparency
+  // Then c_fit to scale to container dimensions (2x for sharpness)
+  // This ensures small signatures are enlarged and large ones are contained
+  if (signatureUrl.includes('/upload/')) {
+    return signatureUrl.replace('/upload/', '/upload/e_trim/c_fit,w_300,h_130/');
+  }
+  return signatureUrl;
+}
+
+/**
+ * Dynamic signature scaling - called onload for signature images.
+ * Adjusts the image transform if the natural dimensions indicate
+ * the signature needs scaling up or down relative to the container.
+ * 
+ * @param {HTMLImageElement} img - The loaded signature image element
+ */
+function dynamicSignatureScale(img) {
+  if (!img || !img.naturalWidth || !img.naturalHeight) return;
+  
+  const container = img.closest('.id-signature-area') || img.closest('.id-fo-signature-container');
+  if (!container) return;
+  
+  const containerW = container.offsetWidth || 150;
+  const containerH = container.offsetHeight || 65;
+  
+  const natW = img.naturalWidth;
+  const natH = img.naturalHeight;
+  
+  // Calculate the scale ratio - how much of the container the signature fills
+  const scaleX = containerW / natW;
+  const scaleY = containerH / natH;
+  const fitScale = Math.min(scaleX, scaleY);
+  
+  // If the signature is very small (fills less than 40% of container), scale it up
+  if (fitScale > 2.5) {
+    // Very small signature - scale to fill ~80% of container
+    const targetScale = fitScale * 0.8;
+    img.style.transform = `scale(${Math.min(targetScale, 3.0)})`;
+    img.style.transformOrigin = 'center center';
+  }
+  // If the signature is too large (would overflow), ensure contain behavior
+  // This is already handled by object-fit: contain, no extra action needed
+}
+
+// Make dynamicSignatureScale available globally for onload handlers
+window.dynamicSignatureScale = dynamicSignatureScale;
+
+/**
  * Determine CSS size class for id-fullname based on total name length.
  * Longer names get smaller font sizes to prevent pushing barcode/ID off the card.
  */
@@ -725,8 +783,14 @@ function generateRegularIDCardHtml(emp) {
     : `<span class="id-photo-placeholder">AI Image</span>`;
 
   const signatureHasImage = emp.signature_url ? 'has-image' : '';
-  const signatureHtml = emp.signature_url 
-    ? `<img src="${emp.signature_url}" alt="Signature" crossorigin="anonymous">`
+  // Apply Cloudinary e_trim transformation to auto-crop whitespace from signature
+  // This dynamically scales small signatures up (by removing surrounding blank space)
+  // and keeps large signatures properly contained within the ID card area
+  const trimmedSignatureUrl = emp.signature_url 
+    ? applySignatureTrim(emp.signature_url)
+    : '';
+  const signatureHtml = trimmedSignatureUrl 
+    ? `<img src="${trimmedSignatureUrl}" alt="Signature" crossorigin="anonymous" onload="dynamicSignatureScale(this)">`
     : `<span class="id-signature-placeholder">Signature</span>`;
 
   // Calculate expiration date (1 year from now) - only for Freelancer/Intern
@@ -744,8 +808,9 @@ function generateRegularIDCardHtml(emp) {
         </div>`;
   }
 
-  // Get nickname or use first name
-  const nickname = emp.id_nickname || (emp.first_name || emp.employee_name.split(' ')[0]);
+  // Get nickname or use first name - always capitalize (first letter uppercase, rest lowercase)
+  const rawNickname = emp.id_nickname || (emp.first_name || emp.employee_name.split(' ')[0]);
+  const nickname = rawNickname ? rawNickname.charAt(0).toUpperCase() + rawNickname.slice(1).toLowerCase() : '';
   
   // Generate dynamic back-side URL using OKPo slug format:
   // Full first word of first name + first letter of each subsequent word
@@ -830,8 +895,12 @@ function generateFieldOfficeIDCardHtml(emp) {
     ? `<img src="${idPhotoUrl}" alt="${escapeHtml(emp.employee_name)}" crossorigin="anonymous">`
     : `<span class="id-fo-photo-placeholder">Photo</span>`;
 
-  const signatureHtml = emp.signature_url 
-    ? `<img src="${emp.signature_url}" alt="Signature" crossorigin="anonymous">`
+  // Apply Cloudinary e_trim transformation to signature for dynamic sizing
+  const trimmedFoSignatureUrl = emp.signature_url
+    ? applySignatureTrim(emp.signature_url)
+    : '';
+  const signatureHtml = trimmedFoSignatureUrl 
+    ? `<img src="${trimmedFoSignatureUrl}" alt="Signature" crossorigin="anonymous" onload="dynamicSignatureScale(this)">`
     : `<span class="id-fo-signature-placeholder"></span>`;
 
   // Parse name for multi-line display
