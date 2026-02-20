@@ -364,6 +364,81 @@ def upload_bytes_to_cloudinary(
         return None
 
 
+def upload_card_image_png(
+    image_bytes: bytes,
+    public_id: str,
+    folder: Optional[str] = None
+) -> Optional[str]:
+    """
+    Upload a high-quality PNG card image to Cloudinary for direct bot message delivery.
+    
+    Unlike PDF-based uploads, this stores the image natively as PNG in Cloudinary's
+    image namespace, avoiding the PDF→PNG conversion quality loss.
+    
+    Optimized for HR-quality output:
+    - Lossless PNG format (no JPEG compression artifacts)
+    - No format conversion or re-encoding
+    - Direct delivery URL without on-the-fly transformations
+    
+    Args:
+        image_bytes: Raw PNG image bytes (high-resolution, lossless)
+        public_id: Unique identifier (e.g., "ID_EMP001_front")
+        folder: Cloudinary folder (defaults to 'id_card_images')
+    
+    Returns:
+        Secure HTTPS URL if successful, None otherwise
+    """
+    try:
+        if not configure_cloudinary():
+            logger.warning("Cloudinary not configured. Skipping card image upload.")
+            return None
+        
+        if folder is None:
+            folder = 'id_card_images'
+        
+        full_public_id = f"{folder}/{public_id}"
+        
+        file_size_mb = len(image_bytes) / (1024 * 1024)
+        logger.info(f"Card image PNG upload: {public_id} ({len(image_bytes)} bytes / {file_size_mb:.2f} MB)")
+        
+        if file_size_mb > 10:
+            logger.error(f"Card image too large: {file_size_mb:.2f} MB (limit: 10 MB)")
+            return None
+        
+        # Convert bytes to base64 data URI
+        base64_data = base64.b64encode(image_bytes).decode('utf-8')
+        data_uri = f"data:image/png;base64,{base64_data}"
+        
+        # Upload as native image (PNG) — no format conversion
+        result = cloudinary.uploader.upload(
+            data_uri,
+            public_id=full_public_id,
+            overwrite=True,
+            resource_type="image",
+            format="png",
+            type="upload",
+            access_mode="public",
+            # Preserve quality — no auto-optimization
+            quality="auto:best"
+        )
+        
+        secure_url = result.get('secure_url')
+        
+        if secure_url:
+            logger.info(f"Card image PNG uploaded: {public_id} -> {secure_url}")
+            return secure_url
+        else:
+            logger.error(f"Card image PNG upload failed: No secure_url for {public_id}")
+            return None
+            
+    except cloudinary.exceptions.Error as e:
+        logger.error(f"Cloudinary API error uploading card image {public_id}: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"Card image PNG upload failed for {public_id}: {str(e)}")
+        return None
+
+
 def upload_pdf_to_cloudinary(
     pdf_bytes: bytes,
     public_id: str,

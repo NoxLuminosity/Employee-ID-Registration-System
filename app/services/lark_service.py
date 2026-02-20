@@ -1952,11 +1952,67 @@ def send_to_poc(
     logger.info(f"  Pages to embed: {[label for _, label in page_specs]}")
     
     # Download and upload ID card images for each page
+    # Strategy: Use direct PNG URLs first (high quality, no PDF conversion),
+    # fall back to PDF-derived Cloudinary transformations if PNGs unavailable
     card_images = []
     cloudinary_image_ensured = False
     
-    if pdf_url:
+    # Check for direct PNG card images (stored in card_images_json)
+    card_images_json = employee_data.get("card_images_json", "")
+    direct_png_urls = {}
+    if card_images_json:
+        try:
+            parsed_images = json.loads(card_images_json) if isinstance(card_images_json, str) else card_images_json
+            if isinstance(parsed_images, list):
+                for img_entry in parsed_images:
+                    label = img_entry.get("label", "")
+                    url = img_entry.get("url", "")
+                    if label and url:
+                        direct_png_urls[label] = url
+                logger.info(f"  📸 Found {len(direct_png_urls)} direct PNG images: {list(direct_png_urls.keys())}")
+        except (json.JSONDecodeError, TypeError) as parse_err:
+            logger.warning(f"  ⚠️ Failed to parse card_images_json: {str(parse_err)}")
+    
+    use_direct_png = len(direct_png_urls) > 0
+    
+    if use_direct_png:
+        # Direct PNG path: download pre-rendered high-res PNGs from Cloudinary
+        logger.info(f"  🚀 Using DIRECT PNG delivery (skipping PDF→PNG conversion)")
         for page_num, page_label in page_specs:
+            try:
+                png_url = direct_png_urls.get(page_label)
+                if not png_url:
+                    logger.warning(f"  ⚠️ No direct PNG for '{page_label}', will try PDF fallback")
+                    continue
+                
+                logger.info(f"  🖼️ Downloading direct PNG: {page_label}...")
+                image_bytes = download_file_from_url(png_url, timeout=20)
+                
+                if image_bytes:
+                    logger.info(f"  📤 Uploading {page_label} to Lark ({len(image_bytes)} bytes)...")
+                    image_key = upload_image_to_lark_card(image_bytes)
+                    if image_key:
+                        card_images.append({"image_key": image_key, "label": page_label})
+                        logger.info(f"  ✅ {page_label} ready (direct PNG): {image_key[:20]}...")
+                    else:
+                        logger.warning(f"  ⚠️ Failed to upload {page_label} to Lark")
+                else:
+                    logger.warning(f"  ⚠️ Failed to download direct PNG for {page_label}")
+            except Exception as img_e:
+                logger.warning(f"  ⚠️ Direct PNG {page_label} failed: {str(img_e)}")
+        
+        # If direct PNG got some but not all images, fill remaining from PDF
+        if len(card_images) < len(page_specs) and pdf_url:
+            missing_labels = {label for _, label in page_specs} - {img["label"] for img in card_images}
+            if missing_labels:
+                logger.info(f"  🔄 Falling back to PDF for missing: {missing_labels}")
+    
+    # PDF fallback: derive images from Cloudinary PDF transformation (old method)
+    if len(card_images) < len(page_specs) and pdf_url:
+        existing_labels = {img["label"] for img in card_images}
+        for page_num, page_label in page_specs:
+            if page_label in existing_labels:
+                continue  # Already have this image from direct PNG
             try:
                 image_url = derive_image_url_from_pdf(pdf_url, page=page_num)
                 if not image_url:
@@ -2011,7 +2067,8 @@ def send_to_poc(
             except Exception as img_e:
                 logger.warning(f"  \u26a0\ufe0f {page_label} failed: {str(img_e)}")
     
-    logger.info(f"  Card images ready: {len(card_images)}/{len(page_specs)}")
+    image_source = "direct_png" if use_direct_png and len(card_images) > 0 else "pdf_transformation"
+    logger.info(f"  Card images ready: {len(card_images)}/{len(page_specs)} (source: {image_source})")
     
     # Build interactive card
     card = build_poc_interactive_card(
@@ -2025,14 +2082,15 @@ def send_to_poc(
     card_sent = send_lark_card_message(recipient_for_send, card, token=token, id_type=id_type)
     
     if card_sent:
-        logger.info(f"  \u2705 Card notification sent to {recipient_label}")
+        logger.info(f"  \u2705 Card notification sent to {recipient_label} (image_source: {image_source})")
         return {
             "success": True,
             "message": f"Sent to {recipient_label}",
             "recipient": target_email,
             "test_mode": POC_TEST_MODE,
             "images_included": len(card_images),
-            "images_total": len(page_specs)
+            "images_total": len(page_specs),
+            "image_source": image_source
         }
     else:
         error_msg = f"Failed to send Lark card message to {target_email}"

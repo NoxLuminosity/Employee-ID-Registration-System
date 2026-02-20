@@ -120,6 +120,11 @@ CREATE TABLE IF NOT EXISTS headshot_usage (
 
 CREATE INDEX IF NOT EXISTS idx_headshot_usage_lark_user ON headshot_usage(lark_user_id);
 
+-- Card image URLs for direct PNG bot delivery (skips PDF→PNG conversion)
+-- Stores JSON array of {label, url} objects for each card face
+-- Example: [{"label": "SPMC ID - Front", "url": "https://..."}, ...]
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS card_images_json TEXT;
+
 -- Ask PostgREST (Supabase API layer) to reload its schema cache.
 -- This helps the API see newly-added columns immediately.
 -- If you don't have permissions for NOTIFY, you can remove this and wait a minute.

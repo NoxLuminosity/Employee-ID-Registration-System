@@ -632,6 +632,7 @@ def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
             poc_name = poc_contact.get("name", "") if poc_contact else ""
             
             # Prepare employee data for message (include PDF URL from render_url field)
+            # Also include card_images_json for direct PNG delivery (higher quality)
             employee_data = {
                 "id_number": id_number,
                 "employee_name": row.get("employee_name", ""),
@@ -641,6 +642,7 @@ def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
                 "pdf_url": row.get("render_url", ""),
                 "render_url": row.get("render_url", ""),
                 "poc_name": poc_name,
+                "card_images_json": row.get("card_images_json", ""),
             }
             
             # Send the message
@@ -766,6 +768,7 @@ def api_send_all_to_pocs(hr_session: str = Cookie(None)):
                             "pdf_url": emp.get("render_url", ""),
                             "render_url": emp.get("render_url", ""),
                             "poc_name": poc_name,
+                            "card_images_json": emp.get("card_images_json", ""),
                         }
                         send_result = send_to_poc(employee_data, nearest_poc, poc_email)
                         
@@ -1319,6 +1322,156 @@ async def api_upload_pdf(employee_id: int, request: Request, hr_session: str = C
         
     except Exception as e:
         logger.error(f"❌ Error uploading PDF for employee {employee_id}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@router.post("/api/employees/{employee_id}/upload-card-images")
+async def api_upload_card_images(employee_id: int, request: Request, hr_session: str = Cookie(None)):
+    """
+    Upload high-resolution PNG card images for direct bot message delivery.
+    
+    This endpoint receives PNG images (front/back of each card template) captured
+    at high resolution (4x scale, lossless PNG) from the frontend. The images are
+    uploaded to Cloudinary as native PNGs and their URLs are stored in the database.
+    
+    When sending ID cards to POCs via Lark bot, these direct PNG URLs are used
+    instead of deriving images from the PDF via Cloudinary transformations,
+    eliminating the PDF→PNG conversion quality loss.
+    
+    Request body: JSON with card_images array:
+    [
+        {"label": "SPMC ID - Front", "data": "base64_png_data..."},
+        {"label": "SPMC ID - Back", "data": "base64_png_data..."},
+        ...
+    ]
+    
+    Returns:
+        - success: True if all images uploaded successfully
+        - card_images: List of {label, url} for each uploaded image
+        - error: Error message if any step failed
+    """
+    session = get_session(hr_session)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
+    
+    try:
+        row = get_employee_by_id(employee_id)
+        if not row:
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "error": "Employee not found"}
+            )
+        
+        # Accept Rendered, Approved, or Completed status
+        if row.get("status") not in ["Rendered", "Approved", "Completed", "Sent to POC"]:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "ID not ready for card image upload"}
+            )
+        
+        # Parse JSON body
+        import json as json_module
+        body = await request.json()
+        card_images_input = body.get("card_images", [])
+        
+        if not card_images_input:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "No card images provided"}
+            )
+        
+        logger.info(f"📸 Received {len(card_images_input)} card images for employee {employee_id}")
+        
+        # Build unique identifiers
+        id_number = row.get("id_number", "")
+        id_number_safe = id_number.replace(" ", "_").replace("/", "-").replace("\\", "-")
+        employee_name = row.get("employee_name", "").replace(" ", "_")
+        
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        from app.services.cloudinary_service import upload_card_image_png
+        
+        uploaded_images = []
+        errors = []
+        
+        for i, img_entry in enumerate(card_images_input):
+            label = img_entry.get("label", f"Page {i+1}")
+            base64_data = img_entry.get("data", "")
+            
+            if not base64_data:
+                errors.append(f"Empty data for {label}")
+                continue
+            
+            # Remove data URI prefix if present
+            if base64_data.startswith("data:"):
+                base64_data = base64_data.split(",", 1)[1]
+            
+            try:
+                import base64 as b64_module
+                image_bytes = b64_module.b64decode(base64_data)
+            except Exception as decode_err:
+                errors.append(f"Invalid base64 for {label}: {str(decode_err)}")
+                continue
+            
+            if len(image_bytes) < 100:
+                errors.append(f"Image too small for {label}: {len(image_bytes)} bytes")
+                continue
+            
+            # Generate label-based suffix for the public_id
+            label_safe = label.replace(" ", "_").replace("-", "_").replace("/", "_").lower()
+            public_id = f"ID_{id_number_safe}_{label_safe}_{timestamp}"
+            
+            logger.info(f"  📤 Uploading {label}: {len(image_bytes)} bytes as {public_id}")
+            
+            image_url = upload_card_image_png(image_bytes, public_id, folder="id_card_images")
+            
+            if image_url:
+                uploaded_images.append({"label": label, "url": image_url})
+                logger.info(f"  ✅ {label} uploaded: {image_url[:60]}...")
+            else:
+                errors.append(f"Cloudinary upload failed for {label}")
+                logger.error(f"  ❌ {label} upload failed")
+        
+        if not uploaded_images:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "error": f"No images uploaded successfully. Errors: {'; '.join(errors)}"
+                }
+            )
+        
+        # Store card image URLs in database
+        import json as json_mod
+        card_images_json = json_mod.dumps(uploaded_images)
+        
+        db_success = update_employee(employee_id, {
+            "card_images_json": card_images_json,
+            "date_last_modified": datetime.now().isoformat()
+        })
+        
+        if not db_success:
+            logger.warning(f"⚠️ Failed to save card_images_json to database for employee {employee_id}")
+        
+        logger.info(f"✅ Card images upload complete for employee {employee_id}: {len(uploaded_images)}/{len(card_images_input)} images")
+        
+        return JSONResponse(content={
+            "success": True,
+            "card_images": uploaded_images,
+            "total_uploaded": len(uploaded_images),
+            "total_requested": len(card_images_input),
+            "errors": errors if errors else None,
+            "message": f"{len(uploaded_images)} card images uploaded successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error uploading card images for employee {employee_id}: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return JSONResponse(

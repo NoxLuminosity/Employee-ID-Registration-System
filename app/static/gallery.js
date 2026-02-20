@@ -1411,6 +1411,134 @@ function closePreviewModal() {
   galleryState.currentEmployee = null;
 }
 
+// ============================================
+// Direct PNG Card Image Capture & Upload
+// ============================================
+// Captures high-resolution PNG images of each card face and uploads them
+// to the backend for direct bot message delivery (skips PDF→PNG conversion).
+// This produces significantly higher quality images for the OkPo bot messages.
+//
+// PNG Capture Config:
+// - Scale: 4x (2048×3200px for portrait, 2048×1276px for landscape)
+// - Format: PNG (lossless, no JPEG compression artifacts)
+// - Purpose: Direct delivery in Lark Interactive Card messages
+
+const PNG_CAPTURE_SCALE = 4; // 4x scale for high-res PNG (512×4 = 2048px width)
+
+async function captureAndUploadCardImages(emp) {
+  const isFieldOfficer = emp.position === 'Field Officer';
+  const foType = emp.field_officer_type || '';
+  const isRepoShared = isFieldOfficer && ['Repossessor', 'Reprocessor', 'Shared'].includes(foType);
+  
+  // Determine which card faces to capture (must match send_to_poc page_specs)
+  let captureSpecs = [];
+  
+  if (isRepoShared) {
+    // 4 images: SPMC front+back + SPMA front+back
+    captureSpecs = [
+      { label: 'SPMC ID - Front', htmlFn: () => generateRegularIDCardHtml(emp), width: 512, height: 800 },
+      { label: 'SPMC ID - Back', htmlFn: () => generateIDCardBackHtml(emp), width: 512, height: 800 },
+      { label: 'SPMA ID - Front', htmlFn: () => generateFieldOfficeIDCardHtml(emp), width: 512, height: 319 },
+      { label: 'SPMA ID - Back', htmlFn: () => generateFieldOfficeIDCardBackHtml(emp), width: 512, height: 319 },
+    ];
+  } else if (isFieldOfficer) {
+    // 2 images: SPMA front+back only
+    captureSpecs = [
+      { label: 'SPMA ID - Front', htmlFn: () => generateFieldOfficeIDCardHtml(emp), width: 512, height: 319 },
+      { label: 'SPMA ID - Back', htmlFn: () => generateFieldOfficeIDCardBackHtml(emp), width: 512, height: 319 },
+    ];
+  } else {
+    // 2 images: SPMC front+back
+    captureSpecs = [
+      { label: 'SPMC ID - Front', htmlFn: () => generateIDCardHtml(emp), width: 512, height: 800 },
+      { label: 'SPMC ID - Back', htmlFn: () => getBackHtml(emp), width: 512, height: 800 },
+    ];
+  }
+  
+  console.log(`[PNG Capture] Starting high-res PNG capture for ${emp.employee_name} (${captureSpecs.length} images at ${PNG_CAPTURE_SCALE}x scale)`);
+  
+  // Create temp container for rendering
+  const tempContainer = document.createElement('div');
+  tempContainer.style.position = 'absolute';
+  tempContainer.style.left = '-9999px';
+  tempContainer.style.top = '0';
+  tempContainer.style.width = '600px';
+  tempContainer.style.background = '#ffffff';
+  document.body.appendChild(tempContainer);
+  
+  const cardImages = [];
+  
+  try {
+    for (const spec of captureSpecs) {
+      try {
+        console.log(`[PNG Capture] Capturing ${spec.label} at ${spec.width}x${spec.height} @ ${PNG_CAPTURE_SCALE}x...`);
+        
+        const canvas = await captureCardCanvas(
+          tempContainer,
+          spec.htmlFn(),
+          spec.width,
+          spec.height,
+          PNG_CAPTURE_SCALE, // 4x scale for high resolution
+          1500 // Wait time for images to load
+        );
+        
+        // Convert to PNG (lossless) — no JPEG compression artifacts
+        const pngDataUrl = canvas.toDataURL('image/png');
+        const base64Data = pngDataUrl.split(',')[1]; // Remove "data:image/png;base64," prefix
+        
+        const estimatedSize = Math.round(base64Data.length * 0.75 / 1024);
+        console.log(`[PNG Capture] ${spec.label}: ${canvas.width}x${canvas.height}px, ~${estimatedSize}KB`);
+        
+        cardImages.push({
+          label: spec.label,
+          data: base64Data
+        });
+      } catch (captureErr) {
+        console.error(`[PNG Capture] Failed to capture ${spec.label}:`, captureErr);
+      }
+    }
+  } finally {
+    document.body.removeChild(tempContainer);
+  }
+  
+  if (cardImages.length === 0) {
+    console.warn('[PNG Capture] No images captured successfully');
+    return false;
+  }
+  
+  // Upload to backend
+  console.log(`[PNG Capture] Uploading ${cardImages.length} PNG images to backend...`);
+  
+  try {
+    const uploadResponse = await fetch(`/hr/api/employees/${emp.id}/upload-card-images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ card_images: cardImages }),
+      credentials: 'include'
+    });
+    
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('[PNG Capture] Upload failed:', uploadResponse.status, errorText);
+      return false;
+    }
+    
+    const result = await uploadResponse.json();
+    console.log('[PNG Capture] Upload result:', result);
+    
+    if (result.success) {
+      console.log(`[PNG Capture] ✅ ${result.total_uploaded}/${result.total_requested} PNG images uploaded successfully`);
+      return true;
+    } else {
+      console.error('[PNG Capture] Upload response indicates failure:', result.error);
+      return false;
+    }
+  } catch (uploadErr) {
+    console.error('[PNG Capture] Upload error:', uploadErr);
+    return false;
+  }
+}
+
 // Download single ID as PDF
 function downloadSinglePdf(id) {
   const emp = galleryState.employees.find(e => e.id == id);
@@ -1806,6 +1934,22 @@ async function downloadIDPdf(emp) {
       return;
     }
     
+    // Capture and upload high-res PNG card images for direct bot delivery
+    // This runs in parallel with the PDF download - non-blocking
+    // Direct PNGs skip the PDF→PNG conversion and deliver higher quality to POCs
+    let pngUploadSuccess = false;
+    try {
+      console.log('[PNG Capture] Starting high-res PNG capture for bot message delivery...');
+      pngUploadSuccess = await captureAndUploadCardImages(emp);
+      if (pngUploadSuccess) {
+        console.log('[PNG Capture] ✅ Direct PNG images ready for bot delivery');
+      } else {
+        console.warn('[PNG Capture] ⚠️ PNG capture/upload failed - bot will fall back to PDF-derived images');
+      }
+    } catch (pngErr) {
+      console.warn('[PNG Capture] ⚠️ PNG capture error (non-critical):', pngErr);
+    }
+    
     // Download the PDF locally with descriptive filename
     // This is now AFTER successful backend upload
     const suffix = isFieldOfficer ? '_dual_templates' : '';
@@ -1836,6 +1980,9 @@ async function downloadIDPdf(emp) {
       message += ' ✅ Saved to LarkBase';
     } else if (pdfUrl) {
       message += ' ⚠️ Cloud uploaded (LarkBase pending)';
+    }
+    if (pngUploadSuccess) {
+      message += ' 📸 HD images ready';
     }
     showToast(message, 'success');
   } catch (error) {
