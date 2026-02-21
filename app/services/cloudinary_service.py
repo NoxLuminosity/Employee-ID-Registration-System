@@ -6,12 +6,13 @@ Authentication: Uses environment variables (no files required).
 This is production-safe for Vercel serverless functions.
 
 Includes Cloudinary AI background removal as an alternative to rembg.
+Includes rollback support for ACID transaction management.
 """
 import os
 import logging
 import base64
 import urllib.request
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import cloudinary
 import cloudinary.uploader
@@ -576,3 +577,94 @@ def upload_pdf_image_preview(
     except Exception as e:
         logger.error(f"PDF image resource upload failed for {public_id}: {str(e)}")
         return None
+
+
+# =============================================================================
+# Rollback Utilities for ACID Transaction Support
+# =============================================================================
+
+def delete_from_cloudinary(secure_url: str) -> bool:
+    """
+    Delete an asset from Cloudinary by its secure URL.
+    Used as a rollback action in TransactionManager.
+
+    Extracts the public_id from the URL and destroys the resource.
+
+    Args:
+        secure_url: The Cloudinary secure URL to delete
+
+    Returns:
+        True if deletion succeeded, False otherwise
+    """
+    if not secure_url:
+        return False
+
+    try:
+        if not configure_cloudinary():
+            logger.warning("Cloudinary not configured. Cannot rollback.")
+            return False
+
+        # Extract public_id from Cloudinary URL
+        # URL format: https://res.cloudinary.com/{cloud}/image/upload/v{version}/{folder}/{public_id}.{ext}
+        # or: https://res.cloudinary.com/{cloud}/raw/upload/v{version}/{folder}/{public_id}.{ext}
+        public_id = _extract_public_id(secure_url)
+        if not public_id:
+            logger.warning(f"Could not extract public_id from URL: {secure_url}")
+            return False
+
+        # Determine resource type from URL
+        resource_type = "image"
+        if "/raw/upload/" in secure_url:
+            resource_type = "raw"
+
+        result = cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+        if result.get("result") == "ok":
+            logger.info(f"🗑️ Cloudinary rollback: deleted {public_id}")
+            return True
+        else:
+            logger.warning(f"Cloudinary rollback: destroy returned {result} for {public_id}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Cloudinary rollback failed for {secure_url}: {e}")
+        return False
+
+
+def delete_multiple_from_cloudinary(urls: List[str]) -> int:
+    """
+    Delete multiple assets from Cloudinary. Used for bulk rollback.
+
+    Args:
+        urls: List of Cloudinary secure URLs to delete
+
+    Returns:
+        Number of successfully deleted assets
+    """
+    deleted = 0
+    for url in urls:
+        if url and delete_from_cloudinary(url):
+            deleted += 1
+    return deleted
+
+
+def _extract_public_id(secure_url: str) -> Optional[str]:
+    """
+    Extract the Cloudinary public_id from a secure URL.
+
+    Handles various URL formats:
+    - https://res.cloudinary.com/cloud/image/upload/v123/folder/file.jpg
+    - https://res.cloudinary.com/cloud/raw/upload/v123/folder/file.pdf
+
+    Returns:
+        The public_id string (e.g., 'folder/file') or None
+    """
+    try:
+        import re
+        # Match the path after /upload/ and optional version
+        match = re.search(r'/upload/(?:v\d+/)?(.+?)(?:\.[^.]+)?$', secure_url)
+        if match:
+            return match.group(1)
+        return None
+    except Exception:
+        return None
+

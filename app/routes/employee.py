@@ -2,6 +2,7 @@
 Employee Routes - From Code 1
 Handles employee registration, AI headshot generation, and form submission.
 Protected by Lark authentication.
+Uses TransactionManager for ACID compliance across multi-step API workflows.
 """
 from fastapi import APIRouter, Request, UploadFile, File, Form, HTTPException, Body, Cookie
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -17,7 +18,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 # Database abstraction layer (supports Supabase and SQLite)
-from app.database import insert_employee, USE_SUPABASE, get_headshot_usage_count, increment_headshot_usage, check_headshot_limit
+from app.database import insert_employee, delete_employee, USE_SUPABASE, get_headshot_usage_count, increment_headshot_usage, check_headshot_limit
 
 # Lark Bitable integration (for appending data)
 from app.services.lark_service import (
@@ -30,7 +31,8 @@ from app.services.cloudinary_service import (
     upload_image_to_cloudinary, 
     upload_base64_to_cloudinary,
     upload_url_with_bg_removal,
-    upload_url_to_cloudinary_simple
+    upload_url_to_cloudinary_simple,
+    delete_from_cloudinary,
 )
 # BytePlus Seedream integration (for AI headshot generation)
 from app.services.seedream_service import generate_headshot_from_url
@@ -45,6 +47,10 @@ from app.services.barcode_service import (
 
 # Authentication
 from app.auth import get_session
+
+# ACID Transaction Manager & Cache
+from app.transaction_manager import TransactionManager, TransactionError
+from app.workflow_cache import WorkflowCache, make_cache_key, TTL_EXTENDED, TTL_DEFAULT
 
 router = APIRouter()
 
@@ -151,58 +157,98 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
         valid_prompt_types = ["male_1", "male_2", "male_3", "male_4", "female_1", "female_2", "female_3", "female_4"]
         prompt_type = request.prompt_type if request.prompt_type in valid_prompt_types else "male_1"
         
-        # Step 1: Upload original to Cloudinary to get a public URL
-        temp_id = f"temp_preview_{uuid.uuid4().hex[:8]}"
+        # ====================================================================
+        # ACID TRANSACTION: AI Headshot Generation
+        # Steps: Upload original → Seedream AI → Cloudinary bg removal
+        # If any step fails, all completed Cloudinary uploads are rolled back.
+        # Cache keys ensure re-attempts reuse previous successful results.
+        # ====================================================================
+        txn = TransactionManager("generate_headshot", context={
+            "lark_user_id": lark_user_id,
+            "prompt_type": prompt_type,
+        })
         
-        logger.info(f"Step 1: Uploading original image to Cloudinary: {temp_id}")
-        cloudinary_url = upload_base64_to_cloudinary(
-            base64_data=request.image,
-            public_id=temp_id,
-            folder="seedream_temp"
-        )
-        
-        if not cloudinary_url:
-            logger.error("Failed to upload image to Cloudinary")
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": "Failed to process image. Please try again."}
+        try:
+            # Step 1: Upload original to Cloudinary to get a public URL
+            temp_id = f"temp_preview_{uuid.uuid4().hex[:8]}"
+            
+            cloudinary_url = txn.execute_step(
+                name="upload_original_to_cloudinary",
+                action=lambda: upload_base64_to_cloudinary(
+                    base64_data=request.image,
+                    public_id=temp_id,
+                    folder="seedream_temp"
+                ),
+                rollback=lambda url: delete_from_cloudinary(url),
+                error_message="Failed to process image. Please try again.",
             )
-        
-        logger.info(f"Original uploaded to Cloudinary: {cloudinary_url}")
-        
-        # Step 2: Generate headshot using Seedream with the Cloudinary URL and selected prompt
-        logger.info(f"Step 2: Generating AI headshot with Seedream (prompt: {prompt_type})...")
-        generated_url, error = generate_headshot_from_url(cloudinary_url, prompt_type)
-        
-        if not generated_url:
-            logger.warning(f"Failed to generate headshot: {error}")
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": error or "Failed to generate headshot. Please try again."}
+            
+            # Step 2: Generate headshot using Seedream
+            # Cache key based on Cloudinary URL + prompt type for reuse
+            seedream_cache_key = make_cache_key("seedream", cloudinary_url, prompt_type)
+            
+            def _generate_seedream():
+                gen_url, err = generate_headshot_from_url(cloudinary_url, prompt_type)
+                if not gen_url:
+                    raise Exception(err or "Failed to generate headshot")
+                return gen_url
+            
+            generated_url = txn.execute_step(
+                name="generate_seedream_headshot",
+                action=_generate_seedream,
+                cache_key=seedream_cache_key,
+                error_message="Failed to generate headshot. Please try again.",
             )
-        
-        logger.info(f"AI headshot generated: {generated_url[:80]}...")
-        
-        # --- Increment headshot usage count after successful AI generation ---
-        if lark_user_id:
-            increment_headshot_usage(lark_user_id, lark_name)
-            new_limit_info = check_headshot_limit(lark_user_id)
-            logger.info(f"Headshot usage incremented for {lark_user_id}: {new_limit_info['used']}/{new_limit_info['limit']}")
-        else:
-            new_limit_info = {"used": 0, "limit": 5, "remaining": 5}
-        
-        # Step 3: Upload AI image to Cloudinary with background removal
-        logger.info("Step 3: Uploading to Cloudinary with background removal...")
-        final_id = f"headshot_transparent_{uuid.uuid4().hex[:8]}"
-        
-        final_url, is_transparent = upload_url_with_bg_removal(
-            image_url=generated_url,
-            public_id=final_id,
-            folder="headshots"
-        )
-        
-        if final_url:
-            logger.info(f"Final headshot uploaded (transparent: {is_transparent}): {final_url}")
+            
+            # Increment headshot usage count after successful AI generation
+            if lark_user_id:
+                increment_headshot_usage(lark_user_id, lark_name)
+                new_limit_info = check_headshot_limit(lark_user_id)
+                logger.info(f"Headshot usage incremented for {lark_user_id}: {new_limit_info['used']}/{new_limit_info['limit']}")
+            else:
+                new_limit_info = {"used": 0, "limit": 5, "remaining": 5}
+            
+            # Step 3: Upload AI image to Cloudinary with background removal
+            final_id = f"headshot_transparent_{uuid.uuid4().hex[:8]}"
+            
+            def _upload_with_bg_removal():
+                url, is_transparent = upload_url_with_bg_removal(
+                    image_url=generated_url,
+                    public_id=final_id,
+                    folder="headshots"
+                )
+                if url:
+                    return {"url": url, "transparent": is_transparent}
+                # Fallback: upload without background removal
+                logger.warning("Cloudinary bg removal failed, uploading without processing")
+                fallback_url = upload_url_to_cloudinary_simple(
+                    image_url=generated_url,
+                    public_id=final_id,
+                    folder="headshots"
+                )
+                if fallback_url:
+                    return {"url": fallback_url, "transparent": False}
+                # Last resort: use original Seedream URL
+                return {"url": generated_url, "transparent": False}
+            
+            final_result = txn.execute_step(
+                name="upload_final_headshot",
+                action=_upload_with_bg_removal,
+                rollback=lambda r: delete_from_cloudinary(r["url"]) if r and r["url"] != generated_url else None,
+                is_critical=False,  # Even if bg removal fails, we still have the Seedream URL
+            )
+            
+            # Commit the transaction
+            summary = txn.commit()
+            
+            # Determine final URL and transparency
+            if final_result:
+                final_url = final_result["url"]
+                is_transparent = final_result["transparent"]
+            else:
+                final_url = generated_url
+                is_transparent = False
+            
             return JSONResponse(
                 status_code=200,
                 content={
@@ -213,44 +259,22 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
                     "used": new_limit_info["used"],
                     "limit": new_limit_info["limit"],
                     "remaining": new_limit_info["remaining"],
+                    "transaction": summary,
                 }
             )
-        else:
-            # Fallback: upload without background removal
-            logger.warning("Cloudinary bg removal failed, uploading without processing")
-            fallback_url = upload_url_to_cloudinary_simple(
-                image_url=generated_url,
-                public_id=final_id,
-                folder="headshots"
-            )
             
-            if fallback_url:
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "success": True,
-                        "generated_image": fallback_url,
-                        "transparent": False,
-                        "message": "AI headshot generated (background removal unavailable)",
-                        "used": new_limit_info["used"],
-                        "limit": new_limit_info["limit"],
-                        "remaining": new_limit_info["remaining"],
-                    }
-                )
-            else:
-                # Last resort: return the original Seedream URL
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "success": True,
-                        "generated_image": generated_url,
-                        "transparent": False,
-                        "message": "AI headshot generated (using original URL)",
-                        "used": new_limit_info["used"],
-                        "limit": new_limit_info["limit"],
-                        "remaining": new_limit_info["remaining"],
-                    }
-                )
+        except TransactionError as te:
+            # Rollback all completed steps
+            txn.rollback()
+            logger.error(f"Headshot generation transaction failed: {te}")
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "error": str(te),
+                    "transaction": txn.get_summary(),
+                }
+            )
             
     except Exception as e:
         error_msg = str(e)
@@ -501,6 +525,13 @@ async def submit_employee(
     
     employee_name = ' '.join(employee_name_parts)
     
+    # ====================================================================
+    # ACID TRANSACTION: Employee Registration
+    # Steps: Save files → Upload Cloudinary → Insert DB → Append Lark
+    # On failure, all completed steps are rolled back automatically.
+    # ====================================================================
+    txn = TransactionManager("employee_submit", context={"id_number": id_number})
+    
     try:
         # Ensure uploads directory exists
         # Use /tmp on Vercel (only writable directory in serverless)
@@ -539,83 +570,72 @@ async def submit_employee(
             except Exception as e:
                 logger.error(f"Error saving signature: {str(e)}")
 
-        # ===== CLOUDINARY + SHEETS INTEGRATION =====
+        # ===== CLOUDINARY + SHEETS INTEGRATION (TRANSACTIONAL) =====
         date_last_modified = datetime.now().isoformat()
-        cloudinary_photo_url = None
-        cloudinary_signature_url = None
         
         # Create deterministic public IDs using employee ID number
         # Sanitize id_number for use as public_id (remove special chars)
         safe_id = id_number.replace(' ', '_').replace('/', '-').replace('\\', '-')
         
-        # Step 1: Upload photo to Cloudinary
-        try:
-            photo_public_id = f"{safe_id}_photo"
-            logger.info(f"Attempting to upload photo to Cloudinary for employee: {id_number}")
-            
-            cloudinary_photo_url = upload_image_to_cloudinary(
+        # Step 1: Upload photo to Cloudinary (with cache + rollback)
+        photo_cache_key = make_cache_key("photo", safe_id)
+        cloudinary_photo_url = txn.execute_step(
+            name="upload_photo_cloudinary",
+            action=lambda: upload_image_to_cloudinary(
                 file_path=photo_path,
-                public_id=photo_public_id
-            )
-            
-            if cloudinary_photo_url:
-                logger.info(f"Successfully uploaded photo to Cloudinary: {cloudinary_photo_url}")
-            else:
-                logger.warning(f"Failed to upload photo to Cloudinary: {id_number}")
-        except Exception as e:
-            logger.error(f"Error uploading photo to Cloudinary: {str(e)}")
+                public_id=f"{safe_id}_photo"
+            ),
+            rollback=lambda url: delete_from_cloudinary(url),
+            cache_key=photo_cache_key,
+            is_critical=False,  # Submission can proceed without Cloudinary
+            error_message=f"Failed to upload photo to cloud for {id_number}",
+        )
         
-        # Step 2: Upload signature to Cloudinary (if exists)
+        # Step 2: Upload signature to Cloudinary (with cache + rollback)
+        cloudinary_signature_url = None
         if signature_local_path:
-            try:
-                signature_public_id = f"{safe_id}_signature"
-                signature_path_full = os.path.join(uploads_dir, os.path.basename(signature_local_path.replace('uploads/', '')))
-                
-                logger.info(f"Attempting to upload signature to Cloudinary for employee: {id_number}")
-                
-                cloudinary_signature_url = upload_image_to_cloudinary(
+            sig_cache_key = make_cache_key("signature", safe_id)
+            signature_path_full = os.path.join(uploads_dir, os.path.basename(signature_local_path.replace('uploads/', '')))
+            
+            cloudinary_signature_url = txn.execute_step(
+                name="upload_signature_cloudinary",
+                action=lambda: upload_image_to_cloudinary(
                     file_path=signature_path_full,
-                    public_id=signature_public_id
-                )
-                
-                if cloudinary_signature_url:
-                    logger.info(f"Successfully uploaded signature to Cloudinary: {cloudinary_signature_url}")
-                else:
-                    logger.warning(f"Failed to upload signature to Cloudinary: {id_number}")
-            except Exception as e:
-                logger.error(f"Error uploading signature to Cloudinary: {str(e)}")
+                    public_id=f"{safe_id}_signature"
+                ),
+                rollback=lambda url: delete_from_cloudinary(url),
+                cache_key=sig_cache_key,
+                is_critical=False,  # Submission can proceed without signature upload
+                error_message=f"Failed to upload signature to cloud for {id_number}",
+            )
 
-        # Step 3: Handle AI-generated headshot URL
+        # Step 3: Handle AI-generated headshot URL (with cache)
         cloudinary_ai_headshot_url = None
-        # Use ai_generated_image if ai_headshot_data is not provided (SPMA form uses this field)
         effective_ai_data = ai_headshot_data or ai_generated_image
         if effective_ai_data:
             if effective_ai_data.startswith('http'):
-                # Direct URL from Seedream - use as-is
+                # Direct URL from Seedream - use as-is (already in Cloudinary)
                 cloudinary_ai_headshot_url = effective_ai_data
                 logger.info(f"Using Seedream URL directly for AI headshot: {cloudinary_ai_headshot_url[:80]}...")
             elif effective_ai_data.startswith('data:image'):
                 # Legacy base64 format - upload to Cloudinary
-                try:
-                    ai_headshot_public_id = f"{safe_id}_ai_headshot"
-                    logger.info(f"Attempting to upload AI headshot to Cloudinary for employee: {id_number}")
-                    
-                    cloudinary_ai_headshot_url = upload_base64_to_cloudinary(
+                ai_cache_key = make_cache_key("ai_headshot", safe_id)
+                cloudinary_ai_headshot_url = txn.execute_step(
+                    name="upload_ai_headshot_cloudinary",
+                    action=lambda: upload_base64_to_cloudinary(
                         base64_data=effective_ai_data,
-                        public_id=ai_headshot_public_id,
+                        public_id=f"{safe_id}_ai_headshot",
                         folder="employees"
-                    )
-                    
-                    if cloudinary_ai_headshot_url:
-                        logger.info(f"Successfully uploaded AI headshot to Cloudinary: {cloudinary_ai_headshot_url}")
-                    else:
-                        logger.warning(f"Failed to upload AI headshot to Cloudinary: {id_number}")
-                except Exception as e:
-                    logger.error(f"Error uploading AI headshot to Cloudinary: {str(e)}")
+                    ),
+                    rollback=lambda url: delete_from_cloudinary(url),
+                    cache_key=ai_cache_key,
+                    is_critical=False,
+                    error_message=f"Failed to upload AI headshot for {id_number}",
+                )
 
-        # Save to database using abstraction layer
+        # Step 4: Save to database (CRITICAL - rollback = delete record)
         employee_data = {
-            'employee_name': employee_name,  # Full name for backward compatibility
+            'employee_name': employee_name,
             'first_name': first_name,
             'middle_initial': middle_initial,
             'last_name': last_name,
@@ -623,24 +643,23 @@ async def submit_employee(
             'id_nickname': id_nickname.strip().capitalize() if id_nickname else '',
             'id_number': id_number,
             'position': position,
-            'location_branch': location_branch,  # Branch/Location from form
-            'department': fo_department or '',  # Field Officer department or empty
+            'location_branch': location_branch,
+            'department': fo_department or '',
             'email': email,
             'personal_number': personal_number,
             'photo_path': photo_local_path,
             'photo_url': cloudinary_photo_url or '',
-            'new_photo': 1,  # True
+            'new_photo': 1,
             'new_photo_url': cloudinary_ai_headshot_url or '',
             'signature_path': signature_local_path or '',
             'signature_url': cloudinary_signature_url or '',
             'status': 'Reviewing',
             'date_last_modified': date_last_modified,
-            'id_generated': 0,  # False
+            'id_generated': 0,
             'render_url': '',
             'emergency_name': emergency_name or '',
             'emergency_contact': emergency_contact or '',
             'emergency_address': emergency_address or '',
-            # Field Officer specific fields
             'field_officer_type': field_officer_type or '',
             'field_clearance': field_clearance or '',
             'fo_division': fo_division or '',
@@ -648,51 +667,35 @@ async def submit_employee(
             'fo_campaign': fo_campaign or ''
         }
         
-        # Log the payload before insert
         logger.info("=" * 60)
         logger.info("📋 EMPLOYEE DATA PAYLOAD FOR DATABASE INSERT:")
         logger.info(f"  ID Number: {id_number}")
         logger.info(f"  Position: {position}")
         logger.info(f"  field_officer_type: {field_officer_type or 'NOT SET'}")
-        logger.info(f"  fo_division: {fo_division or 'NOT SET'}")
-        logger.info(f"  fo_department: {fo_department or 'NOT SET'}")
-        logger.info(f"  fo_campaign: {fo_campaign or 'NOT SET'}")
         logger.info("=" * 60)
         
-        employee_id = insert_employee(employee_data)
-        
-        if employee_id is None:
-            logger.error(f"Failed to insert employee: {id_number}")
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": "Database error", "detail": "Failed to save employee"}
-            )
+        employee_id = txn.execute_step(
+            name="insert_database",
+            action=lambda: insert_employee(employee_data),
+            rollback=lambda eid: delete_employee(eid) if eid else None,
+            error_message="Failed to save employee to database",
+        )
         
         logger.info(f"Employee saved to database (id={employee_id}, supabase={USE_SUPABASE})")
         
-        # Step 4: Append submission to Lark Bitable
-        try:
-            logger.info(f"Attempting to append to Lark Bitable for employee: {id_number}")
-            
-            # Debug: Log what URLs we're sending to Lark Base
-            logger.info("=" * 60)
-            logger.info("🔍 CLOUDINARY URLS BEING SENT TO LARK BASE:")
-            logger.info(f"  Photo URL: {cloudinary_photo_url or 'MISSING/NONE'}")
-            logger.info(f"  Signature URL: {cloudinary_signature_url or 'MISSING/NONE'}")
-            logger.info(f"  AI Headshot URL: {cloudinary_ai_headshot_url or 'MISSING/NONE'}")
-            logger.info("=" * 60)
-            
-            # Route to appropriate Lark table based on form type
-            target_lark_table = LARK_TABLE_ID_SPMA if form_type == 'SPMA' else None
-            logger.info(f"📋 Form Type: {form_type} → Table: {target_lark_table or 'default (SPMC)'}")
-            
-            lark_success = append_employee_submission(
+        # Step 5: Append submission to Lark Bitable (non-critical)
+        target_lark_table = LARK_TABLE_ID_SPMA if form_type == 'SPMA' else None
+        logger.info(f"📋 Form Type: {form_type} → Table: {target_lark_table or 'default (SPMC)'}")
+        
+        lark_success = txn.execute_step(
+            name="append_lark_bitable",
+            action=lambda: append_employee_submission(
                 employee_name=employee_name,
                 id_nickname=id_nickname.strip().capitalize() if id_nickname else '',
                 id_number=id_number,
                 position=position,
                 location_branch=location_branch,
-                department=fo_department or '',  # Field Officer department
+                department=fo_department or '',
                 email=email,
                 personal_number=personal_number,
                 photo_path=photo_local_path,
@@ -708,34 +711,61 @@ async def submit_employee(
                 last_name=last_name,
                 suffix=final_suffix,
                 table_id=target_lark_table,
-                # Field Officer specific fields
                 field_officer_type=field_officer_type or '',
                 field_clearance=field_clearance or '',
                 fo_division=fo_division or '',
                 fo_campaign=fo_campaign or ''
-            )
-            if lark_success:
-                logger.info(f"✅ Successfully appended employee submission to Lark Bitable: {id_number}")
-            else:
-                logger.warning(f"⚠️  Failed to append to Lark Bitable (submission still saved to database): {id_number}")
-                logger.warning(f"Please check Lark credentials: LARK_BITABLE_ID and LARK_TABLE_ID")
-        except Exception as e:
-            # Log error but don't fail the request
-            logger.error(f"❌ Error appending to Lark Bitable: {str(e)}")
-            logger.error(f"Traceback:", exc_info=True)
-            logger.warning(f"Submission saved to database but not synced to Lark Bitable")
+            ),
+            is_critical=False,  # Don't fail submission if Lark sync fails
+            error_message=f"Failed to sync to Lark Bitable for {id_number}",
+        )
+        
+        if lark_success:
+            logger.info(f"✅ Successfully appended employee submission to Lark Bitable: {id_number}")
+        else:
+            logger.warning(f"⚠️ Failed to append to Lark Bitable (submission still saved to database): {id_number}")
+        
         # ===== END CLOUDINARY + LARK INTEGRATION =====
+        
+        # Commit the transaction
+        summary = txn.commit()
 
         return JSONResponse(
             status_code=200,
-            content={"success": True, "message": "Submission successful"}
+            content={
+                "success": True,
+                "message": "Submission successful",
+                "transaction": summary,
+            }
+        )
+        
+    except TransactionError as te:
+        # ACID Rollback: undo all completed steps in reverse order
+        txn.rollback()
+        logger.error(f"Employee submission transaction failed: {te}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "Submission failed",
+                "detail": str(te),
+                "transaction": txn.get_summary(),
+            }
         )
         
     except Exception as e:
+        # Catch-all: rollback if transaction is still active
+        if txn.status.value == "active":
+            txn.rollback()
         logger.error(f"Submit error: {str(e)}\n{traceback.format_exc()}")
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": "Submission failed", "detail": str(e)}
+            content={
+                "success": False,
+                "error": "Submission failed",
+                "detail": str(e),
+                "transaction": txn.get_summary(),
+            }
         )
 
 
@@ -823,119 +853,152 @@ async def submit_spma_employee(
             except Exception as e:
                 logger.error(f"Error saving SPMA signature: {str(e)}")
 
-        # ===== CLOUDINARY UPLOAD =====
+        # ====================================================================
+        # ACID TRANSACTION: SPMA Employee Registration
+        # Steps: Upload Photo → Upload Signature → Insert DB → Append Lark
+        # If DB insert fails, Cloudinary uploads are rolled back.
+        # ====================================================================
         date_last_modified = datetime.now().isoformat()
-        cloudinary_photo_url = None
-        cloudinary_signature_url = None
-        
         safe_id = id_number.replace(' ', '_').replace('/', '-').replace('\\', '-')
         
-        # Upload photo to Cloudinary
+        txn = TransactionManager("spma_submit", context={
+            "id_number": id_number,
+            "employee_name": employee_name,
+        })
+        
         try:
-            photo_public_id = f"spma_{safe_id}_photo"
-            logger.info(f"Uploading SPMA photo to Cloudinary: {id_number}")
+            # Step 1: Upload photo to Cloudinary (non-critical - local fallback)
+            photo_cache_key = make_cache_key("spma_photo", safe_id)
+            cloudinary_photo_url = None
+            try:
+                cloudinary_photo_url = txn.execute_step(
+                    name="upload_photo_cloudinary",
+                    action=lambda: upload_image_to_cloudinary(
+                        file_path=photo_path,
+                        public_id=f"spma_{safe_id}_photo"
+                    ),
+                    rollback=lambda url: delete_from_cloudinary(url),
+                    cache_key=photo_cache_key,
+                    is_critical=False,
+                )
+                if cloudinary_photo_url:
+                    logger.info(f"✅ SPMA photo uploaded: {cloudinary_photo_url[:60]}...")
+            except Exception as e:
+                logger.error(f"Error uploading SPMA photo: {str(e)}")
             
-            cloudinary_photo_url = upload_image_to_cloudinary(
-                file_path=photo_path,
-                public_id=photo_public_id
+            # Step 2: Upload signature to Cloudinary (non-critical)
+            cloudinary_signature_url = None
+            if signature_local_path:
+                sig_cache_key = make_cache_key("spma_signature", safe_id)
+                try:
+                    signature_path_full = os.path.join(uploads_dir, os.path.basename(signature_local_path.replace('uploads/', '')))
+                    cloudinary_signature_url = txn.execute_step(
+                        name="upload_signature_cloudinary",
+                        action=lambda: upload_image_to_cloudinary(
+                            file_path=signature_path_full,
+                            public_id=f"spma_{safe_id}_signature"
+                        ),
+                        rollback=lambda url: delete_from_cloudinary(url),
+                        cache_key=sig_cache_key,
+                        is_critical=False,
+                    )
+                    if cloudinary_signature_url:
+                        logger.info(f"✅ SPMA signature uploaded: {cloudinary_signature_url[:60]}...")
+                except Exception as e:
+                    logger.error(f"Error uploading SPMA signature: {str(e)}")
+
+            # Step 3: Save to database (CRITICAL)
+            employee_data = {
+                'employee_name': employee_name,
+                'first_name': first_name,
+                'middle_initial': middle_initial,
+                'last_name': last_name,
+                'suffix': final_suffix,
+                'id_nickname': '',
+                'id_number': id_number,
+                'position': 'Legal Officer',
+                'location_branch': location_branch,
+                'department': department,
+                'email': email,
+                'personal_number': personal_number,
+                'photo_path': photo_local_path,
+                'photo_url': cloudinary_photo_url or '',
+                'new_photo': 0,
+                'new_photo_url': '',
+                'signature_path': signature_local_path or '',
+                'signature_url': cloudinary_signature_url or '',
+                'status': 'Reviewing',
+                'date_last_modified': date_last_modified,
+                'id_generated': 0,
+                'render_url': '',
+                'emergency_name': '',
+                'emergency_contact': '',
+                'emergency_address': ''
+            }
+            
+            employee_id = txn.execute_step(
+                name="insert_database",
+                action=lambda: insert_employee(employee_data),
+                rollback=lambda eid: delete_employee(eid) if eid else None,
+                error_message="Failed to save SPMA employee to database",
             )
             
-            if cloudinary_photo_url:
-                logger.info(f"✅ SPMA photo uploaded: {cloudinary_photo_url[:60]}...")
-        except Exception as e:
-            logger.error(f"Error uploading SPMA photo: {str(e)}")
-        
-        # Upload signature to Cloudinary
-        if signature_local_path:
-            try:
-                signature_public_id = f"spma_{safe_id}_signature"
-                signature_path_full = os.path.join(uploads_dir, os.path.basename(signature_local_path.replace('uploads/', '')))
-                
-                cloudinary_signature_url = upload_image_to_cloudinary(
-                    file_path=signature_path_full,
-                    public_id=signature_public_id
+            if employee_id is None:
+                raise TransactionError(
+                    "Database insert returned None",
+                    transaction_id=txn.transaction_id,
+                    step_name="insert_database",
                 )
-                
-                if cloudinary_signature_url:
-                    logger.info(f"✅ SPMA signature uploaded: {cloudinary_signature_url[:60]}...")
+            
+            logger.info(f"✅ SPMA employee saved to database (id={employee_id})")
+            
+            # Step 4: Append to SPMA Lark Table (non-critical)
+            try:
+                txn.execute_step(
+                    name="append_lark_bitable",
+                    action=lambda: append_spma_employee_submission(
+                        employee_name=employee_name,
+                        middle_initial=middle_initial,
+                        last_name=last_name,
+                        suffix=final_suffix,
+                        id_number=id_number,
+                        division=division,
+                        department=department,
+                        field_clearance=field_clearance,
+                        branch_location=location_branch,
+                        email=email,
+                        personal_number=personal_number,
+                        photo_url=cloudinary_photo_url,
+                        signature_url=cloudinary_signature_url
+                    ),
+                    is_critical=False,
+                )
             except Exception as e:
-                logger.error(f"Error uploading SPMA signature: {str(e)}")
-
-        # Save to database
-        employee_data = {
-            'employee_name': employee_name,
-            'first_name': first_name,
-            'middle_initial': middle_initial,
-            'last_name': last_name,
-            'suffix': final_suffix,
-            'id_nickname': '',  # SPMA doesn't use nickname
-            'id_number': id_number,
-            'position': 'Legal Officer',  # Fixed for SPMA
-            'location_branch': location_branch,
-            'department': department,  # SPMA uses department
-            'email': email,
-            'personal_number': personal_number,
-            'photo_path': photo_local_path,
-            'photo_url': cloudinary_photo_url or '',
-            'new_photo': 0,  # SPMA doesn't use AI generation
-            'new_photo_url': '',
-            'signature_path': signature_local_path or '',
-            'signature_url': cloudinary_signature_url or '',
-            'status': 'Reviewing',
-            'date_last_modified': date_last_modified,
-            'id_generated': 0,
-            'render_url': '',
-            'emergency_name': '',
-            'emergency_contact': '',
-            'emergency_address': ''
-        }
-        
-        employee_id = insert_employee(employee_data)
-        
-        if employee_id is None:
-            logger.error(f"Failed to insert SPMA employee: {id_number}")
+                logger.error(f"❌ Error appending SPMA to Lark: {str(e)}")
+            
+            summary = txn.commit()
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": "SPMA submission successful",
+                    "transaction": summary,
+                }
+            )
+            
+        except TransactionError as te:
+            txn.rollback()
+            logger.error(f"SPMA submission transaction failed: {te}")
             return JSONResponse(
                 status_code=500,
-                content={"success": False, "error": "Database error", "detail": "Failed to save employee"}
+                content={
+                    "success": False,
+                    "error": "Submission failed",
+                    "detail": str(te),
+                    "transaction": txn.get_summary(),
+                }
             )
-        
-        logger.info(f"✅ SPMA employee saved to database (id={employee_id})")
-        
-        # ===== APPEND TO SPMA LARK TABLE =====
-        try:
-            logger.info(f"📤 Appending to SPMA Lark Table: {id_number}")
-            logger.info("=" * 60)
-            logger.info(f"  Photo URL: {cloudinary_photo_url or 'NONE'}")
-            logger.info(f"  Signature URL: {cloudinary_signature_url or 'NONE'}")
-            logger.info("=" * 60)
-            
-            lark_success = append_spma_employee_submission(
-                employee_name=employee_name,
-                middle_initial=middle_initial,
-                last_name=last_name,
-                suffix=final_suffix,
-                id_number=id_number,
-                division=division,
-                department=department,
-                field_clearance=field_clearance,
-                branch_location=location_branch,
-                email=email,
-                personal_number=personal_number,
-                photo_url=cloudinary_photo_url,
-                signature_url=cloudinary_signature_url
-            )
-            
-            if lark_success:
-                logger.info(f"✅ SPMA submission appended to Lark Bitable: {id_number}")
-            else:
-                logger.warning(f"⚠️ Failed to append SPMA to Lark (saved to database): {id_number}")
-        except Exception as e:
-            logger.error(f"❌ Error appending SPMA to Lark: {str(e)}", exc_info=True)
-        
-        return JSONResponse(
-            status_code=200,
-            content={"success": True, "message": "SPMA submission successful"}
-        )
         
     except Exception as e:
         logger.error(f"SPMA Submit error: {str(e)}\n{traceback.format_exc()}")

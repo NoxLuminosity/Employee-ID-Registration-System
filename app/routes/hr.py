@@ -3,6 +3,7 @@ HR Routes - From Code 2
 Handles HR authentication, dashboard, gallery, and employee management.
 Includes background removal functionality for AI-generated photos.
 Supports both password-based and Lark SSO authentication.
+Uses TransactionManager for ACID compliance across multi-step API workflows.
 """
 from fastapi import APIRouter, Request, Cookie
 from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
@@ -32,7 +33,7 @@ from app.database import (
 
 # Import services for background removal
 from app.services.background_removal_service import remove_background_from_url
-from app.services.cloudinary_service import upload_bytes_to_cloudinary
+from app.services.cloudinary_service import upload_bytes_to_cloudinary, delete_from_cloudinary
 
 # Import POC routing service
 from app.services.poc_routing_service import compute_nearest_poc_branch, is_valid_poc_branch
@@ -45,6 +46,10 @@ from app.auth import (
     delete_session,
     get_session
 )
+
+# ACID Transaction Manager & Cache
+from app.transaction_manager import TransactionManager, TransactionError
+from app.workflow_cache import WorkflowCache, make_cache_key, TTL_EXTENDED, TTL_DEFAULT
 
 router = APIRouter(prefix="/hr")
 
@@ -508,52 +513,68 @@ def api_approve_employee(employee_id: int, hr_session: str = Cookie(None)):
                 content={"success": False, "error": f"Cannot approve. Current status: {row.get('status')}. Only 'Rendered' IDs can be approved."}
             )
 
-        # Update status to Approved
-        success = update_employee(employee_id, {
-            "status": "Approved",
-            "date_last_modified": datetime.now().isoformat()
-        })
+        old_status = row.get("status")
+        id_number = row.get("id_number")
 
-        if not success:
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": "Failed to update employee"}
+        # ====================================================================
+        # ACID TRANSACTION: Approve Employee
+        # Steps: Update DB → Sync Lark
+        # If DB update fails, nothing changes. Lark sync is non-critical.
+        # ====================================================================
+        txn = TransactionManager("approve_employee", context={"employee_id": employee_id})
+        
+        try:
+            # Step 1: Update local database (CRITICAL)
+            txn.execute_step(
+                name="update_status_db",
+                action=lambda: update_employee(employee_id, {
+                    "status": "Approved",
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                rollback=lambda _: update_employee(employee_id, {
+                    "status": old_status,
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                error_message="Failed to update employee status in database",
             )
 
-        # Sync status to Lark Bitable (one-way authoritative from HR side)
-        lark_synced = False
-        lark_error = None
-        try:
-            from app.services.lark_service import find_and_update_employee_status
-            id_number = row.get("id_number")
-            old_status = row.get("status")
-            if id_number:
-                logger.info(f"📤 Syncing status 'Approved' to Lark for id_number: {id_number}")
-                lark_synced = find_and_update_employee_status(
-                    id_number, 
-                    "Approved",
-                    old_status=old_status,
-                    source="HR Approval"
-                )
-                if lark_synced:
-                    logger.info(f"✅ Lark Bitable status synced to 'Approved' for employee {id_number}")
+            # Step 2: Sync status to Lark Bitable (non-critical)
+            lark_synced = False
+            lark_error = None
+            try:
+                from app.services.lark_service import find_and_update_employee_status
+                if id_number:
+                    lark_synced = txn.execute_step(
+                        name="sync_lark_status",
+                        action=lambda: find_and_update_employee_status(
+                            id_number, "Approved", old_status=old_status, source="HR Approval"
+                        ),
+                        is_critical=False,
+                    )
+                    if not lark_synced:
+                        lark_error = "Lark update returned False - check logs for details"
                 else:
-                    lark_error = "Lark update returned False - check logs for details"
-                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Approved' for employee {id_number}")
-            else:
-                lark_error = "No id_number found for employee"
-                logger.warning(f"⚠️ Cannot sync to Lark - employee {employee_id} has no id_number")
-        except Exception as lark_e:
-            lark_error = str(lark_e)
-            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+                    lark_error = "No id_number found for employee"
+            except Exception as lark_e:
+                lark_error = str(lark_e)
 
-        logger.info(f"Employee {employee_id} approved (Lark synced: {lark_synced})")
-        return JSONResponse(content={
-            "success": True, 
-            "message": "Application approved",
-            "lark_synced": lark_synced,
-            "lark_error": lark_error
-        })
+            summary = txn.commit()
+            logger.info(f"Employee {employee_id} approved (Lark synced: {lark_synced})")
+            return JSONResponse(content={
+                "success": True, 
+                "message": "Application approved",
+                "lark_synced": lark_synced,
+                "lark_error": lark_error,
+                "transaction": summary,
+            })
+            
+        except TransactionError as te:
+            txn.rollback()
+            logger.error(f"Approve transaction failed: {te}")
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": str(te), "transaction": txn.get_summary()}
+            )
 
     except Exception as e:
         logger.error(f"Error approving employee {employee_id}: {str(e)}")
@@ -592,102 +613,118 @@ def api_send_to_poc(employee_id: int, hr_session: str = Cookie(None)):
         # Compute nearest POC branch based on employee's location
         location_branch = row.get("location_branch", "")
         nearest_poc = compute_nearest_poc_branch(location_branch)
-        
-        # Update employee status via RPC (bypasses PostgREST schema cache)
         id_number = row.get("id_number")
-        success = update_employee_status_rpc(employee_id, "Sent to POC")
+
+        # ====================================================================
+        # ACID TRANSACTION: Send to POC
+        # Steps: Update DB Status → Sync Lark → Send POC Message → Update email_sent
+        # If DB update fails, nothing proceeds. Lark + message are non-critical.
+        # ====================================================================
+        txn = TransactionManager("send_to_poc", context={
+            "employee_id": employee_id,
+            "nearest_poc": nearest_poc,
+        })
         
-        if not success:
+        try:
+            # Step 1: Update employee status via RPC (CRITICAL)
+            txn.execute_step(
+                name="update_status_rpc",
+                action=lambda: update_employee_status_rpc(employee_id, "Sent to POC"),
+                rollback=lambda _: update_employee_status_rpc(employee_id, current_status),
+                error_message="Failed to update employee status",
+            )
+            
+            # Step 2: Sync status to Lark Bitable (non-critical)
+            lark_synced = False
+            try:
+                from app.services.lark_service import find_and_update_employee_status
+                if id_number:
+                    lark_synced = txn.execute_step(
+                        name="sync_lark_status",
+                        action=lambda: find_and_update_employee_status(
+                            id_number, "Sent to POC", old_status=current_status, source="HR Portal Send to POC"
+                        ),
+                        is_critical=False,
+                    )
+            except Exception as lark_e:
+                logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+            
+            # Step 3: Send actual Lark message to POC (non-critical)
+            message_sent = False
+            email_sent_updated = False
+            test_mode = False
+            send_error = None
+            try:
+                from app.services.lark_service import send_to_poc, update_employee_email_sent, is_poc_test_mode
+                from app.services.poc_routing_service import get_poc_email, get_poc_contact
+                
+                test_mode = is_poc_test_mode()
+                poc_email = get_poc_email(nearest_poc)
+                poc_contact = get_poc_contact(nearest_poc)
+                poc_name = poc_contact.get("name", "") if poc_contact else ""
+                
+                employee_data = {
+                    "id_number": id_number,
+                    "employee_name": row.get("employee_name", ""),
+                    "position": row.get("position", ""),
+                    "field_officer_type": row.get("field_officer_type", ""),
+                    "location_branch": location_branch,
+                    "pdf_url": row.get("render_url", ""),
+                    "render_url": row.get("render_url", ""),
+                    "poc_name": poc_name,
+                    "card_images_json": row.get("card_images_json", ""),
+                }
+                
+                send_result = txn.execute_step(
+                    name="send_poc_message",
+                    action=lambda: send_to_poc(employee_data, nearest_poc, poc_email),
+                    is_critical=False,
+                )
+                
+                if send_result and send_result.get("success"):
+                    message_sent = True
+                    logger.info(f"✅ POC message sent for employee {id_number} to {nearest_poc}" + 
+                               (f" (TEST MODE)" if test_mode else ""))
+                    
+                    # Step 4: Update email_sent in Lark Bitable (non-critical)
+                    try:
+                        email_sent_updated = txn.execute_step(
+                            name="update_email_sent",
+                            action=lambda: update_employee_email_sent(
+                                id_number, email_sent=True, resolved_printer_branch=nearest_poc
+                            ),
+                            is_critical=False,
+                        )
+                    except Exception:
+                        pass
+                else:
+                    send_error = send_result.get("error", "Unknown error") if send_result else "No result"
+            except Exception as msg_e:
+                send_error = str(msg_e)
+                logger.warning(f"⚠️ Could not send POC message: {send_error}")
+            
+            summary = txn.commit()
+            
+            logger.info(f"Employee {employee_id} sent to POC '{nearest_poc}' (Lark synced: {lark_synced}, message sent: {message_sent})")
+            return JSONResponse(content={
+                "success": True,
+                "message": f"Sent to POC: {nearest_poc}",
+                "nearest_poc": nearest_poc,
+                "lark_synced": lark_synced,
+                "message_sent": message_sent,
+                "email_sent_updated": email_sent_updated,
+                "test_mode": test_mode,
+                "send_error": send_error,
+                "transaction": summary,
+            })
+            
+        except TransactionError as te:
+            txn.rollback()
+            logger.error(f"Send to POC transaction failed: {te}")
             return JSONResponse(
                 status_code=500,
-                content={"success": False, "error": "Failed to update employee status"}
+                content={"success": False, "error": str(te), "transaction": txn.get_summary()}
             )
-        
-        # Sync status to Lark Bitable
-        lark_synced = False
-        try:
-            from app.services.lark_service import find_and_update_employee_status
-            if id_number:
-                lark_synced = find_and_update_employee_status(
-                    id_number,
-                    "Sent to POC",
-                    old_status=current_status,
-                    source="HR Portal Send to POC"
-                )
-                if lark_synced:
-                    logger.info(f"✅ Lark Bitable status synced to 'Sent to POC' for employee {id_number}")
-                else:
-                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Sent to POC' for employee {id_number}")
-        except Exception as lark_e:
-            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
-        
-        # Send actual Lark message to POC (or test recipient if in test mode)
-        message_sent = False
-        email_sent_updated = False
-        test_mode = False
-        send_error = None
-        try:
-            from app.services.lark_service import send_to_poc, update_employee_email_sent, is_poc_test_mode
-            from app.services.poc_routing_service import get_poc_email, get_poc_contact
-            
-            test_mode = is_poc_test_mode()
-            poc_email = get_poc_email(nearest_poc)
-            poc_contact = get_poc_contact(nearest_poc)
-            poc_name = poc_contact.get("name", "") if poc_contact else ""
-            
-            # Prepare employee data for message (include PDF URL from render_url field)
-            # Also include card_images_json for direct PNG delivery (higher quality)
-            employee_data = {
-                "id_number": id_number,
-                "employee_name": row.get("employee_name", ""),
-                "position": row.get("position", ""),
-                "field_officer_type": row.get("field_officer_type", ""),
-                "location_branch": location_branch,
-                "pdf_url": row.get("render_url", ""),
-                "render_url": row.get("render_url", ""),
-                "poc_name": poc_name,
-                "card_images_json": row.get("card_images_json", ""),
-            }
-            
-            # Send the message
-            send_result = send_to_poc(employee_data, nearest_poc, poc_email)
-            
-            if send_result.get("success"):
-                message_sent = True
-                logger.info(f"✅ POC message sent for employee {id_number} to {nearest_poc}" + 
-                           (f" (TEST MODE - sent to {send_result.get('recipient', 'test recipient')})" if test_mode else ""))
-                
-                # Update email_sent in Lark Bitable
-                try:
-                    email_sent_updated = update_employee_email_sent(
-                        id_number, 
-                        email_sent=True,
-                        resolved_printer_branch=nearest_poc
-                    )
-                    if email_sent_updated:
-                        logger.info(f"✅ email_sent updated to True in Lark Bitable for {id_number}")
-                    else:
-                        logger.warning(f"⚠️ Failed to update email_sent in Lark Bitable for {id_number}")
-                except Exception as email_e:
-                    logger.warning(f"⚠️ Could not update email_sent in Lark Bitable: {str(email_e)}")
-            else:
-                send_error = send_result.get("error", "Unknown error")
-                logger.warning(f"⚠️ Failed to send POC message for employee {id_number}: {send_error}")
-        except Exception as msg_e:
-            send_error = str(msg_e)
-            logger.warning(f"⚠️ Could not send POC message: {send_error}")
-        
-        logger.info(f"Employee {employee_id} sent to POC '{nearest_poc}' (Lark synced: {lark_synced}, message sent: {message_sent})")
-        return JSONResponse(content={
-            "success": True,
-            "message": f"Sent to POC: {nearest_poc}",
-            "nearest_poc": nearest_poc,
-            "lark_synced": lark_synced,
-            "message_sent": message_sent,
-            "email_sent_updated": email_sent_updated,
-            "test_mode": test_mode,
-            "send_error": send_error
-        })
     
     except Exception as e:
         logger.error(f"Error sending employee {employee_id} to POC: {str(e)}")
@@ -855,51 +892,67 @@ def api_render_employee(employee_id: int, hr_session: str = Cookie(None)):
                 content={"success": False, "error": f"Cannot render. Current status: {current_status}. Must be one of: {', '.join(acceptable_statuses)}"}
             )
 
-        # Update status to Rendered (NOT Approved - approval happens in Gallery)
-        success = update_employee(employee_id, {
-            "status": "Rendered",
-            "date_last_modified": datetime.now().isoformat()
-        })
+        id_number = row.get("id_number")
 
-        if not success:
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": "Failed to update employee"}
+        # ====================================================================
+        # ACID TRANSACTION: Render Employee
+        # Steps: Update DB → Sync Lark
+        # DB rollback to previous status if critical failure occurs.
+        # ====================================================================
+        txn = TransactionManager("render_employee", context={"employee_id": employee_id})
+        
+        try:
+            # Step 1: Update local database (CRITICAL)
+            txn.execute_step(
+                name="update_status_db",
+                action=lambda: update_employee(employee_id, {
+                    "status": "Rendered",
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                rollback=lambda _: update_employee(employee_id, {
+                    "status": current_status,
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                error_message="Failed to update employee status in database",
             )
 
-        # Sync status to Lark Bitable
-        lark_synced = False
-        lark_error = None
-        try:
-            from app.services.lark_service import find_and_update_employee_status
-            id_number = row.get("id_number")
-            if id_number:
-                logger.info(f"📤 Syncing status 'Rendered' to Lark for id_number: {id_number}")
-                lark_synced = find_and_update_employee_status(
-                    id_number, 
-                    "Rendered",
-                    old_status=current_status,
-                    source="HR Render"
-                )
-                if lark_synced:
-                    logger.info(f"✅ Lark Bitable status synced to 'Rendered' for employee {id_number}")
+            # Step 2: Sync status to Lark Bitable (non-critical)
+            lark_synced = False
+            lark_error = None
+            try:
+                from app.services.lark_service import find_and_update_employee_status
+                if id_number:
+                    lark_synced = txn.execute_step(
+                        name="sync_lark_status",
+                        action=lambda: find_and_update_employee_status(
+                            id_number, "Rendered", old_status=current_status, source="HR Render"
+                        ),
+                        is_critical=False,
+                    )
+                    if not lark_synced:
+                        lark_error = "Lark update returned False - check logs for details"
                 else:
-                    lark_error = "Lark update returned False - check logs for details"
-                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Rendered' for employee {id_number}")
-            else:
-                lark_error = "No id_number found for employee"
-                logger.warning(f"⚠️ Cannot sync to Lark - employee {employee_id} has no id_number")
-        except Exception as lark_e:
-            lark_error = str(lark_e)
-            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+                    lark_error = "No id_number found for employee"
+            except Exception as lark_e:
+                lark_error = str(lark_e)
 
-        logger.info(f"Employee {employee_id} rendered (Lark synced: {lark_synced})")
-        return JSONResponse(content={
-            "success": True, 
-            "message": "ID marked as Rendered - ready for Gallery approval",
-            "lark_synced": lark_synced,
-            "lark_error": lark_error
-        })
+            summary = txn.commit()
+            logger.info(f"Employee {employee_id} rendered (Lark synced: {lark_synced})")
+            return JSONResponse(content={
+                "success": True, 
+                "message": "ID marked as Rendered - ready for Gallery approval",
+                "lark_synced": lark_synced,
+                "lark_error": lark_error,
+                "transaction": summary,
+            })
+            
+        except TransactionError as te:
+            txn.rollback()
+            logger.error(f"Render transaction failed: {te}")
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": str(te), "transaction": txn.get_summary()}
+            )
 
     except Exception as e:
         logger.error(f"Error rendering employee {employee_id}: {str(e)}")
@@ -930,38 +983,59 @@ def api_delete_employee(employee_id: int, hr_session: str = Cookie(None)):
         id_number = row.get("id_number")
         current_status = row.get("status")
 
-        # Update status to Removed instead of deleting
-        success = update_employee(employee_id, {
-            "status": "Removed",
-            "date_last_modified": datetime.now().isoformat()
-        })
+        # ====================================================================
+        # ACID TRANSACTION: Remove Employee
+        # Steps: Update DB → Sync Lark
+        # DB rollback to previous status on failure.
+        # ====================================================================
+        txn = TransactionManager("remove_employee", context={"employee_id": employee_id})
         
-        if not success:
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": "Failed to remove employee"}
+        try:
+            # Step 1: Update status to Removed (CRITICAL)
+            txn.execute_step(
+                name="update_status_db",
+                action=lambda: update_employee(employee_id, {
+                    "status": "Removed",
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                rollback=lambda _: update_employee(employee_id, {
+                    "status": current_status,
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                error_message="Failed to remove employee",
             )
 
-        # Sync status to Lark Bitable
-        lark_synced = False
-        try:
-            from app.services.lark_service import find_and_update_employee_status
-            if id_number:
-                lark_synced = find_and_update_employee_status(
-                    id_number,
-                    "Removed",
-                    old_status=current_status,
-                    source="HR Remove"
-                )
-                if lark_synced:
-                    logger.info(f"✅ Lark Bitable status synced to 'Removed' for employee {id_number}")
-                else:
-                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Removed' for employee {id_number}")
-        except Exception as lark_e:
-            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+            # Step 2: Sync status to Lark Bitable (non-critical)
+            lark_synced = False
+            try:
+                from app.services.lark_service import find_and_update_employee_status
+                if id_number:
+                    lark_synced = txn.execute_step(
+                        name="sync_lark_status",
+                        action=lambda: find_and_update_employee_status(
+                            id_number, "Removed", old_status=current_status, source="HR Remove"
+                        ),
+                        is_critical=False,
+                    )
+            except Exception as lark_e:
+                logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
 
-        logger.info(f"Employee {employee_id} ({employee_name}) marked as Removed (Lark synced: {lark_synced})")
-        return JSONResponse(content={"success": True, "message": f"Application for {employee_name} removed", "lark_synced": lark_synced})
+            summary = txn.commit()
+            logger.info(f"Employee {employee_id} ({employee_name}) marked as Removed (Lark synced: {lark_synced})")
+            return JSONResponse(content={
+                "success": True, 
+                "message": f"Application for {employee_name} removed", 
+                "lark_synced": lark_synced,
+                "transaction": summary,
+            })
+            
+        except TransactionError as te:
+            txn.rollback()
+            logger.error(f"Remove transaction failed: {te}")
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": str(te), "transaction": txn.get_summary()}
+            )
 
     except Exception as e:
         logger.error(f"Error removing employee {employee_id}: {str(e)}")
@@ -1002,67 +1076,104 @@ def api_remove_background(employee_id: int, hr_session: str = Cookie(None)):
                 content={"success": False, "error": "No AI photo available to process"}
             )
 
-        # If already has nobg photo, return it
+        # If already has nobg photo, return it (cached result)
         if row.get("nobg_photo_url"):
-            logger.info(f"Employee {employee_id} already has nobg photo: {row.get('nobg_photo_url', '')[:50]}...")
+            logger.info(f"Employee {employee_id} already has nobg photo (reusing cached): {row.get('nobg_photo_url', '')[:50]}...")
             return JSONResponse(content={
                 "success": True, 
                 "nobg_photo_url": row.get("nobg_photo_url"),
-                "message": "Background already removed"
+                "message": "Background already removed",
+                "from_cache": True,
             })
 
         ai_photo_url = row.get("new_photo_url")
         safe_id = row.get("id_number", "").replace(' ', '_').replace('/', '-').replace('\\', '-')
-
-        logger.info(f"Starting background removal for employee {employee_id}...")
-        logger.info(f"AI Photo URL: {ai_photo_url}")
-
-        # Remove background using remove.bg API
-        logger.info("Calling remove_background_from_url...")
-        nobg_bytes, error = remove_background_from_url(ai_photo_url)
         
-        if not nobg_bytes:
-            logger.error(f"Background removal failed: {error}")
+        # Check workflow cache for previously generated nobg result
+        nobg_cache_key = make_cache_key("nobg", safe_id)
+        cached_nobg = WorkflowCache.get(nobg_cache_key)
+        if cached_nobg:
+            logger.info(f"Using cached nobg URL for employee {employee_id}: {cached_nobg[:50]}...")
+            # Save to database since we have it cached
+            update_employee(employee_id, {
+                "nobg_photo_url": cached_nobg,
+                "date_last_modified": datetime.now().isoformat()
+            })
+            return JSONResponse(content={
+                "success": True,
+                "nobg_photo_url": cached_nobg,
+                "message": "Background removed (from cache)",
+                "from_cache": True,
+            })
+
+        # ====================================================================
+        # ACID TRANSACTION: Background Removal
+        # Steps: Remove BG API → Upload Cloudinary → Update DB
+        # If any step fails, completed steps are rolled back.
+        # ====================================================================
+        txn = TransactionManager("background_removal", context={"employee_id": employee_id})
+        
+        try:
+            # Step 1: Remove background using remove.bg API
+            def _remove_bg():
+                nobg_result, err = remove_background_from_url(ai_photo_url)
+                if not nobg_result:
+                    raise Exception(err or "Failed to remove background")
+                return nobg_result
+            
+            nobg_bytes = txn.execute_step(
+                name="remove_background_api",
+                action=_remove_bg,
+                error_message="Failed to remove background from image",
+            )
+            
+            logger.info(f"Background removed successfully, got {len(nobg_bytes)} bytes")
+            
+            # Step 2: Upload to Cloudinary
+            nobg_public_id = f"{safe_id}_nobg"
+            nobg_url = txn.execute_step(
+                name="upload_nobg_cloudinary",
+                action=lambda: upload_bytes_to_cloudinary(
+                    image_bytes=nobg_bytes,
+                    public_id=nobg_public_id,
+                    folder="employees"
+                ),
+                rollback=lambda url: delete_from_cloudinary(url),
+                cache_key=nobg_cache_key,
+                error_message="Failed to upload processed image to cloud",
+            )
+            
+            # Step 3: Update database with nobg URL
+            txn.execute_step(
+                name="update_database_nobg",
+                action=lambda: update_employee(employee_id, {
+                    "nobg_photo_url": nobg_url,
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                is_critical=False,  # Don't fail if DB update doesn't work
+            )
+            
+            summary = txn.commit()
+            
+            logger.info(f"=== BACKGROUND REMOVAL COMPLETE for employee {employee_id} ===")
+            return JSONResponse(content={
+                "success": True, 
+                "nobg_photo_url": nobg_url,
+                "message": "Background removed successfully",
+                "transaction": summary,
+            })
+            
+        except TransactionError as te:
+            txn.rollback()
+            logger.error(f"Background removal transaction failed: {te}")
             return JSONResponse(
                 status_code=500,
-                content={"success": False, "error": error or "Failed to remove background"}
+                content={
+                    "success": False,
+                    "error": str(te),
+                    "transaction": txn.get_summary(),
+                }
             )
-
-        logger.info(f"Background removed successfully, got {len(nobg_bytes)} bytes")
-
-        # Upload to Cloudinary
-        logger.info("Uploading to Cloudinary...")
-        nobg_public_id = f"{safe_id}_nobg"
-        nobg_url = upload_bytes_to_cloudinary(
-            image_bytes=nobg_bytes,
-            public_id=nobg_public_id,
-            folder="employees"
-        )
-
-        if not nobg_url:
-            logger.error("Cloudinary upload failed")
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": "Failed to upload processed image"}
-            )
-
-        logger.info(f"Uploaded to Cloudinary: {nobg_url}")
-
-        # Update database with nobg URL
-        success = update_employee(employee_id, {
-            "nobg_photo_url": nobg_url,
-            "date_last_modified": datetime.now().isoformat()
-        })
-
-        if not success:
-            logger.error("Failed to update employee with nobg URL")
-
-        logger.info(f"=== BACKGROUND REMOVAL COMPLETE for employee {employee_id} ===")
-        return JSONResponse(content={
-            "success": True, 
-            "nobg_photo_url": nobg_url,
-            "message": "Background removed successfully"
-        })
 
     except Exception as e:
         logger.error(f"Error removing background for employee {employee_id}: {str(e)}")
@@ -1095,44 +1206,62 @@ def api_complete_employee(employee_id: int, hr_session: str = Cookie(None)):
                 content={"success": False, "error": f"Cannot mark as complete. Current status: {old_status}. Must be 'Sent to POC'."}
             )
 
-        # Update status to Completed
-        success = update_employee(employee_id, {
-            "status": "Completed",
-            "id_generated": 1,
-            "date_last_modified": datetime.now().isoformat()
-        })
+        id_number = row.get("id_number")
 
-        if not success:
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": "Failed to update employee"}
+        # ====================================================================
+        # ACID TRANSACTION: Complete Employee
+        # Steps: Update DB → Sync Lark
+        # DB rollback to previous status on critical failure.
+        # ====================================================================
+        txn = TransactionManager("complete_employee", context={"employee_id": employee_id})
+        
+        try:
+            # Step 1: Update local database (CRITICAL)
+            txn.execute_step(
+                name="update_status_db",
+                action=lambda: update_employee(employee_id, {
+                    "status": "Completed",
+                    "id_generated": 1,
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                rollback=lambda _: update_employee(employee_id, {
+                    "status": old_status,
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                error_message="Failed to update employee status in database",
             )
 
-        # Sync status to Lark Bitable (one-way authoritative from HR side)
-        lark_synced = False
-        try:
-            from app.services.lark_service import find_and_update_employee_status
-            id_number = row.get("id_number")
-            if id_number:
-                lark_synced = find_and_update_employee_status(
-                    id_number, 
-                    "Completed", 
-                    old_status=old_status,
-                    source="PDF Download"
-                )
-                if lark_synced:
-                    logger.info(f"✅ Lark Bitable status synced to 'Completed' for employee {id_number}")
-                else:
-                    logger.warning(f"⚠️ Failed to sync Lark Bitable status to 'Completed' for employee {id_number}")
-        except Exception as lark_e:
-            logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
+            # Step 2: Sync status to Lark Bitable (non-critical)
+            lark_synced = False
+            try:
+                from app.services.lark_service import find_and_update_employee_status
+                if id_number:
+                    lark_synced = txn.execute_step(
+                        name="sync_lark_status",
+                        action=lambda: find_and_update_employee_status(
+                            id_number, "Completed", old_status=old_status, source="PDF Download"
+                        ),
+                        is_critical=False,
+                    )
+            except Exception as lark_e:
+                logger.warning(f"⚠️ Could not sync status to Lark Bitable: {str(lark_e)}")
 
-        logger.info(f"Employee {employee_id} marked as completed (Lark synced: {lark_synced})")
-        return JSONResponse(content={
-            "success": True, 
-            "message": "ID marked as completed",
-            "lark_synced": lark_synced
-        })
+            summary = txn.commit()
+            logger.info(f"Employee {employee_id} marked as completed (Lark synced: {lark_synced})")
+            return JSONResponse(content={
+                "success": True, 
+                "message": "ID marked as completed",
+                "lark_synced": lark_synced,
+                "transaction": summary,
+            })
+            
+        except TransactionError as te:
+            txn.rollback()
+            logger.error(f"Complete transaction failed: {te}")
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "error": str(te), "transaction": txn.get_summary()}
+            )
 
     except Exception as e:
         logger.error(f"Error completing employee {employee_id}: {str(e)}")
@@ -1204,125 +1333,121 @@ async def api_upload_pdf(employee_id: int, request: Request, hr_session: str = C
         employee_name = row.get("employee_name", "").replace(" ", "_")
         position = row.get("position", "")
         
-        # Add timestamp to ensure uniqueness
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Determine suffix based on position
         suffix = "_dual_templates" if position == "Field Officer" else ""
         public_id = f"ID_{id_number_safe}_{employee_name}{suffix}_{timestamp}"
         
-        # Step 1: Upload PDF to Cloudinary
-        logger.info(f"📤 Uploading PDF to Cloudinary: {public_id}")
-        from app.services.cloudinary_service import upload_pdf_to_cloudinary
-        pdf_url = upload_pdf_to_cloudinary(pdf_bytes, public_id, folder="id_cards")
+        # ====================================================================
+        # ACID TRANSACTION: PDF Upload + LarkBase Sync
+        # Steps: Upload PDF → Verify URL → Upload Preview → Update Lark → Update DB
+        # If Lark sync fails, Cloudinary upload is rolled back.
+        # ====================================================================
+        txn = TransactionManager("pdf_upload", context={
+            "employee_id": employee_id,
+            "id_number": id_number,
+        })
         
-        if not pdf_url:
-            logger.error(f"❌ Cloudinary upload failed for employee {employee_id}")
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": "Failed to upload PDF to cloud storage"}
+        try:
+            # Step 1: Upload PDF to Cloudinary
+            from app.services.cloudinary_service import upload_pdf_to_cloudinary
+            pdf_url = txn.execute_step(
+                name="upload_pdf_cloudinary",
+                action=lambda: upload_pdf_to_cloudinary(pdf_bytes, public_id, folder="id_cards"),
+                rollback=lambda url: delete_from_cloudinary(url),
+                error_message="Failed to upload PDF to cloud storage",
             )
-        
-        logger.info(f"✅ PDF uploaded to Cloudinary: {pdf_url}")
-        
-        # Step 1.5a: Upload image preview to Cloudinary (for Lark card image embedding)
-        # This creates an image version of the PDF that can be used in Lark Interactive Cards
-        try:
-            from app.services.cloudinary_service import upload_pdf_image_preview
-            image_preview_url = upload_pdf_image_preview(pdf_bytes, public_id, folder="id_cards")
-            if image_preview_url:
-                logger.info(f"✅ Image preview uploaded: {image_preview_url[:80]}...")
-            else:
-                logger.warning(f"⚠️ Image preview upload failed (non-critical)")
-        except Exception as img_e:
-            logger.warning(f"⚠️ Image preview upload error (non-critical): {str(img_e)}")
-        
-        # Step 1.5b: Verify the URL is publicly accessible before saving to LarkBase
-        # This prevents saving 401/403 URLs to the database
-        import urllib.request
-        import urllib.error
-        try:
-            logger.info(f"🔗 Verifying PDF URL accessibility: {pdf_url[:80]}...")
-            req = urllib.request.Request(pdf_url, method='HEAD')
-            req.add_header('User-Agent', 'Mozilla/5.0 (compatible; URLValidator/1.0)')
-            with urllib.request.urlopen(req, timeout=10) as response:
-                if response.status == 200:
-                    logger.info(f"✅ PDF URL is publicly accessible (HTTP {response.status})")
-                else:
-                    logger.warning(f"⚠️ PDF URL returned unexpected status: HTTP {response.status}")
-        except urllib.error.HTTPError as http_err:
-            logger.error(f"❌ PDF URL not accessible: HTTP {http_err.code} - {http_err.reason}")
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "success": False, 
-                    "error": f"PDF uploaded but URL not accessible (HTTP {http_err.code})",
-                    "pdf_url": pdf_url,
-                    "http_error": http_err.code
-                }
+            
+            logger.info(f"✅ PDF uploaded to Cloudinary: {pdf_url}")
+            
+            # Step 1.5a: Upload image preview (non-critical)
+            try:
+                from app.services.cloudinary_service import upload_pdf_image_preview
+                txn.execute_step(
+                    name="upload_image_preview",
+                    action=lambda: upload_pdf_image_preview(pdf_bytes, public_id, folder="id_cards"),
+                    is_critical=False,
+                )
+            except Exception as img_e:
+                logger.warning(f"⚠️ Image preview upload error (non-critical): {str(img_e)}")
+            
+            # Step 1.5b: Verify URL accessibility (non-critical)
+            import urllib.request
+            import urllib.error
+            
+            def _verify_url():
+                req = urllib.request.Request(pdf_url, method='HEAD')
+                req.add_header('User-Agent', 'Mozilla/5.0 (compatible; URLValidator/1.0)')
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    if response.status != 200:
+                        raise Exception(f"HTTP {response.status}")
+                return True
+            
+            txn.execute_step(
+                name="verify_pdf_url",
+                action=_verify_url,
+                is_critical=False,  # Some CDNs block HEAD requests
             )
-        except Exception as url_err:
-            logger.warning(f"⚠️ Could not verify PDF URL accessibility: {str(url_err)}")
-            # Continue anyway - some CDNs may block HEAD requests
-        
-        # Step 2: Update LarkBase id_card field with the URL
-        # This is CRITICAL - the download should only proceed if this succeeds
-        lark_synced = False
-        lark_error = None
-        try:
+            
+            # Step 2: Update LarkBase id_card field (CRITICAL)
             from app.services.lark_service import update_employee_id_card
-            lark_synced = update_employee_id_card(
-                id_number,
-                pdf_url,
-                source="HR PDF Download"
+            
+            lark_synced = txn.execute_step(
+                name="update_lark_id_card",
+                action=lambda: update_employee_id_card(
+                    id_number,
+                    pdf_url,
+                    source="HR PDF Download"
+                ),
+                error_message=f"PDF uploaded to cloud but LarkBase update failed",
             )
-            if lark_synced:
-                logger.info(f"✅ LarkBase id_card updated for employee {id_number}")
-            else:
-                lark_error = "LarkBase update returned False"
-                logger.error(f"❌ LarkBase id_card update failed for employee {id_number}")
-        except Exception as lark_e:
-            lark_error = str(lark_e)
-            logger.error(f"❌ LarkBase id_card update exception for {id_number}: {lark_error}")
-        
-        # If LarkBase update failed, return failure so frontend doesn't download
-        if not lark_synced:
-            logger.error(f"❌ LarkBase sync failed for {id_number}. PDF URL: {pdf_url}. Error: {lark_error}")
+            
+            if not lark_synced:
+                raise TransactionError(
+                    "LarkBase id_card update returned False",
+                    transaction_id=txn.transaction_id,
+                    step_name="update_lark_id_card",
+                )
+            
+            # Step 3: Update local database (non-critical)
+            txn.execute_step(
+                name="update_local_database",
+                action=lambda: update_employee(employee_id, {
+                    "render_url": pdf_url,
+                    "id_generated": 1,
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                is_critical=False,
+            )
+            
+            summary = txn.commit()
+            
+            logger.info(f"✅ PDF upload complete for employee {employee_id} - LarkBase synced: {lark_synced}")
+            
+            return JSONResponse(content={
+                "success": True,
+                "pdf_url": pdf_url,
+                "lark_synced": True,
+                "message": "PDF uploaded and LarkBase id_card updated successfully",
+                "transaction": summary,
+            })
+            
+        except TransactionError as te:
+            txn.rollback()
+            logger.error(f"PDF upload transaction failed: {te}")
+            # Include pdf_url for manual recovery if Cloudinary upload succeeded
+            pdf_url_for_recovery = txn.get_step_result("upload_pdf_cloudinary")
             return JSONResponse(
                 status_code=500,
                 content={
-                    "success": False, 
-                    "error": f"PDF uploaded to cloud but LarkBase update failed: {lark_error}",
-                    "pdf_url": pdf_url,  # Include URL in case manual recovery is needed
-                    "lark_synced": False
+                    "success": False,
+                    "error": str(te),
+                    "pdf_url": pdf_url_for_recovery,
+                    "lark_synced": False,
+                    "transaction": txn.get_summary(),
                 }
             )
-        
-        # Step 3: Update local database with PDF URL and mark as generated
-        success = update_employee(employee_id, {
-            "render_url": pdf_url,
-            "id_generated": 1,
-            "date_last_modified": datetime.now().isoformat()
-        })
-        
-        if not success:
-            logger.warning(f"⚠️ Failed to update local database with PDF URL for employee {employee_id}")
-        
-        # NOTE: Status is NOT changed here. The workflow is:
-        # Rendered -> Approved (via "Approve All Rendered" button)
-        # Approved -> Sent to POC (via "Send All to POCs" button)
-        # Sent to POC -> Completed (manually when POC receives ID cards)
-        
-        logger.info(f"✅ PDF upload complete for employee {employee_id} - LarkBase synced: {lark_synced}")
-        
-        # SUCCESS: Both Cloudinary upload and LarkBase update succeeded
-        return JSONResponse(content={
-            "success": True,
-            "pdf_url": pdf_url,
-            "lark_synced": lark_synced,
-            "message": "PDF uploaded and LarkBase id_card updated successfully"
-        })
         
     except Exception as e:
         logger.error(f"❌ Error uploading PDF for employee {employee_id}: {str(e)}")
@@ -1401,78 +1526,113 @@ async def api_upload_card_images(employee_id: int, request: Request, hr_session:
         
         from app.services.cloudinary_service import upload_card_image_png
         
-        uploaded_images = []
-        errors = []
+        # ====================================================================
+        # ACID TRANSACTION: Card Images Upload
+        # Steps: Upload each image → Save all URLs to DB
+        # If DB save fails, all Cloudinary uploads are rolled back.
+        # ====================================================================
+        txn = TransactionManager("card_images_upload", context={
+            "employee_id": employee_id,
+            "image_count": len(card_images_input),
+        })
         
-        for i, img_entry in enumerate(card_images_input):
-            label = img_entry.get("label", f"Page {i+1}")
-            base64_data = img_entry.get("data", "")
+        try:
+            uploaded_images = []
+            errors = []
             
-            if not base64_data:
-                errors.append(f"Empty data for {label}")
-                continue
+            for i, img_entry in enumerate(card_images_input):
+                label = img_entry.get("label", f"Page {i+1}")
+                base64_data = img_entry.get("data", "")
+                
+                if not base64_data:
+                    errors.append(f"Empty data for {label}")
+                    continue
+                
+                # Remove data URI prefix if present
+                if base64_data.startswith("data:"):
+                    base64_data = base64_data.split(",", 1)[1]
+                
+                try:
+                    import base64 as b64_module
+                    image_bytes = b64_module.b64decode(base64_data)
+                except Exception as decode_err:
+                    errors.append(f"Invalid base64 for {label}: {str(decode_err)}")
+                    continue
+                
+                if len(image_bytes) < 100:
+                    errors.append(f"Image too small for {label}: {len(image_bytes)} bytes")
+                    continue
+                
+                # Generate label-based suffix for the public_id
+                label_safe = label.replace(" ", "_").replace("-", "_").replace("/", "_").lower()
+                public_id = f"ID_{id_number_safe}_{label_safe}_{timestamp}"
+                
+                # Each image upload is a non-critical step (partial success is OK)
+                try:
+                    image_url = txn.execute_step(
+                        name=f"upload_card_image_{i}",
+                        action=lambda ib=image_bytes, pid=public_id: upload_card_image_png(ib, pid, folder="id_card_images"),
+                        rollback=lambda url: delete_from_cloudinary(url),
+                        is_critical=False,
+                    )
+                    if image_url:
+                        uploaded_images.append({"label": label, "url": image_url})
+                        logger.info(f"  ✅ {label} uploaded: {image_url[:60]}...")
+                    else:
+                        errors.append(f"Cloudinary upload returned None for {label}")
+                except Exception as upload_err:
+                    errors.append(f"Upload failed for {label}: {str(upload_err)}")
+                    logger.error(f"  ❌ {label} upload failed: {str(upload_err)}")
             
-            # Remove data URI prefix if present
-            if base64_data.startswith("data:"):
-                base64_data = base64_data.split(",", 1)[1]
+            if not uploaded_images:
+                txn.rollback()
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "success": False,
+                        "error": f"No images uploaded successfully. Errors: {'; '.join(errors)}",
+                        "transaction": txn.get_summary(),
+                    }
+                )
             
-            try:
-                import base64 as b64_module
-                image_bytes = b64_module.b64decode(base64_data)
-            except Exception as decode_err:
-                errors.append(f"Invalid base64 for {label}: {str(decode_err)}")
-                continue
+            # Save all card image URLs to database (CRITICAL step)
+            import json as json_mod
+            card_images_json = json_mod.dumps(uploaded_images)
             
-            if len(image_bytes) < 100:
-                errors.append(f"Image too small for {label}: {len(image_bytes)} bytes")
-                continue
+            txn.execute_step(
+                name="save_card_images_db",
+                action=lambda: update_employee(employee_id, {
+                    "card_images_json": card_images_json,
+                    "date_last_modified": datetime.now().isoformat()
+                }),
+                is_critical=False,  # Don't rollback all images if DB save fails
+            )
             
-            # Generate label-based suffix for the public_id
-            label_safe = label.replace(" ", "_").replace("-", "_").replace("/", "_").lower()
-            public_id = f"ID_{id_number_safe}_{label_safe}_{timestamp}"
+            summary = txn.commit()
             
-            logger.info(f"  📤 Uploading {label}: {len(image_bytes)} bytes as {public_id}")
+            logger.info(f"✅ Card images upload complete for employee {employee_id}: {len(uploaded_images)}/{len(card_images_input)} images")
             
-            image_url = upload_card_image_png(image_bytes, public_id, folder="id_card_images")
+            return JSONResponse(content={
+                "success": True,
+                "card_images": uploaded_images,
+                "total_uploaded": len(uploaded_images),
+                "total_requested": len(card_images_input),
+                "errors": errors if errors else None,
+                "message": f"{len(uploaded_images)} card images uploaded successfully",
+                "transaction": summary,
+            })
             
-            if image_url:
-                uploaded_images.append({"label": label, "url": image_url})
-                logger.info(f"  ✅ {label} uploaded: {image_url[:60]}...")
-            else:
-                errors.append(f"Cloudinary upload failed for {label}")
-                logger.error(f"  ❌ {label} upload failed")
-        
-        if not uploaded_images:
+        except TransactionError as te:
+            txn.rollback()
+            logger.error(f"Card images upload transaction failed: {te}")
             return JSONResponse(
                 status_code=500,
                 content={
                     "success": False,
-                    "error": f"No images uploaded successfully. Errors: {'; '.join(errors)}"
+                    "error": str(te),
+                    "transaction": txn.get_summary(),
                 }
             )
-        
-        # Store card image URLs in database
-        import json as json_mod
-        card_images_json = json_mod.dumps(uploaded_images)
-        
-        db_success = update_employee(employee_id, {
-            "card_images_json": card_images_json,
-            "date_last_modified": datetime.now().isoformat()
-        })
-        
-        if not db_success:
-            logger.warning(f"⚠️ Failed to save card_images_json to database for employee {employee_id}")
-        
-        logger.info(f"✅ Card images upload complete for employee {employee_id}: {len(uploaded_images)}/{len(card_images_input)} images")
-        
-        return JSONResponse(content={
-            "success": True,
-            "card_images": uploaded_images,
-            "total_uploaded": len(uploaded_images),
-            "total_requested": len(card_images_input),
-            "errors": errors if errors else None,
-            "message": f"{len(uploaded_images)} card images uploaded successfully"
-        })
         
     except Exception as e:
         logger.error(f"❌ Error uploading card images for employee {employee_id}: {str(e)}")

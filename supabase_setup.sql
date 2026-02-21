@@ -129,6 +129,35 @@ ALTER TABLE headshot_usage ADD COLUMN IF NOT EXISTS lark_name TEXT DEFAULT '';
 -- Example: [{"label": "SPMC ID - Front", "url": "https://..."}, ...]
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS card_images_json TEXT;
 
+-- ============================================
+-- Workflow Cache (ACID Transaction Support)
+-- ============================================
+-- Persistent cache for intermediate workflow results (AI-generated images,
+-- Cloudinary URLs, processed outputs). Survives Vercel cold starts.
+-- Used by WorkflowCache class for database-backed caching layer.
+CREATE TABLE IF NOT EXISTS workflow_cache (
+    cache_key TEXT PRIMARY KEY,
+    cache_value TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    ttl_seconds INTEGER DEFAULT 3600
+);
+
+-- Index for efficient expired entry cleanup
+CREATE INDEX IF NOT EXISTS idx_workflow_cache_expires ON workflow_cache(expires_at);
+
+-- Periodic cleanup function for expired cache entries
+CREATE OR REPLACE FUNCTION cleanup_expired_cache()
+RETURNS INTEGER AS $$
+DECLARE
+    deleted_count INTEGER;
+BEGIN
+    DELETE FROM workflow_cache WHERE expires_at < NOW();
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Ask PostgREST (Supabase API layer) to reload its schema cache.
 -- This helps the API see newly-added columns immediately.
 -- If you don't have permissions for NOTIFY, you can remove this and wait a minute.
@@ -139,3 +168,4 @@ NOTIFY pgrst, 'reload schema';
 -- ============================================
 -- SELECT * FROM employees LIMIT 1;
 -- SELECT * FROM oauth_states LIMIT 1;
+-- SELECT * FROM workflow_cache LIMIT 1;
