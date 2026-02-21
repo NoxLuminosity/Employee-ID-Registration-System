@@ -1248,6 +1248,7 @@
 }
 
 /* Reset modal active state */
-#resetModal.active {
+#resetModal.active,
+#resetAllModal.active {
   display: flex;
 }

@@ -884,3 +884,38 @@ def reset_headshot_usage(lark_user_id: str) -> bool:
         except Exception as e:
             logger.error(f"SQLite reset_headshot_usage error: {e}")
             return False
+
+
+def reset_all_headshot_usage() -> int:
+    """Delete ALL headshot usage records, resetting rate limits for everyone. Returns count deleted."""
+    if USE_SUPABASE:
+        try:
+            # Supabase requires a filter for delete; use neq on a non-existent value to match all
+            result = (
+                supabase_client.table("headshot_usage")
+                .delete()
+                .neq("lark_user_id", "___IMPOSSIBLE_VALUE___")
+                .execute()
+            )
+            count = len(result.data) if result.data else 0
+            logger.info(f"Reset ALL headshot usage: {count} records deleted (Supabase)")
+            return count
+        except Exception as e:
+            logger.error(f"Supabase reset_all_headshot_usage error: {e}")
+            return -1
+    else:
+        import sqlite3
+        try:
+            _init_headshot_usage_sqlite()
+            conn = get_sqlite_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM headshot_usage")
+            count = cursor.fetchone()[0]
+            cursor.execute("DELETE FROM headshot_usage")
+            conn.commit()
+            conn.close()
+            logger.info(f"Reset ALL headshot usage: {count} records deleted (SQLite)")
+            return count
+        except Exception as e:
+            logger.error(f"SQLite reset_all_headshot_usage error: {e}")
+            return -1

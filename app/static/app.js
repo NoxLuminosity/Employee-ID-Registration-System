@@ -1721,7 +1721,7 @@ function updateHeadshotLimitUI() {
     warningEl = document.createElement('div');
     warningEl.id = 'headshotLimitWarning';
     warningEl.style.cssText = 'display:none;background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;padding:8px 12px;border-radius:8px;font-size:0.85rem;text-align:center;margin-top:8px;';
-    warningEl.textContent = 'You have reached the limit of 5 AI headshot generations. Further attempts are not allowed.';
+    warningEl.textContent = 'AI headshot generation limit reached. Please contact HR to request a reset.';
     const aiPreviewCard = document.querySelector('.ai-preview-card');
     if (aiPreviewCard) aiPreviewCard.appendChild(warningEl);
   }
@@ -1753,7 +1753,7 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
   
   // Check rate limit before attempting generation
   if (state.headshotLimitReached) {
-    showMessage('You have reached the limit of 5 AI headshot generations. Further attempts are not allowed.', 'error');
+    showMessage('AI headshot generation limit reached. Please contact HR to request a reset.', 'error');
     return;
   }
   
@@ -1860,14 +1860,14 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
       elements.aiLoading.style.display = 'none';
       elements.aiPreviewImg.style.display = 'none';
       elements.aiError.style.display = 'block';
-      elements.aiError.textContent = 'AI headshot limit reached';
+      elements.aiError.textContent = 'Generation limit reached — contact HR for a reset';
       
       state.aiGenerationComplete = false;
       state.aiGenerationInProgress = false;
       updateSubmitButtonState();
       hideProgressOverlay();
       
-      showMessage('You have reached the limit of 5 AI headshot generations. Further attempts are not allowed.', 'error');
+      showMessage('AI headshot generation limit reached. Please contact HR to request a reset.', 'error');
     } else {
       throw new Error(result.error || 'Failed to generate headshot');
     }

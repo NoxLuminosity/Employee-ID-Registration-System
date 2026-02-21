@@ -25,6 +25,7 @@ from app.database import (
     get_status_breakdown,
     get_all_headshot_usage,
     reset_headshot_usage,
+    reset_all_headshot_usage,
     HEADSHOT_LIMIT_PER_USER,
     USE_SUPABASE
 )
@@ -1838,4 +1839,27 @@ def reset_rate_limit(lark_user_id: str, request: Request, hr_session: str = Cook
             return JSONResponse({"error": "Failed to reset rate limit"}, status_code=500)
     except Exception as e:
         logger.error(f"Error resetting rate limit: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.post("/api/reset-all-rate-limits")
+def reset_all_rate_limits(request: Request, hr_session: str = Cookie(None)):
+    """API: Reset headshot rate limits for ALL users"""
+    session = get_session(hr_session)
+    if not session:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    try:
+        count = reset_all_headshot_usage()
+        if count >= 0:
+            logger.info(f"HR user '{session.get('username')}' reset ALL rate limits ({count} records deleted)")
+            return JSONResponse({
+                "success": True,
+                "message": f"All rate limits reset. {count} usage records cleared.",
+                "deleted_count": count,
+            })
+        else:
+            return JSONResponse({"error": "Failed to reset all rate limits"}, status_code=500)
+    except Exception as e:
+        logger.error(f"Error resetting all rate limits: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)

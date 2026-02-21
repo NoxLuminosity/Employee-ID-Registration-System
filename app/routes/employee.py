@@ -130,7 +130,7 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
                 status_code=429,
                 content={
                     "success": False,
-                    "error": "You have reached the limit of 5 AI headshot generations. Further attempts are not allowed.",
+                    "error": "AI headshot generation limit reached. Please contact HR to request a reset.",
                     "rate_limited": True,
                     "used": limit_info["used"],
                     "limit": limit_info["limit"],

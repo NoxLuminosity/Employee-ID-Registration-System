@@ -45,6 +45,12 @@ const DOM = {
   closeResetModal: document.getElementById('closeResetModal'),
   cancelResetBtn: document.getElementById('cancelResetBtn'),
   confirmResetBtn: document.getElementById('confirmResetBtn'),
+  // Reset All Modal
+  resetAllBtn: document.getElementById('resetAllBtn'),
+  resetAllModal: document.getElementById('resetAllModal'),
+  closeResetAllModal: document.getElementById('closeResetAllModal'),
+  cancelResetAllBtn: document.getElementById('cancelResetAllBtn'),
+  confirmResetAllBtn: document.getElementById('confirmResetAllBtn'),
 };
 
 // ============================================
@@ -273,6 +279,44 @@ async function confirmReset() {
 }
 
 // ============================================
+// Reset All Rate Limits
+// ============================================
+function openResetAllModal() {
+  DOM.resetAllModal.classList.add('active');
+}
+
+function closeResetAllModal() {
+  DOM.resetAllModal.classList.remove('active');
+}
+
+async function confirmResetAll() {
+  closeResetAllModal();
+  showProgress('Resetting all rate limits...', 'Clearing all usage records');
+  try {
+    const res = await fetch('/hr/api/reset-all-rate-limits', {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      if (res.status === 401) { window.location.href = '/hr/login'; return; }
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || `HTTP ${res.status}`);
+    }
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Reset failed');
+
+    updateProgress('All rate limits reset!', `${json.deleted_count} records cleared`, 100);
+    showToast(`All rate limits reset — ${json.deleted_count} records cleared`, 'success');
+    await fetchUsageData();
+  } catch (err) {
+    console.error('Reset all error:', err);
+    showToast('Failed to reset all: ' + err.message, 'error');
+  } finally {
+    hideProgress();
+  }
+}
+
+// ============================================
 // Event Listeners
 // ============================================
 DOM.searchInput.addEventListener('input', applyFilters);
@@ -281,6 +325,14 @@ DOM.refreshBtn.addEventListener('click', () => fetchUsageData());
 DOM.closeResetModal.addEventListener('click', closeResetModal);
 DOM.cancelResetBtn.addEventListener('click', closeResetModal);
 DOM.confirmResetBtn.addEventListener('click', confirmReset);
+// Reset All
+DOM.resetAllBtn.addEventListener('click', openResetAllModal);
+DOM.closeResetAllModal.addEventListener('click', closeResetAllModal);
+DOM.cancelResetAllBtn.addEventListener('click', closeResetAllModal);
+DOM.confirmResetAllBtn.addEventListener('click', confirmResetAll);
+DOM.resetAllModal.addEventListener('click', (e) => {
+  if (e.target === DOM.resetAllModal) closeResetAllModal();
+});
 // Close modal on overlay click
 DOM.resetModal.addEventListener('click', (e) => {
   if (e.target === DOM.resetModal) closeResetModal();

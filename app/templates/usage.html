@@ -76,6 +76,13 @@
           <p>Monitor AI headshot generation usage &amp; rate limits</p>
         </div>
         <div class="header-actions">
+          <button class="btn btn-secondary" id="resetAllBtn" style="background: #e65100; color: white; border-color: #e65100;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 4v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3.51 15a9 9 0 105.64-9.94L1 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Reset All Limits
+          </button>
           <button class="btn btn-secondary" id="refreshUsageBtn">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/>
@@ -250,6 +257,32 @@
     </div>
   </div>
 
-  <script src="/static/usage.js?v=1"></script>
+  <!-- Confirm Reset All Modal -->
+  <div class="modal-overlay" id="resetAllModal">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-header">
+        <h2>Reset All Rate Limits</h2>
+        <button class="modal-close" id="closeResetAllModal">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: var(--spacing-lg);">
+        <p style="margin-bottom: var(--spacing-md); color: var(--color-text-secondary);">
+          Are you sure you want to reset AI headshot rate limits for <strong>all users</strong>?
+        </p>
+        <p style="font-size: 0.85rem; color: #e65100;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: -2px; margin-right: 4px;">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="2"/>
+            <path d="M12 9v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          This will clear all usage records and allow every user to generate AI headshots again.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelResetAllBtn">Cancel</button>
+        <button class="btn btn-primary" id="confirmResetAllBtn" style="background: #e65100;">Reset All</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/usage.js?v=2"></script>
 </body>
 </html>
