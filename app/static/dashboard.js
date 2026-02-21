@@ -970,27 +970,6 @@ async function sendAllToPOCs() {
 // ============================================
 // Quick Actions
 // ============================================
-async function syncToGoogleSheets() {
-  showToast('Syncing to Google Sheets...', 'success');
-
-  try {
-    const response = await fetch('/hr/api/sync-sheets', { 
-      method: 'POST',
-      credentials: 'include'
-    });
-    const data = await response.json();
-
-    if (data.success) {
-      showToast('Successfully synced to Google Sheets', 'success');
-    } else {
-      throw new Error(data.error || 'Sync failed');
-    }
-  } catch (error) {
-    console.error('Error syncing:', error);
-    showToast('Failed to sync to Google Sheets', 'error');
-  }
-}
-
 function exportData() {
   const employees = dashboardState.filteredEmployees;
   

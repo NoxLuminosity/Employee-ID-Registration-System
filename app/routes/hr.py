@@ -1693,41 +1693,6 @@ def api_download_id(employee_id: int, hr_session: str = Cookie(None)):
         )
 
 
-@router.post("/api/sync-sheets")
-def api_sync_sheets(hr_session: str = Cookie(None)):
-    """Sync employee data to Google Sheets"""
-    if not get_session(hr_session):
-        return JSONResponse(status_code=401, content={"success": False, "error": "Unauthorized"})
-    try:
-        # Import Google Sheets service
-        from app.services.google_sheets import sync_employees_to_sheets
-        
-        employees = get_all_employees()
-        
-        # Attempt to sync
-        success = sync_employees_to_sheets(employees)
-        
-        if success:
-            return JSONResponse(content={"success": True, "message": "Synced to Google Sheets"})
-        else:
-            return JSONResponse(
-                status_code=500,
-                content={"success": False, "error": "Failed to sync to Google Sheets"}
-            )
-
-    except ImportError:
-        return JSONResponse(
-            status_code=501,
-            content={"success": False, "error": "Google Sheets integration not configured"}
-        )
-    except Exception as e:
-        logger.error(f"Error syncing to Google Sheets: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "error": str(e)}
-        )
-
-
 @router.get("/api/stats")
 def api_get_stats(hr_session: str = Cookie(None)):
     """Get dashboard statistics"""

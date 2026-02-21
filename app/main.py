@@ -6,7 +6,7 @@ Features:
 - Employee registration with AI headshot generation
 - HR dashboard with authentication
 - Background removal for ID card photos
-- Google Sheets and Lark Bitable integration
+- Lark Bitable integration
 - Mandatory Lark authentication for all access
 """
 from fastapi import FastAPI, Request, Cookie
@@ -54,8 +54,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Content Security Policy - strict enforcement
         # Blocks inline scripts (except for legitimate uses), restricts frame sources
         # VERCEL FIX: Added cdnjs.cloudflare.com for jsPDF and html2canvas libraries
-        # BARCODE: barcodeapi.org is allowed via https: wildcard in img-src and connect-src
-        # QR: quickchart.io added for QR code generation
+        # BARCODE/QR: quickchart.io for barcode and QR code generation
         # SWAGGER/REDOC: cdn.jsdelivr.net added for FastAPI auto-generated docs
         csp = (
             "default-src 'self'; "
@@ -63,7 +62,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.jsdelivr.net; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https: blob:; "
-            "connect-src 'self' https://api.cloudinary.com https://api.larksuite.com https://barcodeapi.org https://quickchart.io; "
+            "connect-src 'self' https://api.cloudinary.com https://api.larksuite.com https://quickchart.io; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self'; "

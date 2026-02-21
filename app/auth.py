@@ -283,15 +283,6 @@ def verify_session(hr_session: str = Cookie(None)) -> str:
     return session["username"]
 
 
-def verify_session_optional(hr_session: str = Cookie(None)) -> Optional[str]:
-    """
-    Optional session verification - returns None instead of raising exception.
-    Use for routes that work differently for authenticated vs anonymous users.
-    """
-    session = get_session(hr_session)
-    return session["username"] if session else None
-
-
 def authenticate_user(username: str, password: str) -> bool:
     """Authenticate a user with username and password"""
     hr_users = get_hr_users()
@@ -310,9 +301,3 @@ def authenticate_user(username: str, password: str) -> bool:
     
     logger.info(f"User authenticated: {username}")
     return True
-
-
-def clear_user_cache():
-    """Clear the cached HR users (useful for testing or reloading)"""
-    global _hr_users_cache
-    _hr_users_cache = None

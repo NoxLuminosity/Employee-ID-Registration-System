@@ -363,40 +363,6 @@ def exchange_code_for_tokens(
     }
 
 
-def refresh_access_token(refresh_token: str) -> Dict[str, Any]:
-    """
-    Refresh access token using refresh token.
-    
-    Args:
-        refresh_token: Refresh token from previous token exchange
-    
-    Returns:
-        Dict containing new tokens or error information
-    """
-    token_data = {
-        "grant_type": "refresh_token",
-        "client_id": LARK_APP_ID,
-        "client_secret": LARK_APP_SECRET,
-        "refresh_token": refresh_token,
-    }
-    
-    logger.info("Refreshing access token...")
-    response = _make_request(TOKEN_URL, method="POST", data=token_data)
-    
-    if str(response.get("code")) != "0":
-        error_desc = response.get("error_description") or response.get("msg") or "Unknown error"
-        logger.error(f"Token refresh failed: {error_desc}")
-        return {"success": False, "error": error_desc}
-    
-    logger.info("Token refresh successful")
-    return {
-        "success": True,
-        "access_token": response.get("access_token"),
-        "refresh_token": response.get("refresh_token"),  # New refresh token
-        "expires_in": response.get("expires_in")
-    }
-
-
 def get_user_info(access_token: str) -> Dict[str, Any]:
     """
     Get authenticated user's information from Lark.
@@ -563,49 +529,6 @@ def get_department_name(department_id: str, tenant_token: str) -> Optional[str]:
     return dept_data.get("name")
 
 
-def get_department_path(department_id: str, tenant_token: str) -> list:
-    """
-    Get the full department hierarchy path from a department ID to root.
-    
-    Args:
-        department_id: The department's open_department_id
-        tenant_token: Tenant access token
-    
-    Returns:
-        List of department names from current to root
-    """
-    path = []
-    current_dept_id = department_id
-    max_depth = 10  # Prevent infinite loops
-    
-    while current_dept_id and max_depth > 0:
-        url = f"{DEPARTMENT_URL}/{current_dept_id}?department_id_type=open_department_id"
-        headers = {
-            "Authorization": f"Bearer {tenant_token}"
-        }
-        
-        response = _make_request(url, method="GET", headers=headers)
-        
-        if response.get("code") != 0:
-            break
-        
-        dept_data = response.get("data", {}).get("department", {})
-        dept_name = dept_data.get("name")
-        parent_dept_id = dept_data.get("parent_department_id")
-        
-        if dept_name:
-            path.append(dept_name)
-        
-        # Move to parent, stop if we reached root (parent_id is "0" or empty)
-        if not parent_dept_id or parent_dept_id == "0":
-            break
-        
-        current_dept_id = parent_dept_id
-        max_depth -= 1
-    
-    return path
-
-
 def is_descendant_of_people_support(open_id: str, tenant_token: str = None) -> Tuple[bool, str]:
     """
     Check if a user is a descendant of the People Support department.
@@ -707,57 +630,6 @@ def is_descendant_of_people_support(open_id: str, tenant_token: str = None) -> T
     return False, "User not in People Support department hierarchy"
 
 
-def validate_hr_portal_access(open_id: str, user_email: str = None) -> Dict[str, Any]:
-    """
-    Validate if a user has access to the HR Portal based on their organization.
-    
-    MAIN VALIDATION: Uses Lark Contact API to check if user is in the People Support
-    department hierarchy (by department ID). This is more reliable than string matching.
-    
-    The user must be a direct member or descendant of:
-    S.P. Madrid & Associates > Solutions Management > People Development > People Support
-    
-    Fallback (deprecated): Checks Lark Bitable for legacy employee records.
-    
-    Caching: Results cached for 30 minutes to reduce API calls during session lifetime.
-    Re-validation: Called on each HR request (not just login).
-    
-    Args:
-        open_id: User's open_id from Lark authentication
-        user_email: User's email for Bitable lookup (fallback only)
-    
-    Returns:
-        Dict with 'allowed' boolean and 'reason' message
-    """
-    from app.services.lark_service import get_tenant_access_token, check_user_in_bitable
-    
-    # PRIMARY VALIDATION: Check org hierarchy by department ID
-    is_authorized, reason = is_descendant_of_people_support(open_id)
-    
-    if is_authorized:
-        logger.info(f"HR Portal access GRANTED via org validation: {reason}")
-        return {"allowed": True, "reason": reason}
-    
-    # FALLBACK: Check Bitable records (legacy, less preferred)
-    if user_email:
-        try:
-            bitable_result = check_user_in_bitable(email=user_email)
-            if bitable_result.get("found"):
-                record = bitable_result.get("record", {})
-                position = record.get("position", "")
-                logger.info(f"HR Portal access GRANTED via Bitable fallback (position: {position})")
-                return {"allowed": True, "reason": f"Access granted: Found in employee records"}
-        except Exception as e:
-            logger.debug(f"Bitable fallback check failed: {e}")
-    
-    # User is not authorized
-    logger.warning(f"HR Portal access DENIED: {reason}")
-    return {
-        "allowed": False, 
-        "reason": f"Access denied. HR Portal access is restricted to People Support department members only. ({reason})"
-    }
-
-
 # ============================================
 # Complete OAuth Flow Helper
 # ============================================
@@ -813,34 +685,4 @@ def complete_oauth_flow(code: str, state: str) -> Dict[str, Any]:
             "refresh_token": token_result.get("refresh_token"),
             "expires_in": token_result.get("expires_in"),
         }
-    }
-
-
-# ============================================
-# Session Integration Helpers
-# ============================================
-def create_lark_session_data(user_info: Dict, tokens: Dict) -> Dict[str, Any]:
-    """
-    Create session data from Lark OAuth result.
-    
-    Args:
-        user_info: User information from Lark
-        tokens: OAuth tokens
-    
-    Returns:
-        Session data dict for storage
-    """
-    return {
-        "auth_type": "lark",
-        "user_id": user_info.get("user_id"),
-        "open_id": user_info.get("open_id"),
-        "username": user_info.get("name") or user_info.get("email") or user_info.get("user_id"),
-        "name": user_info.get("name"),
-        "email": user_info.get("email"),
-        "avatar_url": user_info.get("avatar_url"),
-        "tenant_key": user_info.get("tenant_key"),
-        "access_token": tokens.get("access_token"),
-        "refresh_token": tokens.get("refresh_token"),
-        "token_expires_in": tokens.get("expires_in"),
-        "authenticated_at": time.time()
     }

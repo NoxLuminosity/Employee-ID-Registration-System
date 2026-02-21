@@ -630,23 +630,6 @@ def delete_from_cloudinary(secure_url: str) -> bool:
         return False
 
 
-def delete_multiple_from_cloudinary(urls: List[str]) -> int:
-    """
-    Delete multiple assets from Cloudinary. Used for bulk rollback.
-
-    Args:
-        urls: List of Cloudinary secure URLs to delete
-
-    Returns:
-        Number of successfully deleted assets
-    """
-    deleted = 0
-    for url in urls:
-        if url and delete_from_cloudinary(url):
-            deleted += 1
-    return deleted
-
-
 def _extract_public_id(secure_url: str) -> Optional[str]:
     """
     Extract the Cloudinary public_id from a secure URL.

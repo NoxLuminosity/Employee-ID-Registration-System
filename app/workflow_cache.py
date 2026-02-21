@@ -33,7 +33,6 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Default TTLs in seconds
-TTL_SHORT = 600       # 10 minutes - temporary uploads
 TTL_DEFAULT = 3600    # 1 hour - standard intermediate results
 TTL_EXTENDED = 86400  # 24 hours - expensive AI generation results
 
