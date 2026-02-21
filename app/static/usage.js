@@ -145,7 +145,7 @@ function applyFilters() {
 
   filteredUsageData = allUsageData.filter(u => {
     // Search
-    if (query && !u.lark_user_id.toLowerCase().includes(query)) return false;
+    if (query && !u.lark_user_id.toLowerCase().includes(query) && !(u.lark_name || '').toLowerCase().includes(query)) return false;
     // Filter
     if (filter === 'rate-limited' && u.remaining > 0) return false;
     if (filter === 'active' && u.remaining <= 0) return false;
@@ -190,6 +190,9 @@ function renderTable() {
       : u.lark_user_id;
 
     tr.innerHTML = `
+      <td>
+        <span class="usage-lark-name">${u.lark_name || '<span class="usage-name-unknown">—</span>'}</span>
+      </td>
       <td>
         <span class="usage-user-id" title="${u.lark_user_id}">${displayId}</span>
       </td>

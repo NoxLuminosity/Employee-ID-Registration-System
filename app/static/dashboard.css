@@ -1146,8 +1146,21 @@
 .usage-user-id {
   font-family: 'JetBrains Mono', 'Courier New', monospace;
   font-size: 0.82rem;
-  color: var(--color-text);
+  color: var(--color-text-muted);
   cursor: default;
+}
+
+/* Lark name display */
+.usage-lark-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.usage-name-unknown {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-weight: 400;
 }
 
 /* Usage progress bar */

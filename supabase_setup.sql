@@ -115,10 +115,14 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE IF NOT EXISTS headshot_usage (
     id BIGSERIAL PRIMARY KEY,
     lark_user_id TEXT NOT NULL,
+    lark_name TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_headshot_usage_lark_user ON headshot_usage(lark_user_id);
+
+-- Add lark_name column if table already exists
+ALTER TABLE headshot_usage ADD COLUMN IF NOT EXISTS lark_name TEXT DEFAULT '';
 
 -- Card image URLs for direct PNG bot delivery (skips PDF→PNG conversion)
 -- Stores JSON array of {label, url} objects for each card face

@@ -121,6 +121,7 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
     # --- Rate Limiting: 5 AI headshots per Lark user ---
     session = get_session(employee_session)
     lark_user_id = session.get("lark_user_id", "") if session else ""
+    lark_name = session.get("lark_name", "") if session else ""
     if lark_user_id:
         limit_info = check_headshot_limit(lark_user_id)
         if not limit_info["allowed"]:
@@ -184,7 +185,7 @@ async def api_generate_headshot(request: GenerateHeadshotRequest, employee_sessi
         
         # --- Increment headshot usage count after successful AI generation ---
         if lark_user_id:
-            increment_headshot_usage(lark_user_id)
+            increment_headshot_usage(lark_user_id, lark_name)
             new_limit_info = check_headshot_limit(lark_user_id)
             logger.info(f"Headshot usage incremented for {lark_user_id}: {new_limit_info['used']}/{new_limit_info['limit']}")
         else:

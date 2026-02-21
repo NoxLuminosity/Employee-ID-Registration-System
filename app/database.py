@@ -681,9 +681,15 @@ def _init_headshot_usage_sqlite():
     CREATE TABLE IF NOT EXISTS headshot_usage (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         lark_user_id TEXT NOT NULL,
+        lark_name TEXT DEFAULT '',
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """)
+    # Add lark_name column if table already exists without it
+    try:
+        cursor.execute("ALTER TABLE headshot_usage ADD COLUMN lark_name TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     cursor.execute("""
     CREATE INDEX IF NOT EXISTS idx_headshot_usage_lark_user
     ON headshot_usage(lark_user_id)
@@ -727,7 +733,7 @@ def get_headshot_usage_count(lark_user_id: str) -> int:
             return 0
 
 
-def increment_headshot_usage(lark_user_id: str) -> bool:
+def increment_headshot_usage(lark_user_id: str, lark_name: str = "") -> bool:
     """Record a new AI headshot generation for a Lark user. Returns True on success."""
     if not lark_user_id:
         return False
@@ -735,7 +741,7 @@ def increment_headshot_usage(lark_user_id: str) -> bool:
     if USE_SUPABASE:
         try:
             supabase_client.table("headshot_usage").insert(
-                {"lark_user_id": lark_user_id}
+                {"lark_user_id": lark_user_id, "lark_name": lark_name or ""}
             ).execute()
             return True
         except Exception as e:
@@ -748,8 +754,8 @@ def increment_headshot_usage(lark_user_id: str) -> bool:
             conn = get_sqlite_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO headshot_usage (lark_user_id, created_at) VALUES (?, datetime('now'))",
-                (lark_user_id,),
+                "INSERT INTO headshot_usage (lark_user_id, lark_name, created_at) VALUES (?, ?, datetime('now'))",
+                (lark_user_id, lark_name or ""),
             )
             conn.commit()
             conn.close()
@@ -777,29 +783,34 @@ def check_headshot_limit(lark_user_id: str) -> dict:
 def get_all_headshot_usage() -> list:
     """
     Get aggregated headshot usage for all Lark users.
-    Returns list of dicts: {lark_user_id, usage_count, last_used, limit, remaining}.
+    Returns list of dicts: {lark_user_id, lark_name, usage_count, last_used, limit, remaining}.
     """
     if USE_SUPABASE:
         try:
             result = (
                 supabase_client.table("headshot_usage")
-                .select("lark_user_id, created_at")
+                .select("lark_user_id, lark_name, created_at")
                 .order("created_at", desc=True)
                 .execute()
             )
             # Aggregate in Python
             from collections import defaultdict
-            usage_map = defaultdict(lambda: {"count": 0, "last_used": None})
+            usage_map = defaultdict(lambda: {"count": 0, "last_used": None, "lark_name": ""})
             for row in (result.data or []):
                 uid = row["lark_user_id"]
                 usage_map[uid]["count"] += 1
                 ts = row["created_at"]
                 if usage_map[uid]["last_used"] is None or ts > usage_map[uid]["last_used"]:
                     usage_map[uid]["last_used"] = ts
+                # Keep the most recent non-empty name
+                name = row.get("lark_name") or ""
+                if name and not usage_map[uid]["lark_name"]:
+                    usage_map[uid]["lark_name"] = name
 
             return [
                 {
                     "lark_user_id": uid,
+                    "lark_name": info["lark_name"],
                     "usage_count": info["count"],
                     "last_used": info["last_used"],
                     "limit": HEADSHOT_LIMIT_PER_USER,
@@ -817,7 +828,8 @@ def get_all_headshot_usage() -> list:
             conn = get_sqlite_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT lark_user_id, COUNT(*) as usage_count, MAX(created_at) as last_used
+                SELECT lark_user_id, COUNT(*) as usage_count, MAX(created_at) as last_used,
+                       MAX(lark_name) as lark_name
                 FROM headshot_usage
                 GROUP BY lark_user_id
                 ORDER BY last_used DESC
@@ -827,6 +839,7 @@ def get_all_headshot_usage() -> list:
             return [
                 {
                     "lark_user_id": row[0],
+                    "lark_name": row[3] or "",
                     "usage_count": row[1],
                     "last_used": row[2],
                     "limit": HEADSHOT_LIMIT_PER_USER,
