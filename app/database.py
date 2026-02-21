@@ -772,3 +772,102 @@ def check_headshot_limit(lark_user_id: str) -> dict:
         "limit": HEADSHOT_LIMIT_PER_USER,
         "remaining": remaining,
     }
+
+
+def get_all_headshot_usage() -> list:
+    """
+    Get aggregated headshot usage for all Lark users.
+    Returns list of dicts: {lark_user_id, usage_count, last_used, limit, remaining}.
+    """
+    if USE_SUPABASE:
+        try:
+            result = (
+                supabase_client.table("headshot_usage")
+                .select("lark_user_id, created_at")
+                .order("created_at", desc=True)
+                .execute()
+            )
+            # Aggregate in Python
+            from collections import defaultdict
+            usage_map = defaultdict(lambda: {"count": 0, "last_used": None})
+            for row in (result.data or []):
+                uid = row["lark_user_id"]
+                usage_map[uid]["count"] += 1
+                ts = row["created_at"]
+                if usage_map[uid]["last_used"] is None or ts > usage_map[uid]["last_used"]:
+                    usage_map[uid]["last_used"] = ts
+
+            return [
+                {
+                    "lark_user_id": uid,
+                    "usage_count": info["count"],
+                    "last_used": info["last_used"],
+                    "limit": HEADSHOT_LIMIT_PER_USER,
+                    "remaining": max(0, HEADSHOT_LIMIT_PER_USER - info["count"]),
+                }
+                for uid, info in usage_map.items()
+            ]
+        except Exception as e:
+            logger.error(f"Supabase get_all_headshot_usage error: {e}")
+            return []
+    else:
+        import sqlite3
+        try:
+            _init_headshot_usage_sqlite()
+            conn = get_sqlite_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT lark_user_id, COUNT(*) as usage_count, MAX(created_at) as last_used
+                FROM headshot_usage
+                GROUP BY lark_user_id
+                ORDER BY last_used DESC
+            """)
+            rows = cursor.fetchall()
+            conn.close()
+            return [
+                {
+                    "lark_user_id": row[0],
+                    "usage_count": row[1],
+                    "last_used": row[2],
+                    "limit": HEADSHOT_LIMIT_PER_USER,
+                    "remaining": max(0, HEADSHOT_LIMIT_PER_USER - row[1]),
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            logger.error(f"SQLite get_all_headshot_usage error: {e}")
+            return []
+
+
+def reset_headshot_usage(lark_user_id: str) -> bool:
+    """Delete all headshot usage records for a Lark user, resetting their rate limit."""
+    if not lark_user_id:
+        return False
+
+    if USE_SUPABASE:
+        try:
+            supabase_client.table("headshot_usage").delete().eq(
+                "lark_user_id", lark_user_id
+            ).execute()
+            logger.info(f"Reset headshot usage for lark_user_id={lark_user_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Supabase reset_headshot_usage error: {e}")
+            return False
+    else:
+        import sqlite3
+        try:
+            _init_headshot_usage_sqlite()
+            conn = get_sqlite_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM headshot_usage WHERE lark_user_id = ?",
+                (lark_user_id,),
+            )
+            conn.commit()
+            conn.close()
+            logger.info(f"Reset headshot usage for lark_user_id={lark_user_id} (SQLite)")
+            return True
+        except Exception as e:
+            logger.error(f"SQLite reset_headshot_usage error: {e}")
+            return False

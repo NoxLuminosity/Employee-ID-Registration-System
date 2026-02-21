@@ -23,6 +23,9 @@ from app.database import (
     table_exists,
     get_employee_count,
     get_status_breakdown,
+    get_all_headshot_usage,
+    reset_headshot_usage,
+    HEADSHOT_LIMIT_PER_USER,
     USE_SUPABASE
 )
 
@@ -1780,3 +1783,59 @@ def export_help_page(request: Request, hr_session: str = Cookie(None)):
     </html>
     """)
 
+
+# ============================================
+# Usage Summary Routes
+# ============================================
+
+@router.get("/usage", response_class=HTMLResponse)
+def usage_summary_page(request: Request, hr_session: str = Cookie(None)):
+    """Usage Summary Page - shows AI headshot generation usage per user"""
+    session = verify_session(hr_session)
+    if not session:
+        return RedirectResponse(url="/hr/login", status_code=302)
+    return templates.TemplateResponse("usage.html", {"request": request, "username": session.get("username", "HR")})
+
+
+@router.get("/api/usage-summary")
+def get_usage_summary(request: Request, hr_session: str = Cookie(None)):
+    """API: Get all headshot usage data aggregated by user"""
+    session = verify_session(hr_session)
+    if not session:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    try:
+        usage_data = get_all_headshot_usage()
+        return JSONResponse({
+            "success": True,
+            "data": usage_data,
+            "limit": HEADSHOT_LIMIT_PER_USER,
+            "total_users": len(usage_data),
+            "total_generations": sum(u["usage_count"] for u in usage_data),
+        })
+    except Exception as e:
+        logger.error(f"Error fetching usage summary: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.post("/api/reset-rate-limit/{lark_user_id}")
+def reset_rate_limit(lark_user_id: str, request: Request, hr_session: str = Cookie(None)):
+    """API: Reset the headshot rate limit for a specific Lark user"""
+    session = verify_session(hr_session)
+    if not session:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    try:
+        success = reset_headshot_usage(lark_user_id)
+        if success:
+            logger.info(f"HR user '{session.get('username')}' reset rate limit for lark_user_id={lark_user_id}")
+            return JSONResponse({
+                "success": True,
+                "message": f"Rate limit reset for user {lark_user_id}",
+                "new_remaining": HEADSHOT_LIMIT_PER_USER,
+            })
+        else:
+            return JSONResponse({"error": "Failed to reset rate limit"}, status_code=500)
+    except Exception as e:
+        logger.error(f"Error resetting rate limit: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
