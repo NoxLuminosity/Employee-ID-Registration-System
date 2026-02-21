@@ -4,6 +4,47 @@
  */
 
 // ============================================
+// Name Auto-Fit: Shrink font to fit within N lines
+// ============================================
+/**
+ * Dynamically shrinks font size on an element so that its text
+ * fits within a given number of lines. Instead of truncating with
+ * ellipsis, the font is progressively reduced until the rendered
+ * height is at most maxLines * lineHeight * fontSize.
+ *
+ * @param {HTMLElement} el        - The name element to auto-fit
+ * @param {number}      maxFontPx - Starting (maximum) font size in px
+ * @param {number}      minFontPx - Floor font size in px (never go smaller)
+ * @param {number}      maxLines  - Maximum number of lines allowed (default 2)
+ * @param {number}      lineHeight- CSS line-height multiplier (default 1.05)
+ */
+function fitNameToLines(el, maxFontPx, minFontPx, maxLines, lineHeight) {
+  if (!el) return;
+  maxLines = maxLines || 2;
+  lineHeight = lineHeight || parseFloat(window.getComputedStyle(el).lineHeight) / parseFloat(window.getComputedStyle(el).fontSize) || 1.1;
+
+  // Reset to max font size first
+  el.style.fontSize = maxFontPx + 'px';
+
+  // Calculate the maximum allowed height for maxLines
+  var maxHeight = maxFontPx * lineHeight * maxLines + 2; // +2px tolerance
+
+  // Progressively shrink until it fits or we hit the minimum
+  var currentSize = maxFontPx;
+  var step = 0.5; // shrink by 0.5px per iteration for smooth fit
+  while (el.scrollHeight > maxHeight && currentSize > minFontPx) {
+    currentSize -= step;
+    el.style.fontSize = currentSize + 'px';
+    maxHeight = currentSize * lineHeight * maxLines + 2;
+  }
+
+  // If still overflowing at min size, clamp with CSS as last resort
+  if (el.scrollHeight > maxHeight) {
+    el.style.fontSize = minFontPx + 'px';
+  }
+}
+
+// ============================================
 // Backward Compatibility: Repossessor/Reprocessor
 // ============================================
 // Old DB records may have field_officer_type="Reprocessor"
@@ -532,33 +573,15 @@ function initInputValidation() {
   }
 
   // ========================================
-  // ID Number - Alphanumeric and hyphens, uppercase
+  // ID Number - Readonly (locked from editing)
   // ========================================
   const idNumberField = document.getElementById('id_number');
   if (idNumberField) {
-    idNumberField.addEventListener('input', function(e) {
-      // Allow letters, numbers, and hyphens only
-      this.value = this.value.replace(/[^a-zA-Z0-9\-]/g, '').toUpperCase();
-    });
-    
-    idNumberField.addEventListener('blur', function(e) {
-      const value = this.value.trim();
-      if (!value) {
-        showFieldError('id_number', 'ID Number is required');
-        return;
-      }
-      if (value.length < 3) {
-        showFieldError('id_number', 'ID Number must be at least 3 characters');
-        return;
-      }
-      clearFieldError('id_number');
-    });
-    
-    idNumberField.addEventListener('paste', function(e) {
-      e.preventDefault();
-      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-      const cleaned = pastedText.replace(/[^a-zA-Z0-9\-]/g, '').toUpperCase();
-      document.execCommand('insertText', false, cleaned);
+    // ID Number is readonly - no input/paste events needed
+    // Just validate value exists on blur
+    idNumberField.addEventListener('focus', function(e) {
+      // Prevent focus styling since it's readonly
+      this.blur();
     });
   }
 
@@ -1072,17 +1095,8 @@ function updateDualTemplatePreview() {
   const origFullname = document.getElementById('dual_original_fullname');
   if (origFullname) {
     origFullname.textContent = fullName;
-    
-    // Dynamic font scaling for long names
-    if (fullName.length > 30) {
-      origFullname.style.fontSize = '1.4rem';
-    } else if (fullName.length > 24) {
-      origFullname.style.fontSize = '1.7rem';
-    } else if (fullName.length > 18) {
-      origFullname.style.fontSize = '2.0rem';
-    } else {
-      origFullname.style.fontSize = '2.4rem';
-    }
+    // Auto-fit font to 2 lines (max 38.4px = 2.4rem, min 19.2px = 1.2rem, line-height 1.05)
+    fitNameToLines(origFullname, 38.4, 19.2, 2, 1.05);
   }
   
   // Position - Show "Legal Officer" for SPMC card (same as single template behavior)
@@ -1238,6 +1252,8 @@ function updateDualTemplatePreview() {
       displayName = 'Name<br>Placeholder';
     }
     repossessorName.innerHTML = displayName;
+    // Auto-fit font to 2 lines (max 22px, min 12px, line-height 1.15)
+    fitNameToLines(repossessorName, 22, 12, 2, 1.15);
   }
   
   // Position - ALWAYS show "LEGAL OFFICER" regardless of field_officer_type
@@ -1756,6 +1772,9 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
     
     // Update loading text - server handles AI generation + background removal
     if (loadingText) loadingText.textContent = 'Generating AI headshot...';
+
+    // Show progress overlay for AI generation
+    showProgressOverlay('Generating AI headshot...', 'This may take a few seconds');
     
     const requestBody = { image: imageBase64, prompt_type: promptType };
     console.log('=== Sending to /generate-headshot ===');
@@ -1828,6 +1847,7 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
       state.aiGenerationComplete = true;
       state.aiGenerationInProgress = false;
       updateSubmitButtonState();
+      hideProgressOverlay();
       
     } else if (result.rate_limited) {
       // Rate limit reached - update state and UI
@@ -1845,6 +1865,7 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
       state.aiGenerationComplete = false;
       state.aiGenerationInProgress = false;
       updateSubmitButtonState();
+      hideProgressOverlay();
       
       showMessage('You have reached the limit of 5 AI headshot generations. Further attempts are not allowed.', 'error');
     } else {
@@ -1856,6 +1877,7 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
       console.log('AI generation aborted');
       state.aiGenerationInProgress = false;
       updateSubmitButtonState();
+      hideProgressOverlay();
       return;
     }
     
@@ -1871,6 +1893,7 @@ async function generateAIHeadshot(imageBase64, promptType = 'male_1') {
     state.aiGenerationComplete = false;
     state.aiGenerationInProgress = false;
     updateSubmitButtonState();
+    hideProgressOverlay();
     
     // Still show Remove Background button - user can try after uploading new photo
     if (elements.aiActions) {
@@ -2232,18 +2255,8 @@ function updateIdCardPreview() {
     } else {
       fullnameEl.textContent = fullNameLine1 || 'Employee Fullname';
     }
-    
-    // Dynamic font scaling for long names to prevent barcode/ID disappearing
-    const totalNameLength = (fullNameLine1 + ' ' + fullNameLine2).trim().length;
-    if (totalNameLength > 30) {
-      fullnameEl.style.fontSize = '1.4rem';
-    } else if (totalNameLength > 24) {
-      fullnameEl.style.fontSize = '1.7rem';
-    } else if (totalNameLength > 18) {
-      fullnameEl.style.fontSize = '2.0rem';
-    } else {
-      fullnameEl.style.fontSize = '2.4rem';
-    }
+    // Auto-fit font to 2 lines (max 38.4px = 2.4rem, min 19.2px = 1.2rem, line-height 1.05)
+    fitNameToLines(fullnameEl, 38.4, 19.2, 2, 1.05);
   }
 
   // Update Position (with conditional display and transformation)
@@ -2727,6 +2740,9 @@ function initFormSubmission() {
     elements.btnSubmit.classList.add('loading');
     elements.btnSubmit.textContent = 'Submitting...';
 
+    // Show progress overlay
+    showProgressOverlay('Submitting your registration...', 'Please wait, do not close this page');
+
     try {
       const formData = new FormData(elements.form);
       
@@ -2764,11 +2780,15 @@ function initFormSubmission() {
       }
 
       if (response.ok && (result.success !== false)) {
+        // Update progress overlay
+        updateProgressOverlay(100, 'Registration submitted!', 'Redirecting...');
+
         // Show success toast first
         showToast('Success!', 'Your ID registration has been submitted successfully. HR will review and process your request shortly.', 'success');
 
         // Show success modal after brief delay
         setTimeout(() => {
+          hideProgressOverlay();
           showSuccessModal();
         }, 1500);
         
@@ -2780,6 +2800,7 @@ function initFormSubmission() {
       }
     } catch (error) {
       console.error('Submission error:', error);
+      hideProgressOverlay();
       showMessage(`Error: ${error.message}. Please try again.`, 'error');
 
       // Re-enable submit button
@@ -3138,18 +3159,8 @@ function updateFieldOfficePreview() {
   const nameEl = document.getElementById('id_fo_preview_name');
   if (nameEl) {
     nameEl.innerHTML = displayName.replace('\n', '<br>');
-    
-    // Dynamic font scaling for long names on Field Office template
-    const nameLength = displayName.replace('\n', ' ').length;
-    if (nameLength > 25) {
-      nameEl.style.fontSize = '1.0rem';
-    } else if (nameLength > 20) {
-      nameEl.style.fontSize = '1.2rem';
-    } else if (nameLength > 15) {
-      nameEl.style.fontSize = '1.4rem';
-    } else {
-      nameEl.style.fontSize = '';  // Use default CSS
-    }
+    // Auto-fit font to 2 lines (max 22px, min 12px, line-height 1.15)
+    fitNameToLines(nameEl, 22, 12, 2, 1.15);
   }
   
   // Update Position (always "LEGAL OFFICER" for Field Officer)
@@ -3274,4 +3285,50 @@ function showMessage(message, type = 'success') {
 
   // Scroll to message
   elements.messageContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ============================================
+// Progress Overlay Helpers
+// ============================================
+function showProgressOverlay(text, subtext) {
+  const overlay = document.getElementById('progressOverlay');
+  const progressText = document.getElementById('progressText');
+  const progressSubtext = document.getElementById('progressSubtext');
+  const progressBarFill = document.getElementById('progressBarFill');
+
+  if (!overlay) return;
+
+  if (progressText) progressText.textContent = text || 'Processing...';
+  if (progressSubtext) progressSubtext.textContent = subtext || '';
+  if (progressBarFill) progressBarFill.style.width = '0%';
+
+  overlay.classList.add('active');
+
+  // Simulate progress bar advancing
+  let progress = 0;
+  if (window._progressInterval) clearInterval(window._progressInterval);
+  window._progressInterval = setInterval(() => {
+    if (progress < 85) {
+      progress += Math.random() * 8 + 2;
+      if (progress > 85) progress = 85;
+      if (progressBarFill) progressBarFill.style.width = progress + '%';
+    }
+  }, 400);
+}
+
+function updateProgressOverlay(percent, text, subtext) {
+  const progressBarFill = document.getElementById('progressBarFill');
+  const progressText = document.getElementById('progressText');
+  const progressSubtext = document.getElementById('progressSubtext');
+
+  if (window._progressInterval) clearInterval(window._progressInterval);
+  if (progressBarFill) progressBarFill.style.width = percent + '%';
+  if (progressText && text) progressText.textContent = text;
+  if (progressSubtext && subtext) progressSubtext.textContent = subtext;
+}
+
+function hideProgressOverlay() {
+  const overlay = document.getElementById('progressOverlay');
+  if (window._progressInterval) clearInterval(window._progressInterval);
+  if (overlay) overlay.classList.remove('active');
 }

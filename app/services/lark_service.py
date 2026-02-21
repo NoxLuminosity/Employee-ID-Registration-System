@@ -1633,10 +1633,8 @@ def build_poc_interactive_card(
     - Info about the ID being ready
     - Embedded ID card images with labels (front/back, SPMA/SPMC)
     - Employee details
+    - Download PDF action button
     - Footer: "From HR Services"
-    
-    Note: PDF link and Lark Base link have been removed per HR feedback.
-    Only essential ID information and actions are included.
     
     Args:
         employee_data: Dict with employee info
@@ -1720,9 +1718,23 @@ def build_poc_interactive_card(
     # Divider
     elements.append({"tag": "hr"})
     
-    # Links section removed per HR feedback:
-    # - PDF link and "Open in Lark Base" link are no longer included
-    # - Only essential ID information and images are shown
+    # PDF Download Button — restored per HR request
+    if pdf_url:
+        elements.append({
+            "tag": "action",
+            "actions": [
+                {
+                    "tag": "button",
+                    "text": {
+                        "tag": "plain_text",
+                        "content": "\U0001f4c4 Download PDF"
+                    },
+                    "type": "primary",
+                    "url": pdf_url
+                }
+            ]
+        })
+        elements.append({"tag": "hr"})
     
     # Footer
     elements.append({
@@ -1852,9 +1864,8 @@ def send_to_poc(
     - Greeting mentioning the POC by name
     - Embedded ID card image preview (from Cloudinary)
     - Employee details (name, ID number, position, branch)
+    - Download PDF action button
     - Footer: "From HR Services"
-    
-    Note: PDF link and Lark Base link have been removed per HR feedback.
     
     When test mode is enabled (POC_TEST_MODE=true), all messages are sent
     to the test recipient instead of the real POC.
