@@ -1791,7 +1791,7 @@ def export_help_page(request: Request, hr_session: str = Cookie(None)):
 @router.get("/usage", response_class=HTMLResponse)
 def usage_summary_page(request: Request, hr_session: str = Cookie(None)):
     """Usage Summary Page - shows AI headshot generation usage per user"""
-    session = verify_session(hr_session)
+    session = get_session(hr_session)
     if not session:
         return RedirectResponse(url="/hr/login", status_code=302)
     return templates.TemplateResponse("usage.html", {"request": request, "username": session.get("username", "HR")})
@@ -1800,7 +1800,7 @@ def usage_summary_page(request: Request, hr_session: str = Cookie(None)):
 @router.get("/api/usage-summary")
 def get_usage_summary(request: Request, hr_session: str = Cookie(None)):
     """API: Get all headshot usage data aggregated by user"""
-    session = verify_session(hr_session)
+    session = get_session(hr_session)
     if not session:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
@@ -1821,7 +1821,7 @@ def get_usage_summary(request: Request, hr_session: str = Cookie(None)):
 @router.post("/api/reset-rate-limit/{lark_user_id}")
 def reset_rate_limit(lark_user_id: str, request: Request, hr_session: str = Cookie(None)):
     """API: Reset the headshot rate limit for a specific Lark user"""
-    session = verify_session(hr_session)
+    session = get_session(hr_session)
     if not session:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
