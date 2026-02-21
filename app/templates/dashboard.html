@@ -249,7 +249,20 @@
 
   <!-- Toast Notification -->
   <div class="toast" id="toast">
+    <span class="toast-icon" id="toastIcon"></span>
     <span class="toast-message" id="toastMessage"></span>
+  </div>
+
+  <!-- Progress Overlay (for async operations) -->
+  <div class="progress-overlay" id="dashboardProgressOverlay">
+    <div class="progress-overlay-content">
+      <div class="progress-spinner"></div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="dashboardProgressBarFill"></div>
+      </div>
+      <div class="progress-text" id="dashboardProgressText">Processing...</div>
+      <div class="progress-subtext" id="dashboardProgressSubtext"></div>
+    </div>
   </div>
 
   <!-- Screenshot Protection DISABLED for HR Dashboard -->

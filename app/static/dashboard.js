@@ -110,6 +110,7 @@ const elements = {
   closeModal: document.getElementById('closeModal'),
   toast: document.getElementById('toast'),
   toastMessage: document.getElementById('toastMessage'),
+  toastIcon: document.getElementById('toastIcon'),
   viewGalleryBtn: document.getElementById('viewGalleryBtn'),
   exportDataBtn: document.getElementById('exportDataBtn'),
   refreshDataBtn: document.getElementById('refreshDataBtn'),
@@ -354,10 +355,10 @@ function updateStatusCounts() {
   const approved = active.filter(e => e.status === 'Approved').length;
   const sentToPOC = active.filter(e => e.status === 'Sent to POC').length;
 
-  elements.totalCount.textContent = total;
-  elements.reviewingCount.textContent = reviewing;
-  elements.approvedCount.textContent = approved;
-  elements.sentToPOCCount.textContent = sentToPOC;
+  animateCounter(elements.totalCount, total);
+  animateCounter(elements.reviewingCount, reviewing);
+  animateCounter(elements.approvedCount, approved);
+  animateCounter(elements.sentToPOCCount, sentToPOC);
 }
 
 function renderEmployeeTable() {
@@ -510,6 +511,8 @@ async function removeEmployee(id) {
   
   if (!confirm(`Are you sure you want to remove ${empName}'s application? This will mark it as Removed.`)) return;
 
+  showDashboardProgress('Removing Application...', empName);
+
   try {
     const response = await fetch(`/hr/api/employees/${id}`, {
       method: 'DELETE',
@@ -520,22 +523,18 @@ async function removeEmployee(id) {
     const data = await response.json();
 
     if (data.success) {
-      // Remove the employee from the local arrays entirely
-      // (backend no longer returns Removed records)
       dashboardState.employees = dashboardState.employees.filter(e => e.id !== id);
       dashboardState.filteredEmployees = dashboardState.filteredEmployees.filter(e => e.id !== id);
-      
-      // Update cache immediately so Removed ID doesn't reappear on refresh
       saveCachedData(dashboardState.employees);
-      
-      // Re-filter and update counters
       filterEmployees();
       updateStatusCounts();
+      hideDashboardProgress();
       showToast(data.message || 'Application marked as Removed', 'success');
     } else {
       throw new Error(data.error || 'Failed to remove');
     }
   } catch (error) {
+    hideDashboardProgress();
     console.error('Error removing employee:', error);
     showToast('Failed to remove application', 'error');
   }
@@ -548,52 +547,42 @@ async function removeBackground(id) {
     return;
   }
 
-  console.log('Starting background removal for employee:', id);
-  console.log('AI Photo URL:', emp.new_photo_url);
+  showDashboardProgress('Removing Background...', 'AI-powered background removal in progress');
 
   // Find the button by looking for it in the modal
   const button = document.querySelector('.nobg-photo-box button');
-  let originalText = '';
-  
   if (button) {
-    originalText = button.innerHTML;
-    button.innerHTML = '⏳ Processing...';
+    button.classList.add('loading');
     button.disabled = true;
   }
 
   try {
-    console.log('Sending request to /hr/api/employees/' + id + '/remove-background');
-    
-    // VERCEL FIX: Include credentials to ensure JWT cookie is sent
     const response = await fetch(`/hr/api/employees/${id}/remove-background`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include'
     });
 
-    console.log('Response status:', response.status);
-    
     const data = await response.json();
-    console.log('Response data:', data);
 
     if (data.success) {
-      // Update local state
       emp.nobg_photo_url = data.nobg_photo_url;
-      
-      // Re-render the details modal with updated photo
-      viewDetails(id);
-      
-      showToast(data.message || 'Background removed successfully', 'success');
+      updateDashboardProgress(100, 'Background Removed!', '');
+      setTimeout(() => {
+        hideDashboardProgress();
+        viewDetails(id);
+        showToast(data.message || 'Background removed successfully', 'success');
+      }, 800);
     } else {
       throw new Error(data.error || 'Failed to remove background');
     }
   } catch (error) {
+    hideDashboardProgress();
     console.error('Error removing background:', error);
     showToast('Failed to remove background: ' + error.message, 'error');
     
-    // Restore button
     if (button) {
-      button.innerHTML = originalText;
+      button.classList.remove('loading');
       button.disabled = false;
     }
   }
@@ -733,7 +722,7 @@ async function renderAndApprove(id) {
 
   if (!confirm('Are you sure you want to render this ID and send it to Gallery for review?')) return;
 
-  showToast('Rendering ID...', 'success');
+  showDashboardProgress('Rendering ID Card...', emp.employee_name);
 
   try {
     // Mark as Rendered (NOT Approved) - actual approval happens in Gallery
@@ -751,25 +740,20 @@ async function renderAndApprove(id) {
       
       updateStatusCounts();
       filterEmployees();
-      showToast('ID rendered! Redirecting to Gallery for review...', 'success');
+      updateDashboardProgress(100, 'ID Rendered!', 'Redirecting to Gallery...');
       
       // Redirect to gallery for preview
       setTimeout(() => {
+        hideDashboardProgress();
         window.location.href = `/hr/gallery?preview=${encodeURIComponent(id)}`;
       }, 1500);
     } else {
       throw new Error(data.error || 'Failed to render');
     }
   } catch (error) {
+    hideDashboardProgress();
     console.error('Error rendering employee ID:', error);
     showToast('Failed to render: ' + error.message, 'error');
-    
-    // Log full error details for debugging
-    console.error('Full error details:', {
-      employeeId: id,
-      currentStatus: emp?.status,
-      error: error
-    });
   }
 }
 
@@ -785,9 +769,12 @@ function previewID(id) {
 }
 
 async function markAsSentToPOC(id) {
+  const emp = dashboardState.employees.find(e => e.id === id);
+  showDashboardProgress('Sending to POC...', emp ? emp.employee_name : 'Finding nearest branch');
+
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout (Vercel max is 60s)
+    const timeoutId = setTimeout(() => controller.abort(), 55000);
     
     const response = await fetch(`/hr/api/employees/${id}/send-to-poc`, {
       method: 'POST',
@@ -800,20 +787,24 @@ async function markAsSentToPOC(id) {
     const data = await response.json().catch(() => ({}));
     
     if (response.ok && data.success) {
-      const emp = dashboardState.employees.find(e => e.id === id);
       if (emp) emp.status = 'Sent to POC';
       updateStatusCounts();
       filterEmployees();
       
-      // Show detailed result
       const msgSent = data.message_sent ? '✅ Lark message sent' : '⚠️ Lark message failed';
       const testLabel = data.test_mode ? ' (TEST MODE)' : '';
-      showToast(`Sent to POC: ${data.nearest_poc || 'Unknown'}${testLabel}. ${msgSent}`, data.message_sent ? 'success' : 'warning');
+      updateDashboardProgress(100, 'Sent to POC!', data.nearest_poc || '');
+      setTimeout(() => {
+        hideDashboardProgress();
+        showToast(`Sent to POC: ${data.nearest_poc || 'Unknown'}${testLabel}. ${msgSent}`, data.message_sent ? 'success' : 'warning');
+      }, 800);
     } else {
       const errorMsg = data.error || `Server error (${response.status})`;
+      hideDashboardProgress();
       showToast(`Failed to send to POC: ${errorMsg}`, 'error');
     }
   } catch (error) {
+    hideDashboardProgress();
     if (error.name === 'AbortError') {
       showToast('POC send timed out. The server may still be processing. Try refreshing.', 'error');
     } else {
@@ -842,16 +833,24 @@ async function approveAllRendered() {
   const confirmApprove = confirm(`Are you sure you want to approve ${renderedEmployees.length} employee(s) with "Rendered" status?`);
   if (!confirmApprove) return;
   
+  showDashboardProgress('Approving All Rendered...', `0 of ${renderedEmployees.length} employees`);
+  
   // Disable button during operation
   if (elements.approveAllBtn) {
+    elements.approveAllBtn.classList.add('loading');
     elements.approveAllBtn.disabled = true;
-    elements.approveAllBtn.innerHTML = '⏳ Approving...';
   }
   
   let successCount = 0;
   let failCount = 0;
   
-  for (const emp of renderedEmployees) {
+  for (let i = 0; i < renderedEmployees.length; i++) {
+    const emp = renderedEmployees[i];
+    updateDashboardProgress(
+      Math.round(((i + 1) / renderedEmployees.length) * 90),
+      'Approving Employees...',
+      `${i + 1} of ${renderedEmployees.length} — ${emp.employee_name}`
+    );
     try {
       const response = await fetch(`/hr/api/employees/${emp.id}/approve`, {
         method: 'POST',
@@ -873,21 +872,22 @@ async function approveAllRendered() {
   
   // Re-enable button
   if (elements.approveAllBtn) {
+    elements.approveAllBtn.classList.remove('loading');
     elements.approveAllBtn.disabled = false;
-    elements.approveAllBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>
-      <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg> Approve All Rendered`;
   }
   
   updateStatusCounts();
   filterEmployees();
   
-  if (failCount === 0) {
-    showToast(`Successfully approved ${successCount} employee(s)`, 'success');
-  } else {
-    showToast(`Approved ${successCount}, failed ${failCount}`, 'error');
-  }
+  updateDashboardProgress(100, 'Complete!', `${successCount} approved${failCount ? `, ${failCount} failed` : ''}`);
+  setTimeout(() => {
+    hideDashboardProgress();
+    if (failCount === 0) {
+      showToast(`Successfully approved ${successCount} employee(s)`, 'success');
+    } else {
+      showToast(`Approved ${successCount}, failed ${failCount}`, 'error');
+    }
+  }, 800);
 }
 
 /**
@@ -904,16 +904,17 @@ async function sendAllToPOCs() {
   const confirmSend = confirm(`Are you sure you want to send ${approvedEmployees.length} employee(s) to their nearest branch POCs?`);
   if (!confirmSend) return;
   
+  showDashboardProgress('Sending All to POCs...', `${approvedEmployees.length} employees queued`);
+  
   // Disable button during operation
   if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.classList.add('loading');
     elements.sendToPOCsBtn.disabled = true;
-    elements.sendToPOCsBtn.innerHTML = '⏳ Sending...';
   }
   
   try {
-    // Call the bulk POC routing endpoint with extended timeout for serverless
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 55000);
     
     const response = await fetch('/hr/api/send-all-to-pocs', {
       method: 'POST',
@@ -926,7 +927,6 @@ async function sendAllToPOCs() {
     const data = await response.json();
     
     if (data.success) {
-      // Update local state for all sent employees
       for (const emp of approvedEmployees) {
         emp.status = 'Sent to POC';
       }
@@ -937,11 +937,16 @@ async function sendAllToPOCs() {
         ? ` (${data.message_sent_count} Lark messages sent)` 
         : '';
       const testLabel = data.test_mode ? ' [TEST MODE]' : '';
-      showToast(`Successfully sent ${data.sent_count || approvedEmployees.length} employee(s) to POCs${testLabel}${msgInfo}`, 'success');
+      updateDashboardProgress(100, 'All Sent!', `${data.sent_count || approvedEmployees.length} employees routed to POCs`);
+      setTimeout(() => {
+        hideDashboardProgress();
+        showToast(`Successfully sent ${data.sent_count || approvedEmployees.length} employee(s) to POCs${testLabel}${msgInfo}`, 'success');
+      }, 1000);
     } else {
       throw new Error(data.error || 'Failed to send to POCs');
     }
   } catch (error) {
+    hideDashboardProgress();
     if (error.name === 'AbortError') {
       showToast('Bulk send timed out. Refresh to see current status — some may have been sent.', 'error');
     } else {
@@ -952,10 +957,8 @@ async function sendAllToPOCs() {
   
   // Re-enable button
   if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.classList.remove('loading');
     elements.sendToPOCsBtn.disabled = false;
-    elements.sendToPOCsBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M2 5l8 5 8-5M2 5v10h16V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg> Send All to POCs`;
   }
 }
 
@@ -1027,12 +1030,87 @@ function exportData() {
 // Utilities
 // ============================================
 function showToast(message, type = 'success') {
+  const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+  if (elements.toastIcon) elements.toastIcon.textContent = icons[type] || '';
   elements.toastMessage.textContent = message;
   elements.toast.className = `toast show ${type}`;
 
+  // Longer duration for errors/warnings
+  const duration = (type === 'error' || type === 'warning') ? 5000 : 3000;
   setTimeout(() => {
     elements.toast.classList.remove('show');
-  }, 3000);
+  }, duration);
+}
+
+// ============================================
+// Progress Overlay (for async dashboard actions)
+// ============================================
+let dashProgressInterval = null;
+
+function showDashboardProgress(text, subtext) {
+  const overlay = document.getElementById('dashboardProgressOverlay');
+  const textEl = document.getElementById('dashboardProgressText');
+  const subtextEl = document.getElementById('dashboardProgressSubtext');
+  const fillEl = document.getElementById('dashboardProgressBarFill');
+  if (!overlay) return;
+
+  if (textEl) textEl.textContent = text || 'Processing...';
+  if (subtextEl) subtextEl.textContent = subtext || '';
+  if (fillEl) fillEl.style.width = '10%';
+  overlay.classList.add('active');
+
+  // Simulate progress (accelerates then slows near 90%)
+  let pct = 10;
+  clearInterval(dashProgressInterval);
+  dashProgressInterval = setInterval(() => {
+    if (pct < 60) pct += 3;
+    else if (pct < 85) pct += 1;
+    else if (pct < 92) pct += 0.3;
+    if (fillEl) fillEl.style.width = pct + '%';
+  }, 200);
+}
+
+function updateDashboardProgress(percent, text, subtext) {
+  const fillEl = document.getElementById('dashboardProgressBarFill');
+  const textEl = document.getElementById('dashboardProgressText');
+  const subtextEl = document.getElementById('dashboardProgressSubtext');
+  clearInterval(dashProgressInterval);
+  if (fillEl) fillEl.style.width = percent + '%';
+  if (text && textEl) textEl.textContent = text;
+  if (subtext !== undefined && subtextEl) subtextEl.textContent = subtext;
+}
+
+function hideDashboardProgress() {
+  clearInterval(dashProgressInterval);
+  const overlay = document.getElementById('dashboardProgressOverlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+// ============================================
+// Status Counter Animation
+// ============================================
+function animateCounter(element, target) {
+  if (!element) return;
+  const current = parseInt(element.textContent) || 0;
+  if (current === target) { element.textContent = target; return; }
+  
+  const duration = 400; // ms
+  const steps = 20;
+  const stepTime = duration / steps;
+  const increment = (target - current) / steps;
+  let step = 0;
+  
+  element.classList.add('counting');
+  const timer = setInterval(() => {
+    step++;
+    if (step >= steps) {
+      clearInterval(timer);
+      element.textContent = target;
+      element.classList.remove('counting');
+    } else {
+      element.textContent = Math.round(current + increment * step);
+    }
+  }, stepTime);
 }
 
 function escapeHtml(text) {
