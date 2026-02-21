@@ -154,7 +154,7 @@ All other locations are routed to the nearest POC using haversine distance calcu
 ---
 
 ## Project Structure
-
+```
 │   │   └── poc_routing_service.py  # Branch-to-POC distance routing
 │   ├── static/                     # CSS, JavaScript, images
 │   └── templates/                  # Jinja2 HTML templates
