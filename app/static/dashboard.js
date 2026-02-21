@@ -479,6 +479,9 @@ function filterEmployees() {
 async function approveEmployee(id) {
   if (!confirm('Are you sure you want to approve this application?')) return;
 
+  const emp = dashboardState.employees.find(e => e.id === id);
+  showDashboardProgress('Approving Application...', emp ? emp.employee_name : '');
+
   try {
     const response = await fetch(`/hr/api/employees/${id}/approve`, {
       method: 'POST',
@@ -489,17 +492,19 @@ async function approveEmployee(id) {
     const data = await response.json();
 
     if (data.success) {
-      // Update local state
-      const emp = dashboardState.employees.find(e => e.id === id);
       if (emp) emp.status = 'Approved';
-      
       updateStatusCounts();
       filterEmployees();
-      showToast('Application approved successfully', 'success');
+      updateDashboardProgress(100, 'Approved!', '');
+      setTimeout(() => {
+        hideDashboardProgress();
+        showToast('Application approved successfully', 'success');
+      }, 600);
     } else {
       throw new Error(data.error || 'Failed to approve');
     }
   } catch (error) {
+    hideDashboardProgress();
     console.error('Error approving employee:', error);
     showToast('Failed to approve application', 'error');
   }

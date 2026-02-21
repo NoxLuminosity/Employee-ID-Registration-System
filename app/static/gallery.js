@@ -2192,12 +2192,59 @@ function showToast(message, type = 'success') {
     console.log('Toast:', type, message);
     return;
   }
+  const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+  const toastIcon = document.getElementById('toastIcon');
+  if (toastIcon) toastIcon.textContent = icons[type] || '';
   elements.toastMessage.textContent = message;
   elements.toast.className = `toast show ${type}`;
 
+  const duration = (type === 'error' || type === 'warning') ? 5000 : 3000;
   setTimeout(() => {
     elements.toast.classList.remove('show');
-  }, 3000);
+  }, duration);
+}
+
+// ============================================
+// Progress Overlay (for async gallery actions)
+// ============================================
+let galleryProgressInterval = null;
+
+function showGalleryProgress(text, subtext) {
+  const overlay = document.getElementById('galleryProgressOverlay');
+  const textEl = document.getElementById('galleryProgressText');
+  const subtextEl = document.getElementById('galleryProgressSubtext');
+  const fillEl = document.getElementById('galleryProgressBarFill');
+  if (!overlay) return;
+
+  if (textEl) textEl.textContent = text || 'Processing...';
+  if (subtextEl) subtextEl.textContent = subtext || '';
+  if (fillEl) fillEl.style.width = '10%';
+  overlay.classList.add('active');
+
+  let pct = 10;
+  clearInterval(galleryProgressInterval);
+  galleryProgressInterval = setInterval(() => {
+    if (pct < 60) pct += 2;
+    else if (pct < 85) pct += 0.8;
+    else if (pct < 92) pct += 0.2;
+    if (fillEl) fillEl.style.width = pct + '%';
+  }, 250);
+}
+
+function updateGalleryProgress(percent, text, subtext) {
+  const fillEl = document.getElementById('galleryProgressBarFill');
+  const textEl = document.getElementById('galleryProgressText');
+  const subtextEl = document.getElementById('galleryProgressSubtext');
+  clearInterval(galleryProgressInterval);
+  if (fillEl) fillEl.style.width = percent + '%';
+  if (text && textEl) textEl.textContent = text;
+  if (subtext !== undefined && subtextEl) subtextEl.textContent = subtext;
+}
+
+function hideGalleryProgress() {
+  clearInterval(galleryProgressInterval);
+  const overlay = document.getElementById('galleryProgressOverlay');
+  if (overlay) overlay.classList.remove('active');
 }
 
 function escapeHtml(text) {
@@ -2415,6 +2462,8 @@ async function sendToPOC(id) {
 
   if (!confirm(`Send ${emp.employee_name}'s ID to their nearest POC branch?`)) return;
 
+  showGalleryProgress('Sending to POC...', emp.employee_name);
+
   try {
     const response = await fetch(`/hr/api/employees/${id}/send-to-poc`, {
       method: 'POST',
@@ -2424,22 +2473,23 @@ async function sendToPOC(id) {
     
     const data = await response.json();
     
-    // Check both HTTP status and response success flag
     if (!response.ok || !data.success) {
       throw new Error(data.error || `Failed to send to POC (HTTP ${response.status})`);
     }
     
-    // Update local state
     emp.status = 'Sent to POC';
-    
-    // Refresh UI
     updateStats();
     renderGallery();
     
-    showToast(`✅ Sent to POC: ${data.nearest_poc || 'Unknown branch'}`, 'success');
+    updateGalleryProgress(100, 'Sent to POC!', data.nearest_poc || '');
+    setTimeout(() => {
+      hideGalleryProgress();
+      showToast(`Sent to POC: ${data.nearest_poc || 'Unknown branch'}`, 'success');
+    }, 800);
   } catch (error) {
+    hideGalleryProgress();
     console.error('Error sending to POC:', error);
-    showToast(`❌ Failed to send to POC: ${error.message}`, 'error');
+    showToast(`Failed to send to POC: ${error.message}`, 'error');
   }
 }
 
@@ -2472,31 +2522,32 @@ async function approveAndSaveID(id) {
   const isFieldOfficer = emp.position === 'Field Officer';
   const pageCount = isFieldOfficer ? 4 : 2;
   
-  showToast(`⏳ Generating ${pageCount}-page PDF and uploading to LarkBase...`, 'success');
+  showGalleryProgress('Generating & Uploading PDF...', `${pageCount}-page ID card for ${emp.employee_name}`);
 
   try {
-    // Use the shared helper function for generate + upload + approve
     const result = await generateUploadAndApprove(emp);
     
     if (result.success) {
-      // Update local state
       emp.status = 'Approved';
-      
-      // Refresh UI
       updateStats();
       renderGallery();
       
-      if (result.larkSynced) {
-        showToast(`✅ ${emp.employee_name} approved with PDF uploaded to LarkBase`, 'success');
-      } else {
-        showToast(`✅ ${emp.employee_name} approved (LarkBase sync pending)`, 'warning');
-      }
+      updateGalleryProgress(100, 'Approved!', result.larkSynced ? 'PDF uploaded to LarkBase' : 'LarkBase sync pending');
+      setTimeout(() => {
+        hideGalleryProgress();
+        if (result.larkSynced) {
+          showToast(`${emp.employee_name} approved with PDF uploaded to LarkBase`, 'success');
+        } else {
+          showToast(`${emp.employee_name} approved (LarkBase sync pending)`, 'warning');
+        }
+      }, 800);
     } else {
       throw new Error(result.error || 'Failed to approve');
     }
   } catch (error) {
+    hideGalleryProgress();
     console.error('Error approving ID:', error);
-    showToast(`❌ Failed to approve: ${error.message}`, 'error');
+    showToast(`Failed to approve: ${error.message}`, 'error');
   }
 }
 
@@ -2639,7 +2690,6 @@ async function generateUploadAndApprove(emp) {
  * Concurrency is limited to 2 to avoid browser memory issues.
  */
 async function approveAllRendered() {
-  // Use FILTERED employees to respect search/filter criteria
   const renderedEmployees = galleryState.filteredEmployees.filter(e => e.status === 'Rendered');
   
   if (renderedEmployees.length === 0) {
@@ -2650,13 +2700,13 @@ async function approveAllRendered() {
   const confirmApprove = confirm(`Are you sure you want to approve ${renderedEmployees.length} employee(s)?\n\nThis will generate and upload PDFs for each, which may take a few minutes.`);
   if (!confirmApprove) return;
   
-  // Disable button during operation
+  showGalleryProgress('Bulk Approving...', `0 of ${renderedEmployees.length} employees`);
+  
   if (elements.approveAllBtn) {
+    elements.approveAllBtn.classList.add('loading');
     elements.approveAllBtn.disabled = true;
-    elements.approveAllBtn.innerHTML = '⏳ Approving 0/' + renderedEmployees.length + '...';
   }
   
-  // Lower concurrency for PDF generation (memory intensive)
   const MAX_CONCURRENT = 2;
   const MAX_RETRIES = 1;
   
@@ -2664,7 +2714,6 @@ async function approveAllRendered() {
   let failCount = 0;
   const failures = [];
   
-  // Process employees with concurrency limiting
   const queue = [...renderedEmployees];
   const processing = [];
   
@@ -2673,16 +2722,16 @@ async function approveAllRendered() {
     
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        // Use the same generate+upload+approve flow as single approve
         const result = await generateUploadAndApprove(emp);
         
         if (result.success) {
           emp.status = 'Approved';
           successCount++;
-          // Update progress
-          if (elements.approveAllBtn) {
-            elements.approveAllBtn.innerHTML = `⏳ Approving ${successCount + failCount}/${renderedEmployees.length}...`;
-          }
+          updateGalleryProgress(
+            Math.round(((successCount + failCount) / renderedEmployees.length) * 90),
+            'Bulk Approving...',
+            `${successCount + failCount} of ${renderedEmployees.length} — ${emp.employee_name}`
+          );
           return true;
         } else {
           lastError = result.error || 'Unknown error';
@@ -2692,21 +2741,17 @@ async function approveAllRendered() {
         console.error(`Error approving employee ${emp.id} (attempt ${attempt + 1}):`, error);
       }
       
-      // Wait before retry
       if (attempt < MAX_RETRIES) {
         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
       }
     }
     
-    // All retries failed
     failCount++;
     failures.push({ id: emp.id, name: emp.employee_name, error: lastError });
     return false;
   }
   
-  // Process with concurrency limit
   while (queue.length > 0 || processing.length > 0) {
-    // Start new tasks up to concurrency limit
     while (queue.length > 0 && processing.length < MAX_CONCURRENT) {
       const emp = queue.shift();
       const promise = processEmployee(emp).finally(() => {
@@ -2716,32 +2761,29 @@ async function approveAllRendered() {
       processing.push(promise);
     }
     
-    // Wait for at least one to complete
     if (processing.length > 0) {
       await Promise.race(processing);
     }
   }
   
-  // Re-enable button
   if (elements.approveAllBtn) {
+    elements.approveAllBtn.classList.remove('loading');
     elements.approveAllBtn.disabled = false;
-    elements.approveAllBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>
-      <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg> Approve All Rendered`;
   }
   
   updateStats();
   renderGallery();
   
-  // Show summary with detailed results
-  if (failCount === 0) {
-    showToast(`✅ Successfully approved ${successCount} employee(s) with PDFs uploaded`, 'success');
-  } else {
-    // Log failures for debugging
-    console.error('Bulk approve failures:', failures);
-    showToast(`⚠️ Approved ${successCount}, failed ${failCount}. Check console for details.`, 'error');
-  }
+  updateGalleryProgress(100, 'Complete!', `${successCount} approved${failCount ? `, ${failCount} failed` : ''}`);
+  setTimeout(() => {
+    hideGalleryProgress();
+    if (failCount === 0) {
+      showToast(`Successfully approved ${successCount} employee(s) with PDFs uploaded`, 'success');
+    } else {
+      console.error('Bulk approve failures:', failures);
+      showToast(`Approved ${successCount}, failed ${failCount}. Check console for details.`, 'error');
+    }
+  }, 800);
 }
 
 /**
@@ -2758,14 +2800,14 @@ async function sendAllToPOCs() {
   const confirmSend = confirm(`Are you sure you want to send ${approvedEmployees.length} employee(s) to their nearest branch POCs?`);
   if (!confirmSend) return;
   
-  // Disable button during operation
+  showGalleryProgress('Sending All to POCs...', `${approvedEmployees.length} employees queued`);
+  
   if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.classList.add('loading');
     elements.sendToPOCsBtn.disabled = true;
-    elements.sendToPOCsBtn.innerHTML = '⏳ Sending...';
   }
   
   try {
-    // Call the bulk POC routing endpoint
     const response = await fetch('/hr/api/send-all-to-pocs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2774,35 +2816,35 @@ async function sendAllToPOCs() {
     
     const data = await response.json();
     
-    // Check both HTTP status and response success flag
     if (!response.ok || !data.success) {
       throw new Error(data.error || `Failed to send to POCs (HTTP ${response.status})`);
     }
     
-    // Update local state for all sent employees
     for (const emp of approvedEmployees) {
       emp.status = 'Sent to POC';
     }
     updateStats();
     renderGallery();
     
-    let message = `✅ Sent ${data.sent_count} employee(s) to POCs`;
-    if (data.failed_count > 0) {
-      message += ` (${data.failed_count} failed)`;
-      showToast(message, 'warning');
-    } else {
-      showToast(message, 'success');
-    }
+    updateGalleryProgress(100, 'All Sent!', `${data.sent_count} employees routed to POCs`);
+    setTimeout(() => {
+      hideGalleryProgress();
+      let message = `Sent ${data.sent_count} employee(s) to POCs`;
+      if (data.failed_count > 0) {
+        message += ` (${data.failed_count} failed)`;
+        showToast(message, 'warning');
+      } else {
+        showToast(message, 'success');
+      }
+    }, 1000);
   } catch (error) {
+    hideGalleryProgress();
     console.error('Error sending to POCs:', error);
-    showToast('❌ Failed to send employees to POCs: ' + error.message, 'error');
+    showToast('Failed to send employees to POCs: ' + error.message, 'error');
   }
   
-  // Re-enable button
   if (elements.sendToPOCsBtn) {
+    elements.sendToPOCsBtn.classList.remove('loading');
     elements.sendToPOCsBtn.disabled = false;
-    elements.sendToPOCsBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M2 5l8 5 8-5M2 5v10h16V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg> Send All to POCs`;
   }
 }
