@@ -155,7 +155,6 @@ All other locations are routed to the nearest POC using haversine distance calcu
 
 ## Project Structure
 
-@@ -58,105 +180,377 @@ A full-stack employee ID card registration and management system built with Fast
 │   │   └── poc_routing_service.py  # Branch-to-POC distance routing
 │   ├── static/                     # CSS, JavaScript, images
 │   └── templates/                  # Jinja2 HTML templates
