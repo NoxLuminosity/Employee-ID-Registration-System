@@ -720,8 +720,19 @@ def get_headshot_usage_count(lark_user_id: str) -> int:
             )
             return result.count if result.count is not None else 0
         except Exception as e:
-            logger.error(f"Supabase headshot usage count error: {e}")
-            return 0
+            # Fallback: if is_reset column doesn't exist yet, count all records
+            logger.warning(f"Supabase headshot usage count with is_reset failed, trying without: {e}")
+            try:
+                result = (
+                    supabase_client.table("headshot_usage")
+                    .select("id", count="exact")
+                    .eq("lark_user_id", lark_user_id)
+                    .execute()
+                )
+                return result.count if result.count is not None else 0
+            except Exception as e2:
+                logger.error(f"Supabase headshot usage count error: {e2}")
+                return 0
     else:
         import sqlite3
         try:
@@ -794,19 +805,32 @@ def get_all_headshot_usage() -> list:
     """
     if USE_SUPABASE:
         try:
-            result = (
-                supabase_client.table("headshot_usage")
-                .select("lark_user_id, lark_name, created_at, is_reset")
-                .order("created_at", desc=True)
-                .execute()
-            )
+            # Try with is_reset column first
+            try:
+                result = (
+                    supabase_client.table("headshot_usage")
+                    .select("lark_user_id, lark_name, created_at, is_reset")
+                    .order("created_at", desc=True)
+                    .execute()
+                )
+                has_is_reset = True
+            except Exception:
+                # Fallback: is_reset column doesn't exist yet
+                result = (
+                    supabase_client.table("headshot_usage")
+                    .select("lark_user_id, lark_name, created_at")
+                    .order("created_at", desc=True)
+                    .execute()
+                )
+                has_is_reset = False
             # Aggregate in Python
             from collections import defaultdict
             usage_map = defaultdict(lambda: {"active_count": 0, "total_count": 0, "last_used": None, "lark_name": ""})
             for row in (result.data or []):
                 uid = row["lark_user_id"]
                 usage_map[uid]["total_count"] += 1
-                if not row.get("is_reset", False):
+                is_reset = row.get("is_reset", False) if has_is_reset else False
+                if not is_reset:
                     usage_map[uid]["active_count"] += 1
                 ts = row["created_at"]
                 if usage_map[uid]["last_used"] is None or ts > usage_map[uid]["last_used"]:
@@ -879,8 +903,17 @@ def reset_headshot_usage(lark_user_id: str) -> bool:
             logger.info(f"Reset headshot usage for lark_user_id={lark_user_id} (history preserved)")
             return True
         except Exception as e:
-            logger.error(f"Supabase reset_headshot_usage error: {e}")
-            return False
+            # Fallback: if is_reset column doesn't exist, delete records
+            logger.warning(f"Supabase reset with is_reset failed, falling back to delete: {e}")
+            try:
+                supabase_client.table("headshot_usage").delete().eq(
+                    "lark_user_id", lark_user_id
+                ).execute()
+                logger.info(f"Reset headshot usage for lark_user_id={lark_user_id} (deleted, no is_reset column)")
+                return True
+            except Exception as e2:
+                logger.error(f"Supabase reset_headshot_usage error: {e2}")
+                return False
     else:
         import sqlite3
         try:
@@ -920,8 +953,21 @@ def reset_all_headshot_usage() -> int:
             logger.info(f"Reset ALL headshot usage: {count} records marked as reset (Supabase)")
             return count
         except Exception as e:
-            logger.error(f"Supabase reset_all_headshot_usage error: {e}")
-            return -1
+            # Fallback: if is_reset column doesn't exist, delete all records
+            logger.warning(f"Supabase reset_all with is_reset failed, falling back to delete: {e}")
+            try:
+                result = (
+                    supabase_client.table("headshot_usage")
+                    .delete()
+                    .neq("lark_user_id", "___IMPOSSIBLE_VALUE___")
+                    .execute()
+                )
+                count = len(result.data) if result.data else 0
+                logger.info(f"Reset ALL headshot usage: {count} records deleted (Supabase, no is_reset column)")
+                return count
+            except Exception as e2:
+                logger.error(f"Supabase reset_all_headshot_usage error: {e2}")
+                return -1
     else:
         import sqlite3
         try:
