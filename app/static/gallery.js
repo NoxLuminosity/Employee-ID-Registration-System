@@ -635,7 +635,7 @@ function renderGallery() {
     const fitAllNames = () => {
       requestAnimationFrame(() => {
         elements.galleryGrid.querySelectorAll('.id-fullname').forEach(el => {
-          fitNameToLines(el, 38.4, 14, 2, 1.05);
+          fitNameToLines(el, 38.4, 19.2, 2, 1.05);
         });
       });
     };
@@ -1421,7 +1421,7 @@ function previewID(id) {
       // Auto-fit name text to 2 lines in preview modal
       requestAnimationFrame(() => {
         elements.modalBody.querySelectorAll('.id-fullname').forEach(el => {
-          fitNameToLines(el, 38.4, 14, 2, 1.05);
+          fitNameToLines(el, 38.4, 19.2, 2, 1.05);
         });
       });
     };
@@ -1657,7 +1657,7 @@ async function captureCardCanvas(tempContainer, cardHtml, designWidth, designHei
   
   // Auto-fit name text to 2 lines before capture
   const nameEls = tempContainer.querySelectorAll('.id-fullname');
-  nameEls.forEach(el => fitNameToLines(el, 38.4, 14, 2, 1.05));
+  nameEls.forEach(el => fitNameToLines(el, 38.4, 19.2, 2, 1.05));
   
   // Wait for all images to fully load with better error handling
   const images = tempContainer.querySelectorAll('img');
