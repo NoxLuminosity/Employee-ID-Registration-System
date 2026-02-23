@@ -631,9 +631,19 @@ function renderGallery() {
   if (elements.galleryGrid) {
     elements.galleryGrid.innerHTML = cards;
     // Auto-fit name text to 2 lines on all rendered cards
-    elements.galleryGrid.querySelectorAll('.id-fullname').forEach(el => {
-      fitNameToLines(el, 38.4, 14, 2, 1.05);
-    });
+    // Defer until fonts are loaded and layout is computed (same as modal preview)
+    const fitAllNames = () => {
+      requestAnimationFrame(() => {
+        elements.galleryGrid.querySelectorAll('.id-fullname').forEach(el => {
+          fitNameToLines(el, 38.4, 14, 2, 1.05);
+        });
+      });
+    };
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fitAllNames);
+    } else {
+      setTimeout(fitAllNames, 150);
+    }
   }
 }
 
@@ -1402,17 +1412,24 @@ function previewID(id) {
     elements.previewModal.classList.add('active');
     
     // Ensure modal scrolls to top and fit names to 2 lines
-    setTimeout(() => {
+    const fitModalNames = () => {
       elements.modalBody.scrollTop = 0;
       const dualGrid = elements.modalBody.querySelector('.gallery-dual-template-grid');
       if (dualGrid) {
         dualGrid.scrollTop = 0;
       }
       // Auto-fit name text to 2 lines in preview modal
-      elements.modalBody.querySelectorAll('.id-fullname').forEach(el => {
-        fitNameToLines(el, 38.4, 14, 2, 1.05);
+      requestAnimationFrame(() => {
+        elements.modalBody.querySelectorAll('.id-fullname').forEach(el => {
+          fitNameToLines(el, 38.4, 14, 2, 1.05);
+        });
       });
-    }, 0);
+    };
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fitModalNames);
+    } else {
+      setTimeout(fitModalNames, 150);
+    }
   }
 }
 
