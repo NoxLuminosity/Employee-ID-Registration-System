@@ -5,6 +5,35 @@
  */
 
 // ============================================
+// Name Fit Utility (shared with app.js)
+// ============================================
+/**
+ * Auto-shrink font size so the name element fits within maxLines lines.
+ * @param {HTMLElement} el        - The name element to auto-fit
+ * @param {number}      maxFontPx - Starting (maximum) font size in px
+ * @param {number}      minFontPx - Floor font size in px (never go smaller)
+ * @param {number}      maxLines  - Maximum number of lines allowed (default 2)
+ * @param {number}      lineHeight- CSS line-height multiplier (default 1.05)
+ */
+function fitNameToLines(el, maxFontPx, minFontPx, maxLines, lineHeight) {
+  if (!el) return;
+  maxLines = maxLines || 2;
+  lineHeight = lineHeight || parseFloat(window.getComputedStyle(el).lineHeight) / parseFloat(window.getComputedStyle(el).fontSize) || 1.1;
+  el.style.fontSize = maxFontPx + 'px';
+  var maxHeight = maxFontPx * lineHeight * maxLines + 2;
+  var currentSize = maxFontPx;
+  var step = 0.5;
+  while (el.scrollHeight > maxHeight && currentSize > minFontPx) {
+    currentSize -= step;
+    el.style.fontSize = currentSize + 'px';
+    maxHeight = currentSize * lineHeight * maxLines + 2;
+  }
+  if (el.scrollHeight > maxHeight) {
+    el.style.fontSize = minFontPx + 'px';
+  }
+}
+
+// ============================================
 // State Management
 // ============================================
 const galleryState = {
@@ -601,6 +630,10 @@ function renderGallery() {
 
   if (elements.galleryGrid) {
     elements.galleryGrid.innerHTML = cards;
+    // Auto-fit name text to 2 lines on all rendered cards
+    elements.galleryGrid.querySelectorAll('.id-fullname').forEach(el => {
+      fitNameToLines(el, 38.4, 14, 2, 1.05);
+    });
   }
 }
 
@@ -1368,13 +1401,17 @@ function previewID(id) {
   if (elements.previewModal) {
     elements.previewModal.classList.add('active');
     
-    // Ensure modal scrolls to top - use setTimeout to ensure DOM is rendered
+    // Ensure modal scrolls to top and fit names to 2 lines
     setTimeout(() => {
       elements.modalBody.scrollTop = 0;
       const dualGrid = elements.modalBody.querySelector('.gallery-dual-template-grid');
       if (dualGrid) {
         dualGrid.scrollTop = 0;
       }
+      // Auto-fit name text to 2 lines in preview modal
+      elements.modalBody.querySelectorAll('.id-fullname').forEach(el => {
+        fitNameToLines(el, 38.4, 14, 2, 1.05);
+      });
     }, 0);
   }
 }
@@ -1600,6 +1637,10 @@ async function captureCardCanvas(tempContainer, cardHtml, designWidth, designHei
 
   // Initial wait for DOM to settle
   await new Promise(resolve => setTimeout(resolve, waitTime));
+  
+  // Auto-fit name text to 2 lines before capture
+  const nameEls = tempContainer.querySelectorAll('.id-fullname');
+  nameEls.forEach(el => fitNameToLines(el, 38.4, 14, 2, 1.05));
   
   // Wait for all images to fully load with better error handling
   const images = tempContainer.querySelectorAll('img');
